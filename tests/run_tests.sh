@@ -260,6 +260,8 @@ fi
 
 run "update path = the stripped core's (gate 2)" python3 tools/check_update_path.py build/felucca.dis tests/ble/update_path.ref
 run "update path check self-test" python3 tools/check_update_path.py --selftest
+mkdir -p build/tests
+run "BLE-MIDI parser" sh -c 'cc -Wall -O1 -o build/tests/ble_midi_test tests/ble/ble_midi_test.c && build/tests/ble_midi_test'
 
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
 
