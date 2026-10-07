@@ -184,10 +184,13 @@ def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_BLE"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
+    v = os.environ.get("FELUCCA_BLE_STEP")    # firmware/src/ble/ble.c: 1 linked .. 5 monitor + USB forwarding
+    if v in ("0", "1", "2", "3", "4", "5"):
+        flags.append(f"-DFELUCCA_BLE_STEP={v}")
     v = os.environ.get("FELUCCA_USB_LAYOUT")   # firmware/src/usb.c: how the USB composite presents itself (#67), 0..3
     if v in ("0", "1", "2", "3"):
         flags.append(f"-DFELUCCA_USB_LAYOUT={v}")
@@ -200,18 +203,30 @@ def build_app():
     cmain = (("cc", *flags, "-S", "-emit-llvm", "-Xclang", "-disable-llvm-optzns", "-c",
               FW / "src" / "felucca.c", "-o", OUT / "felucca.ll") if size else
              ("cc", *flags, "-c", FW / "src" / "felucca.c", "-o", OUT / "felucca.o"))
-    tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
+    ble = os.environ.get("FELUCCA_BLE") == "1"    # the BLE test build: context switch + the JieLi BT libraries
+    asm = [("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
            ("cc", "-c", FW / "hal" / "fm1_vec.S", "-o", OUT / "fm1_vec.o"),
-           ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o"),
-           cmain)
+           ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o")]
+    if ble:
+        asm.append(("cc", "-c", FW / "hal" / "fm1_ctx.S", "-o", OUT / "fm1_ctx.o"))
+    tc_all(*asm, cmain)
     if size:
         subprocess.run([sys.executable, SRC / "tools" / "size_fns.py", OUT / "felucca.ll", OUT / "felucca_size.ll"],
                        check=True)
         tc("cc", *[f for f in flags if not f.startswith(("-I", "-D", "-W"))], "-c",
            OUT / "felucca_size.ll", "-o", OUT / "felucca.o")
     elf = OUT / "felucca.elf"
+    extra = []
+    if ble:                         # (only then: the default link stays byte-identical to the core's)
+        libdir = OUT / "blelibs"
+        libdir.mkdir(exist_ok=True)
+        libs = subprocess.run([sys.executable, SRC / "tools" / "ble_libs.py", "libs"], capture_output=True,
+                              text=True, check=True).stdout.split()
+        for p in libs:              # inside SRC, so the Docker mount sees them
+            shutil.copy(p, libdir / Path(p).name)
+        extra = [OUT / "fm1_ctx.o", *[libdir / Path(p).name for p in libs]]
     tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
-       OUT / "felucca.o", "-o", elf)
+       OUT / "felucca.o", *extra, "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
