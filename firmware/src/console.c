@@ -189,26 +189,13 @@ static void con_uac(void)                              /* USB audio input: strea
 
 static void con_status(void)
 {
-    const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
-    con_puts("felucca ");
+    con_puts("lsdj-fm1 ");
     con_puts(FELUCCA_VERSION);
     con_puts("\r\n");
     con_kv("uptime_ms", (int32_t)fm1_ms);
-    con_kv("cpu_pct", (int32_t)(song.cpu_q8 * 100u / 256u));
+    con_kv("cpu_pct", (int32_t)(audio_cpu_q8 * 100u / 256u));
     con_kv("audio_max_us", (int32_t)felucca_dbg.max_us);
     con_kv("audio_late", (int32_t)felucca_dbg.late);
-    con_kv("voices_shed", (int32_t)shed_count);
-    con_kv("voices_given_up", (int32_t)voice_kills);
-    con_kv("track", (int32_t)song.sel + 1);
-    con_kv("batt_raw", song.batt_raw);
-    con_puts("engine ");
-    con_puts(e->name);
-    con_puts("\r\n");
-    con_puts("preset ");
-    con_puts(TSEL->preset < e->npresets ? e->presets[TSEL->preset].name : "-");
-    con_puts("\r\n");
-    con_kv("bpm", song.g[G_BPM]);
-    con_kv("playing", song.playing);
     con_kv("boots", (int32_t)felucca_dbg.boots);
     con_kv("usb_resets", (int32_t)usb.resets);
     con_kv("usb_sof", (int32_t)usb.sof_seen);
@@ -328,21 +315,10 @@ static void con_crash(void)
     con_kv("early", (int32_t)fm1_crash.early);
 }
 
-static void con_params(void)
-{
-    uint32_t i;
-    for (i = 0; i < P_COUNT; i++) {
-        con_dec((int32_t)i);
-        con_putc('=');
-        con_dec(TSEL->p[i]);
-        con_puts(i % 8u == 7u || i + 1u == P_COUNT ? "\r\n" : " ");
-    }
-}
-
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("status  dbg  inp  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
+        con_puts("status  dbg  inp  crash  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
     else if (con_word(&p, "status"))
         con_status();
     else if (con_word(&p, "dbg"))
@@ -351,8 +327,6 @@ static void con_exec(const char *p)
         con_crash();
     else if (con_word(&p, "inp"))
         con_inp();
-    else if (con_word(&p, "params"))
-        con_params();
     else if (con_word(&p, "memr"))
         con_memr(p);
 #if FELUCCA_FLASH
@@ -373,7 +347,7 @@ static void con_exec(const char *p)
 static void cdc_task(void)                              /* main loop */
 {
     if (cdc.dtr && !con.dtr_seen) {
-        con_puts("\r\nFelucca ");
+        con_puts("\r\nLSDj FM-1 ");
         con_puts(FELUCCA_VERSION);
         con_puts(" console - 'help'\r\n> ");
     }
