@@ -251,8 +251,15 @@ else
     echo "== skip hostsim (run ./build.sh once)"
 fi
 
-run "regression: target cost of the render loops (pi32v2 disassembly)" python3 tests/target_budget.py \
-    build/felucca.dis tests/target_budget.txt
+if grep -q "^analog_render:" build/felucca.dis; then
+    run "regression: target cost of the render loops (pi32v2 disassembly)" python3 tests/target_budget.py \
+        build/felucca.dis tests/target_budget.txt
+else
+    echo "== skip target cost of the render loops (stripped core: no synth renders in build/felucca.dis)"
+fi
+
+run "update path = the stripped core's (gate 2)" python3 tools/check_update_path.py build/felucca.dis tests/ble/update_path.ref
+run "update path check self-test" python3 tools/check_update_path.py --selftest
 
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
 

@@ -1,0 +1,3384 @@
+e0_chunk:
+| [--sp] = {rets, r6-r4}
+| r4 = <usb >
+| r0 = h[r4+12] (u)
+| r1 = r0
+| if (r0 >= 64) {
+| r1 = 64
+| r2 = <ep0buf >
+| if (r1 == 0) goto 18 <e0_chunk+0x2C : 200149e >
+| r3 = [r4+8]
+| r5 = 0
+| r6 = b[r3+r5] (u)
+| b[r5+r2] = r6
+| r5 += 1
+| if (r5 < r1) goto -14 <e0_chunk+0x1E : 2001490 >
+| csync
+| r3 = <build/felucca_size.ll>
+| [r3+16] = r2
+| [r3+0] = r1
+| [r4+8] += r1
+| r2 = h[r4+12] (u)
+| r1 = r2 - r1
+| r1 = r1.l (u)  #
+| h[r4+12] = r1
+| r5 = 0
+| if (r1 != 0) goto 20 <e0_chunk+0x5C : 20014ce >
+| r2 = 1
+| r3 = 1
+| if (r0 >= 64) {
+| r3 = 0
+| r5 = b[r4+5] (u)
+| if (r5 == 0) goto <e0_chunk>
+| r2 = 0
+| r5 = r3 | r2
+| if (r< 64) goto 6 <e0_chunk>
+| if (r1 != 0) goto <e0_chunk>
+| r0 = 0
+| b[r4+5] = r0
+| r0 = 14
+| r1 = 0
+| call <sie_wr >
+| r1 = 10
+| if (r5 != 0) goto <e0_chunk>
+| r1 = 2
+| r0 = 17
+| call <sie_wr >
+| if (r5 == 0) goto <e0_chunk>
+| r0 = 0
+| b[r4+4] = r0
+| {pc, r6-r4} = [sp++]
+e0_send:
+| [--sp] = {rets, r5, r4}
+| r3 = <usb >
+| r4 = umin(r1, r2)  #
+| [r3+8] = r0
+| h[r3+12] = r4
+| r0 = 1
+| r5 = 1
+| if (r2 <= r1) {
+| r5 = 0
+| r1 = 1
+| if ((r4 & 0x3F) != 0) {
+| r1 = 0
+| r1 &= r5
+| b[r3+5] = r1
+| b[r3+4] = r0
+| r0 = 14
+| r1 = 0
+| call <sie_wr >
+| r0 = 17
+| r1 = 64
+| call <sie_wr >
+| {rets, r5, r4} = [sp++]
+| goto <e0_chunk >
+ep0_service.RATE:
+ep0_service.zero2:
+fl_erase4k_ram:
+| [--sp] = {rets, r15-r4}
+| sp += -32
+| r2 = r0 - 0x97000
+| if (r2 > 299008) goto <fl_erase4k_ram>
+| r2 = 0xE0000 - r0
+| if (r2 > 4095) goto 20 <fl_erase4k_ram+0x2C : 1c002e4 >
+| r2 = r0 - 0xFC000
+| if (r2 > 12288) goto <fl_erase4k_ram>
+| r2 = 0xFF000 - r0
+| if (r<= 4095) goto 12 <fl_erase4k_ram>
+| r3 = 4095 <build/felucca_size.ll+0xFFE : ffe >
+| r2 = -1
+| if ((r0 & r3) != 0) goto 788 <fl_erase4k_ram+0x34A : 1c00602 >
+| goto <fl_erase4k_ram>
+| r3 = 4095 <build/felucca_size.ll+0xFFE : ffe >
+| r2 = -1
+| if ((r0 & r3) != 0) goto 776 <fl_erase4k_ram+0x34A : 1c00602 >
+| r3 = r0 - 0xE0000
+| if (r3 > 20480) goto 766 <fl_erase4k_ram+0x34A : 1c00602 >
+| r3 = 0xE5000 - r0
+| if (r3 <= 4095) goto 756 <fl_erase4k_ram+0x34A : 1c00602 >
+| r6 = 32432136 <settings+0x271F50 : 1eee008 >
+| r2 = [r6+0]
+| if ((r2 & 16384) == 0) goto -6 <fl_erase4k_ram+0x5C : 1c00314 >
+| r14 = <build/felucca_size.ll>
+| r10 = [r14+0]
+| r5 = 0x11C00
+| r9 = [r5+0]
+| r2 = r10 >> 8
+| r2 = r2 & 0xE
+| r4 = r2 | 0x1
+| r2 = -2
+| if (r4 == 7) goto 706 <fl_erase4k_ram+0x34A : 1c00602 >
+| csync
+| r2 = [r14+0]
+| ifs (r2 < 0) goto -8 <fl_erase4k_ram+0x8A : 1c00342 >
+| r2 = 0
+| [r14+0] = r2
+| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| [r8+0] &= 0xFFFFFFDF
+| r2 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| [r5+0] = r2
+| [r5+0] = r2
+| csync
+| r13 = r8 + -3932
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] &= 0xFFFFFFFE
+| r2 = 10
+| [sp] = r2
+| r2 = [sp]
+| r4 = r2 + -1
+| [sp] = r4
+| if (r2 != 0) goto -10 <fl_erase4k_ram+0xBC : 1c00374 >
+| [r5+0] |= 0x8
+| [r5+0] &= 0xFFFFEFFF
+| [r5+8] = 0x6
+| csync
+| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = [r5+0]
+| r4 = r4.l (s)
+| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0xE6 : 1c0039e >
+| r2 += 1
+| if (r2 != 0) goto -12 <fl_erase4k_ram+0xDA : 1c00392 >
+| [r5+0] |= 0x4000
+| [r5+0] &= 0xFFFFFFF7
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] |= 0x1
+| r2 = 10
+| [sp+4] = r2
+| r2 = [sp+4]
+| r4 = r2 + -1
+| [sp+4] = r4
+| if (r2 != 0) goto -10 <fl_erase4k_ram+0xFA : 1c003b2 >
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] &= 0xFFFFFFFE
+| r2 = 10
+| [sp+8] = r2
+| r2 = [sp+8]
+| r4 = r2 + -1
+| [sp+8] = r4
+| if (r2 != 0) goto <fl_erase4k_ram>
+| [r5+0] |= 0x8
+| [r5+0] &= 0xFFFFEFFF
+| [r5+8] = 0x5
+| csync
+| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = [r5+0]
+| r4 = r4.l (s)
+| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x13A : 1c003f2 >
+| r2 += 1
+| if (r2 != 0) goto -12 <fl_erase4k_ram+0x12E : 1c003e6 >
+| [r5+0] |= 0x4000
+| [r5+0] &= 0xFFFFFFF7
+| [r5+0] |= 0x8
+| [r5+0] |= 0x1000
+| [r5+8] = 0xFF
+| csync
+| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = [r5+0]
+| r4 = r4.l (s)
+| ifs (r< 0) goto 4 <fl_erase4k_ram>
+| r2 += 1
+| if (r2 != 0) goto <fl_erase4k_ram>
+| [r5+0] |= 0x4000
+| r4 = [r5+8]
+| [r5+0] &= 0xFFFFFFF7
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] |= 0x1
+| r2 = 10
+| [sp+12] = r2
+| r2 = [sp+12]
+| r7 = r2 + -1
+| [sp+12] = r7
+| if (r2 != 0) goto <fl_erase4k_ram>
+| r2 = -3
+| if ((r4 & 2) == 0) goto <fl_erase4k_ram>
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] &= 0xFFFFFFFE
+| r2 = 10
+| [sp+16] = r2
+| r2 = [sp+16]
+| r4 = r2 + -1
+| [sp+16] = r4
+| if (r2 != 0) goto <fl_erase4k_ram>
+| [r5+0] |= 0x8
+| [r5+0] &= 0xFFFFEFFF
+| [r5+8] = 0x20
+| csync
+| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = [r5+0]
+| r4 = r4.l (s)
+| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x1BE : 1c00476 >
+| r2 += 1
+| if (r2 != 0) goto -12 <fl_erase4k_ram+0x1B2 : 1c0046a >
+| [r5+0] |= 0x4000
+| [r5+0] &= 0xFFFFFFF7
+| [r5+0] |= 0x8
+| [r5+0] &= 0xFFFFEFFF
+| r2 = uextra(r0, p:16, l:8)
+| [r5+8] = r2
+| csync
+| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = [r5+0]
+| r4 = r4.l (s)
+| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x1E8 : 1c004a0 >
+| r2 += 1
+| if (r2 != 0) goto -12 <fl_erase4k_ram+0x1DC : 1c00494 >
+| [r5+0] |= 0x4000
+| [r5+0] &= 0xFFFFFFF7
+| [r5+0] |= 0x8
+| [r5+0] &= 0xFFFFEFFF
+| r2 = uextra(r0, p:8, l:8)
+| [r5+8] = r2
+| csync
+| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = [r5+0]
+| r4 = r4.l (s)
+| ifs (r< 0) goto 4 <fl_erase4k_ram>
+| r2 += 1
+| if (r2 != 0) goto <fl_erase4k_ram>
+| [r5+0] |= 0x4000
+| [r5+0] &= 0xFFFFFFF7
+| [r5+0] |= 0x8
+| [r5+0] &= 0xFFFFEFFF
+| r2 = r0.b0 (u)
+| [r5+8] = r2
+| csync
+| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = [r5+0]
+| r4 = r4.l (s)
+| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x23A : 1c004f2 >
+| r2 += 1
+| if (r2 != 0) goto -12 <fl_erase4k_ram+0x22E : 1c004e6 >
+| [r5+0] |= 0x4000
+| [r5+0] &= 0xFFFFFFF7
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] |= 0x1
+| r2 = 10
+| [sp+20] = r2
+| r2 = [sp+20]
+| r4 = r2 + -1
+| [sp+20] = r4
+| if (r2 != 0) goto -10 <fl_erase4k_ram+0x24E : 1c00506 >
+| r2 = 33538048 <settings+0x37FF48 : 1ffc000 >
+| r2 += r0
+| r4 = [r6+0]
+| if ((r4 & 16384) == 0) goto <fl_erase4k_ram>
+| r4 = 33542144 <settings+0x380F48 : 1ffd000 >
+| r0 += r4
+| r2 = r2 & 0xFFFFFFE0
+| if (r2 >= r0) goto <fl_erase4k_ram>
+| csync
+| flushinv [r2]
+| csync
+| r4 = [r6+0]
+| if ((r4 & 16384) == 0) goto -6 <fl_erase4k_ram+0x27C : 1c00534 >
+| r2 += 32
+| if (r< r0) goto -18 <fl_erase4k_ram>
+| r12 = r5 + -5116
+| r2 = [r12+0]
+| r15 = 10 <build/felucca_size.ll+0xA : a >
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r11 = 12000024 <build/felucca_size.ll+0xB71B18 : b71b18 >
+| r0 = [r12+0]
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] &= 0xFFFFFFFE
+| [sp+24] = r15
+| r7 = [sp+24]
+| r3 = r7 + -1
+| [sp+24] = r3
+| if (r7 != 0) goto -10 <fl_erase4k_ram+0x2B0 : 1c00568 >
+| [r5+0] |= 0x8
+| [r5+0] &= 0xFFFFEFFF
+| [r5+8] = 0x5
+| csync
+| r0 = r0 - r2
+| r7 = r4
+| r3 = [r5+0]
+| r3 = r3.l (s)
+| ifs (r3 < 0) goto 4 <fl_erase4k_ram+0x2D8 : 1c00590 >
+| r7 += 1
+| if (r7 != 0) goto -12 <fl_erase4k_ram+0x2CC : 1c00584 >
+| [r5+0] |= 0x4000
+| [r5+0] &= 0xFFFFFFF7
+| [r5+0] |= 0x8
+| [r5+0] |= 0x1000
+| [r5+8] = 0xFF
+| csync
+| r7 = r4
+| r3 = [r5+0]
+| r3 = r3.l (s)
+| ifs (r3 < 0) goto 4 <fl_erase4k_ram+0x2FC : 1c005b4 >
+| r7 += 1
+| if (r7 != 0) goto -12 <fl_erase4k_ram+0x2F0 : 1c005a8 >
+| [r5+0] |= 0x4000
+| r7 = [r5+8]
+| [r5+0] &= 0xFFFFFFF7
+| [r13+8] &= 0xFFFFFFFE
+| [r13+0] |= 0x1
+| [sp+28] = r15
+| r3 = [sp+28]
+| r6 = r3 + -1
+| [sp+28] = r6
+| if (r3 != 0) goto <fl_erase4k_ram>
+| if ((r7 & 1) == 0) goto <fl_erase4k_ram>
+| if (r0 < r11) goto -132 <fl_erase4k_ram+0x2A0 : 1c00558 >
+| r2 = -4
+| goto 2 <fl_erase4k_ram+0x32A : 1c005e2 >
+| r2 = 0
+| r3 = 24
+| r0 = r0 / r3 (u)
+| [r1+0] = r0
+| [r5+0] = r9
+| [r8+0] |= 0x20
+| csync
+| r0 = [r14+0]
+| ifs (r0 < 0) goto -8 <fl_erase4k_ram+0x33C : 1c005f4 >
+| [r14+0] = r10
+| csync
+| r0 = r2
+| sp += 32
+| {pc, r15-r4} = [sp++]
+fl_jedec_ram:
+| [--sp] = {rets, r8-r4}
+| sp += -8
+| r0 = 32432136 <settings+0x271F50 : 1eee008 >
+| r1 = [r0+0]
+| if ((r1 & 16384) == 0) goto -6 <fl_jedec_ram+0xA : 1c0000a >
+| r1 = <build/felucca_size.ll>
+| r3 = 0x11C00  #
+| r2 = [r1+0]
+| r0 = r2 >> 8
+| r0 = r0 & 0xE  #
+| r4 = [r3+0]
+| r5 = r0 | 0x1
+| r0 = 0
+| if (r5 == 7) goto <fl_jedec_ram>
+| csync
+| r0 = [r1+0]
+| ifs (r< 0) goto -6 <fl_jedec_ram>
+| r5 = 0
+| [r1+0] = r5
+| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| [r8+0] &= 0xFFFFFFDF
+| r5 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| [r3+0] = r5
+| [r3+0] = r5
+| csync
+| r5 = r8 + -3932
+| [r5+8] &= 0xFFFFFFFE
+| [r5+0] &= 0xFFFFFFFE
+| r6 = 10
+| [sp] = r6
+| r6 = [sp]
+| r7 = r6 + -1
+| [sp] = r7
+| if (r6 != 0) goto -10 <fl_jedec_ram+0x5E : 1c0005e >
+| [r3+0] |= 0x8
+| [r3+0] &= 0xFFFFEFFF
+| [r3+8] = 0x9F
+| csync
+| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = [r3+0]
+| r7 = r7.l (s)
+| ifs (r< 0) goto 4 <fl_jedec_ram>
+| r6 += 1
+| if (r6 != 0) goto -12 <fl_jedec_ram+0x7C : 1c0007c >
+| [r3+0] |= 0x4000
+| [r3+0] &= 0xFFFFFFF7
+| [r3+0] |= 0x8
+| [r3+0] |= 0x1000
+| [r3+8] = 0xFF
+| csync
+| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = [r3+0]
+| r7 = r7.l (s)
+| ifs (r7 < 0) goto 4 <fl_jedec_ram+0xB0 : 1c000b0 >
+| r6 += 1
+| if (r6 != 0) goto -12 <fl_jedec_ram+0xA4 : 1c000a4 >
+| [r3+0] |= 0x4000
+| r6 = [r3+8]
+| [r3+0] &= 0xFFFFFFF7
+| [r3+0] |= 0x8
+| [r3+0] |= 0x1000
+| [r3+8] = 0xFF
+| csync
+| r6 = r6 << 16
+| r6 = r6 & 0xFF0000
+| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r0 = [r3+0]
+| r0 = r0.l (s)
+| ifs (r0 < 0) goto 4 <fl_jedec_ram+0xE0 : 1c000e0 >
+| r7 += 1
+| if (r7 != 0) goto -12 <fl_jedec_ram+0xD4 : 1c000d4 >
+| [r3+0] |= 0x4000
+| r0 = [r3+8]
+| [r3+0] &= 0xFFFFFFF7
+| [r3+0] |= 0x8
+| [r3+0] |= 0x1000
+| [r3+8] = 0xFF
+| r0 = r0 << 8
+| csync
+| r0 = r0.l (u)
+| r6 |= r0
+| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r0 = [r3+0]
+| r0 = r0.l (s)
+| ifs (r< 0) goto 4 <fl_jedec_ram>
+| r7 += 1
+| if (r7 != 0) goto <fl_jedec_ram>
+| [r3+0] |= 0x4000
+| r0 = [r3+8]
+| [r3+0] &= 0xFFFFFFF7
+| [r5+8] &= 0xFFFFFFFE
+| [r5+0] |= 0x1
+| r5 = 10
+| r5 = r0.b0 (u)  #
+| [sp+4] = r5
+| r0 = [sp+4]
+| r7 = r0 + -1
+| [sp+4] = r7
+| if (r0 != 0) goto <fl_jedec_ram>
+| [r3+0] = r4
+| [r8+0] |= 0x20
+| csync
+| r0 = r6 | r5
+| r3 = [r1+0]
+| ifs (r3 < 0) goto -6 <fl_jedec_ram+0x13E : 1c0013e >
+| [r1+0] = r2
+| csync
+| sp += 8
+| {pc, r8-r4} = [sp++]
+fl_prog_ram:
+| [--sp] = {rets, r15-r4}
+| sp += -32
+| r4 = r0 - 0x97000
+| if (r4 > 299008) goto <fl_prog_ram>
+| r4 = 0xE0000 - r0
+| if (r4 >= r2) goto 20 <fl_prog_ram+0x2A : 1c00632 >
+| r4 = r0 - 0xFC000
+| if (r4 > 12288) goto 814 <fl_prog_ram+0x34E : 1c00956 >
+| r4 = 0xFF000 - r0
+| if (r4 < r2) goto 804 <fl_prog_ram+0x34E : 1c00956 >
+| r5 = r2 + -1
+| r4 = -1
+| if (r5 > 255) goto <fl_prog_ram>
+| r12 = uextra(r0, p:0, l:8)
+| r5 = r12 + r2
+| if (r5 > 256) goto <fl_prog_ram>
+| r15 = 32432136 <settings+0x271F50 : 1eee008 >
+| r4 = [r15+0]
+| if ((r4 & 16384) == 0) goto -8 <fl_prog_ram+0x4A : 1c00652 >
+| r13 = <build/felucca_size.ll>
+| r10 = [r13+0]
+| r7 = 0x11C00
+| r8 = [r7+0]
+| r4 = r10 >> 8
+| r4 = r4 & 0xE
+| r5 = r4 | 0x1
+| r4 = -2
+| if (r5 == 7) goto <fl_prog_ram>
+| csync
+| r4 = [r13+0]
+| ifs (r4 < 0) goto -8 <fl_prog_ram+0x7A : 1c00682 >
+| r4 = 0
+| [r13+0] = r4
+| r9 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| [r9+0] &= 0xFFFFFFDF
+| r4 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| [r7+0] = r4
+| [r7+0] = r4
+| csync
+| r11 = r9 + -3932
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] &= 0xFFFFFFFE
+| r4 = 10
+| [sp] = r4
+| r4 = [sp]
+| r5 = r4 + -1
+| [sp] = r5
+| if (r4 != 0) goto -10 <fl_prog_ram+0xAC : 1c006b4 >
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| [r7+8] = 0x6
+| csync
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = [r7+0]
+| r5 = r5.l (s)
+| ifs (r5 < 0) goto 4 <fl_prog_ram+0xD6 : 1c006de >
+| r4 += 1
+| if (r4 != 0) goto -12 <fl_prog_ram+0xCA : 1c006d2 >
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] |= 0x1
+| r4 = 10
+| [sp+4] = r4
+| r4 = [sp+4]
+| r5 = r4 + -1
+| [sp+4] = r5
+| if (r4 != 0) goto -10 <fl_prog_ram+0xEA : 1c006f2 >
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] &= 0xFFFFFFFE
+| r4 = 10
+| [sp+8] = r4
+| r4 = [sp+8]
+| r5 = r4 + -1
+| [sp+8] = r5
+| if (r4 != 0) goto <fl_prog_ram>
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| [r7+8] = 0x5
+| csync
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = [r7+0]
+| r5 = r5.l (s)
+| ifs (r5 < 0) goto 4 <fl_prog_ram+0x12A : 1c00732 >
+| r4 += 1
+| if (r4 != 0) goto -12 <fl_prog_ram+0x11E : 1c00726 >
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| [r7+0] |= 0x8
+| [r7+0] |= 0x1000
+| [r7+8] = 0xFF
+| csync
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = [r7+0]
+| r5 = r5.l (s)
+| ifs (r< 0) goto 4 <fl_prog_ram>
+| r4 += 1
+| if (r4 != 0) goto <fl_prog_ram>
+| [r7+0] |= 0x4000
+| r14 = [r7+8]
+| [r7+0] &= 0xFFFFFFF7
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] |= 0x1
+| r4 = 10
+| [sp+12] = r4
+| r4 = [sp+12]
+| r5 = r4 + -1
+| [sp+12] = r5
+| if (r4 != 0) goto -10 <fl_prog_ram+0x16A : 1c00772 >
+| r4 = -3
+| if ((r14 & 2) == 0) goto <fl_prog_ram>
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] &= 0xFFFFFFFE
+| r4 = 10
+| [sp+16] = r4
+| r4 = [sp+16]
+| r5 = r4 + -1
+| [sp+16] = r5
+| if (r4 != 0) goto <fl_prog_ram>
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| [r7+8] = 0x2
+| csync
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = [r7+0]
+| r5 = r5.l (s)
+| ifs (r5 < 0) goto 4 <fl_prog_ram+0x1B0 : 1c007b8 >
+| r4 += 1
+| if (r4 != 0) goto -12 <fl_prog_ram+0x1A4 : 1c007ac >
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| r4 = uextra(r0, p:16, l:8)
+| [r7+8] = r4
+| csync
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = [r7+0]
+| r5 = r5.l (s)
+| ifs (r5 < 0) goto 4 <fl_prog_ram+0x1DA : 1c007e2 >
+| r4 += 1
+| if (r4 != 0) goto -12 <fl_prog_ram+0x1CE : 1c007d6 >
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| r4 = uextra(r0, p:8, l:8)
+| [r7+8] = r4
+| csync
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = [r7+0]
+| r5 = r5.l (s)
+| ifs (r< 0) goto 4 <fl_prog_ram>
+| r4 += 1
+| if (r4 != 0) goto -12 <fl_prog_ram+0x1F8 : 1c00800 >
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| [r7+8] = r12
+| csync
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = [r7+0]
+| r5 = r5.l (s)
+| ifs (r5 < 0) goto 4 <fl_prog_ram+0x22C : 1c00834 >
+| r4 += 1
+| if (r4 != 0) goto <fl_prog_ram>
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| if (r2 == 0) goto 52 <fl_prog_ram+0x26A : 1c00872 >
+| r4 = 0
+| r12 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r5 = b[r1+r4] (u)
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| [r7+8] = r5
+| csync
+| r5 = r12
+| r6 = [r7+0]
+| r6 = r6.l (s)
+| ifs (r6 < 0) goto 4 <fl_prog_ram+0x25C : 1c00864 >
+| r5 += 1
+| if (r5 != 0) goto <fl_prog_ram>
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| r4 += 1
+| if (r4 != r2) goto -44 <fl_prog_ram+0x23E : 1c00846 >
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] |= 0x1
+| r1 = 10
+| [sp+20] = r1
+| r1 = [sp+20]
+| r4 = r1 + -1
+| [sp+20] = r4
+| if (r1 != 0) goto <fl_prog_ram>
+| r1 = 33538048 <settings+0x37FF48 : 1ffc000 >
+| r1 += r0
+| r0 = [r15+0]
+| if ((r0 & 16384) == 0) goto <fl_prog_ram>
+| r0 = r1 + r2
+| r1 = r1 & 0xFFFFFFE0
+| if (r1 >= r0) goto 20 <fl_prog_ram+0x2AE : 1c008b6 >
+| csync
+| flushinv [r1]
+| csync
+| r2 = [r15+0]
+| if ((r2 & 16384) == 0) goto -8 <fl_prog_ram+0x2A0 : 1c008a8 >
+| r1 += 32
+| if (r1 < r0) goto -20 <fl_prog_ram+0x29A : 1c008a2 >
+| r14 = r7 + -5116
+| r1 = [r14+0]
+| r15 = 10 <build/felucca_size.ll+0xA : a >
+| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r12 = 240024 <build/felucca_size.ll+0x3A998 : 3a998 >
+| r5 = [r14+0]
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] &= 0xFFFFFFFE
+| [sp+24] = r15
+| r6 = [sp+24]
+| r0 = r6 + -1
+| [sp+24] = r0
+| if (r6 != 0) goto -10 <fl_prog_ram+0x2D6 : 1c008de >
+| [r7+0] |= 0x8
+| [r7+0] &= 0xFFFFEFFF
+| [r7+8] = 0x5
+| csync
+| r6 = r5 - r1
+| r5 = r4
+| r0 = [r7+0]
+| r0 = r0.l (s)
+| ifs (r0 < 0) goto 4 <fl_prog_ram+0x2FE : 1c00906 >
+| r5 += 1
+| if (r5 != 0) goto -12 <fl_prog_ram+0x2F2 : 1c008fa >
+| [r7+0] |= 0x4000
+| [r7+0] &= 0xFFFFFFF7
+| [r7+0] |= 0x8
+| [r7+0] |= 0x1000
+| [r7+8] = 0xFF
+| csync
+| r5 = r4
+| r0 = [r7+0]
+| r0 = r0.l (s)
+| ifs (r< 0) goto 4 <fl_prog_ram>
+| r5 += 1
+| if (r5 != 0) goto <fl_prog_ram>
+| [r7+0] |= 0x4000
+| r5 = [r7+8]
+| [r7+0] &= 0xFFFFFFF7
+| [r11+8] &= 0xFFFFFFFE
+| [r11+0] |= 0x1
+| [sp+28] = r15
+| r0 = [sp+28]
+| r2 = r0 + -1
+| [sp+28] = r2
+| if (r0 != 0) goto <fl_prog_ram>
+| if ((r5 & 1) == 0) goto 40 <fl_prog_ram+0x36E : 1c00976 >
+| if (r6 < r12) goto -132 <fl_prog_ram+0x2C6 : 1c008ce >
+| r4 = -4
+| goto <fl_prog_ram>
+| r5 = r0 - 0xE0000
+| r4 = -1
+| if (r5 > 20480) goto <fl_prog_ram>
+| if (r2 > 256) goto <fl_prog_ram>
+| r5 = 0xE5000 - r0
+| r6 = r2 + -1
+| if (r< r5) goto -822 <fl_prog_ram>
+| goto <fl_prog_ram>
+| r4 = 0
+| r0 = 24
+| r0 = r6 / r0 (u)
+| [r3+0] = r0
+| [r7+0] = r8
+| [r9+0] |= 0x20
+| csync
+| r0 = [r13+0]
+| ifs (r< 0) goto -8 <fl_prog_ram>
+| [r13+0] = r10
+| csync
+| r0 = r4
+| sp += 32
+| {pc, r15-r4} = [sp++]
+fl_read_ram:
+| [--sp] = {rets, r11-r4}
+| sp += -8
+| r3 = 32432136 <settings+0x271F50 : 1eee008 >
+| r4 = [r3+0]
+| if ((r4 & 16384) == 0) goto -6 <fl_read_ram+0xA : 1c009a8 >
+| r4 = <build/felucca_size.ll>
+| r11 = [r4+0]
+| r6 = 0x11C00
+| r10 = [r6+0]
+| r3 = r11 >> 8
+| r3 = r3 & 0xE
+| r7 = r3 | 0x1
+| r3 = -2
+| if (r7 == 7) goto 366 <fl_read_ram+0x1A2 : 1c00b40 >
+| csync
+| r3 = [r4+0]
+| ifs (r< 0) goto -6 <fl_read_ram>
+| r3 = 0
+| [r4+0] = r3
+| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| [r8+0] &= 0xFFFFFFDF
+| r3 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| [r6+0] = r3
+| [r6+0] = r3
+| csync
+| r9 = r8 + -3932
+| [r9+8] &= 0xFFFFFFFE
+| [r9+0] &= 0xFFFFFFFE
+| r3 = 10
+| [sp] = r3
+| r3 = [sp]
+| r7 = r3 + -1
+| [sp] = r7
+| if (r3 != 0) goto <fl_read_ram>
+| [r6+0] |= 0x8
+| [r6+0] &= 0xFFFFEFFF
+| [r6+8] = 0xB
+| csync
+| r3 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = [r6+0]
+| r7 = r7.l (s)
+| ifs (r7 < 0) goto 4 <fl_read_ram+0x8E : 1c00a2c >
+| r3 += 1
+| if (r3 != 0) goto <fl_read_ram>
+| [r6+0] |= 0x4000
+| [r6+0] &= 0xFFFFFFF7
+| [r6+0] |= 0x8
+| [r6+0] &= 0xFFFFEFFF
+| r3 = uextra(r0, p:16, l:8)
+| [r6+8] = r3
+| csync
+| r3 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = [r6+0]
+| r7 = r7.l (s)
+| ifs (r7 < 0) goto 4 <fl_read_ram+0xB8 : 1c00a56 >
+| r3 += 1
+| if (r3 != 0) goto -12 <fl_read_ram+0xAC : 1c00a4a >
+| [r6+0] |= 0x4000
+| [r6+0] &= 0xFFFFFFF7
+| [r6+0] |= 0x8
+| [r6+0] &= 0xFFFFEFFF
+| r3 = uextra(r0, p:8, l:8)
+| [r6+8] = r3
+| csync
+| r3 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = [r6+0]
+| r7 = r7.l (s)
+| ifs (r7 < 0) goto 4 <fl_read_ram+0xE2 : 1c00a80 >
+| r3 += 1
+| if (r3 != 0) goto -12 <fl_read_ram+0xD6 : 1c00a74 >
+| [r6+0] |= 0x4000
+| [r6+0] &= 0xFFFFFFF7
+| [r6+0] |= 0x8
+| [r6+0] &= 0xFFFFEFFF
+| r0 = r0.b0 (u)
+| [r6+8] = r0
+| csync
+| r0 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r3 = [r6+0]
+| r3 = r3.l (s)
+| ifs (r3 < 0) goto 4 <fl_read_ram+0x10A : 1c00aa8 >
+| r0 += 1
+| if (r0 != 0) goto -12 <fl_read_ram+0xFE : 1c00a9c >
+| [r6+0] |= 0x4000
+| [r6+0] &= 0xFFFFFFF7
+| [r6+0] |= 0x8
+| [r6+0] &= 0xFFFFEFFF
+| [r6+8] = 0xFF
+| csync
+| r0 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r3 = [r6+0]
+| r3 = r3.l (s)
+| ifs (r< 0) goto 4 <fl_read_ram>
+| r0 += 1
+| if (r0 != 0) goto <fl_read_ram>
+| [r6+0] |= 0x4000
+| [r6+0] &= 0xFFFFFFF7
+| if (r2 == 0) goto <fl_read_ram>
+| r0 = 0
+| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| [r6+0] |= 0x8
+| [r6+0] |= 0x1000
+| [r6+8] = 0xFF
+| csync
+| r3 = r7
+| r5 = [r6+0]
+| r5 = r5.l (s)
+| ifs (r< 0) goto 4 <fl_read_ram>
+| r3 += 1
+| if (r3 != 0) goto <fl_read_ram>
+| [r6+0] |= 0x4000
+| r3 = [r6+8]
+| [r6+0] &= 0xFFFFFFF7
+| b[r1+r0] = r3
+| r0 += 1
+| if (r0 != r2) goto <fl_read_ram>
+| [r9+8] &= 0xFFFFFFFE
+| [r9+0] |= 0x1
+| r0 = 10
+| [sp+4] = r0
+| r0 = [sp+4]
+| r1 = r0 + -1
+| [sp+4] = r1
+| if (r0 != 0) goto <fl_read_ram>
+| [r6+0] = r10
+| [r8+0] |= 0x20
+| csync
+| r0 = [r4+0]
+| ifs (r< 0) goto -6 <fl_read_ram>
+| [r4+0] = r11
+| csync
+| r3 = 0
+| r0 = r3
+| sp += 8
+| {pc, r11-r4} = [sp++]
+| nop
+fl_status_ram:
+| [--sp] = {rets, r8-r4}
+| sp += -16
+| r0 = 32432136 <settings+0x271F50 : 1eee008 >
+| r1 = [r0+0]
+| if ((r1 & 16384) == 0) goto -6 <fl_status_ram+0xA : 1c00156 >
+| r1 = <build/felucca_size.ll>
+| r3 = 0x11C00  #
+| r2 = [r1+0]
+| r0 = r2 >> 8
+| r0 = r0 & 0xE  #
+| r4 = [r3+0]
+| r5 = r0 | 0x1
+| r0 = -1
+| if (r5 == 7) goto <fl_status_ram>
+| csync
+| r0 = [r1+0]
+| ifs (r< 0) goto -6 <fl_status_ram>
+| r5 = 0
+| [r1+0] = r5
+| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| [r8+0] &= 0xFFFFFFDF
+| r5 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| [r3+0] = r5
+| [r3+0] = r5
+| csync
+| r5 = r8 + -3932
+| [r5+8] &= 0xFFFFFFFE
+| [r5+0] &= 0xFFFFFFFE
+| r6 = 10
+| [sp] = r6
+| r6 = [sp]
+| r7 = r6 + -1
+| [sp] = r7
+| if (r6 != 0) goto -10 <fl_status_ram+0x5E : 1c001aa >
+| [r3+0] |= 0x8
+| [r3+0] &= 0xFFFFEFFF
+| [r3+8] = 0x5
+| csync
+| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = [r3+0]
+| r7 = r7.l (s)
+| ifs (r< 0) goto 4 <fl_status_ram>
+| r6 += 1
+| if (r6 != 0) goto -12 <fl_status_ram+0x7C : 1c001c8 >
+| [r3+0] |= 0x4000
+| [r3+0] &= 0xFFFFFFF7
+| [r3+0] |= 0x8
+| [r3+0] |= 0x1000
+| [r3+8] = 0xFF
+| csync
+| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = [r3+0]
+| r7 = r7.l (s)
+| ifs (r7 < 0) goto 4 <fl_status_ram+0xB0 : 1c001fc >
+| r6 += 1
+| if (r6 != 0) goto -12 <fl_status_ram+0xA4 : 1c001f0 >
+| [r3+0] |= 0x4000
+| r6 = [r3+8]
+| [r3+0] &= 0xFFFFFFF7
+| [r5+8] &= 0xFFFFFFFE
+| [r5+0] |= 0x1
+| r7 = 10
+| [sp+4] = r7
+| r7 = [sp+4]
+| r0 = r7 + -1
+| [sp+4] = r0
+| if (r7 != 0) goto -10 <fl_status_ram+0xC6 : 1c00212 >
+| [r5+8] &= 0xFFFFFFFE
+| [r5+0] &= 0xFFFFFFFE
+| r0 = 10
+| [sp+8] = r0
+| r0 = [sp+8]
+| r7 = r0 + -1
+| [sp+8] = r7
+| if (r0 != 0) goto -10 <fl_status_ram+0xDC : 1c00228 >
+| [r3+0] |= 0x8
+| [r3+0] &= 0xFFFFEFFF
+| [r3+8] = 0x35
+| csync
+| r6 = r6.b0 (u)
+| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r0 = [r3+0]
+| r0 = r0.l (s)
+| ifs (r< 0) goto 4 <fl_status_ram>
+| r7 += 1
+| if (r7 != 0) goto -12 <fl_status_ram+0xFC : 1c00248 >
+| [r3+0] |= 0x4000
+| [r3+0] &= 0xFFFFFFF7
+| [r3+0] |= 0x8
+| [r3+0] |= 0x1000
+| [r3+8] = 0xFF
+| csync
+| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r0 = [r3+0]
+| r0 = r0.l (s)
+| ifs (r< 0) goto 4 <fl_status_ram>
+| r7 += 1
+| if (r7 != 0) goto <fl_status_ram>
+| [r3+0] |= 0x4000
+| r7 = [r3+8]
+| [r3+0] &= 0xFFFFFFF7
+| [r5+8] &= 0xFFFFFFFE
+| [r5+0] |= 0x1
+| r0 = 10
+| [sp+12] = r0
+| r0 = [sp+12]
+| r5 = r0 + -1
+| [sp+12] = r5
+| if (r0 != 0) goto <fl_status_ram>
+| [r3+0] = r4
+| [r8+0] |= 0x20
+| csync
+| r0 = r7 << 8
+| r0 = r0.l (u)
+| r3 = [r1+0]
+| ifs (r3 < 0) goto -6 <fl_status_ram+0x15C : 1c002a8 >
+| [r1+0] = r2
+| csync
+| r0 |= r6
+| sp += 16
+| {pc, r8-r4} = [sp++]
+fm1_cstart:
+| sp += -8
+| r0 = 0x10800
+| r1 = [r0+0]
+| r1 = r1 & 0xF
+| if (r1 == 9) goto <fm1_cstart>
+| r1 = 0
+| [r0+0] = r1
+| [r0+8] = 0xFFFFFFFF
+| r1 = 16393  # <build/felucca_size.ll+0x4008 : 4008 >
+| [r0+4] = r1
+| [r0+0] = r1
+| r0 = 18
+| call <fm1_p33_read >
+| r9 = <fm1_boot.0 >
+| b[r9+0] = r0
+| r0 = 65728 <build/felucca_size.ll+0x100C0 : 100c0 >
+| r0 = [r0+0]
+| r10 = <fm1_boot.1 >
+| [r10+0] = r0
+| r0 = 128
+| call <fm1_p33_read >
+| r11 = [r10+0]
+| r12 = b[r9+0] (u)
+| r13 = r0
+| r8 = <fm1_boot.2 >
+| b[r8+0] = r0
+| r0 = 0
+| r1 = 128
+| r2 = 0
+| call <fm1__p33_op >
+| r0 = 2
+| r1 = 23
+| r2 = 191
+| call <fm1__p33_op >
+| r0 = 0
+| r1 = 128
+| r2 = 77
+| call <fm1__p33_op >
+| r0 = 1
+| r1 = 128
+| r2 = 16
+| r5 = 1
+| call <fm1__p33_op >
+| r0 = <bootguard >
+| r1 = [r0+0]
+| r2 = 1111970372 <_data_load+0x40464E2C : 42475244 >
+| if (r1 != r2) goto 32 <fm1_cstart+0xB8 : 200478a >
+| r2 = [r0+8]
+| r1 = [r0+4]
+| if (r2 == 0) goto 4 <fm1_cstart+0xA2 : 2004774 >
+| r1 += 1
+| [r0+4] = r1
+| [r0+8] = 0x1
+| if (r1 <= 1) goto 22 <fm1_cstart+0xC0 : 2004792 >
+| r2 = 0
+| r3 = 0
+| d[r0+4] = r3_r2
+| call <fm1_enter_uboot >
+| goto -2 <fm1_cstart+0xB6 : 2004788 >
+| r3 = 0
+| d[r0+0] = r3_r2
+| [r0+8] = r5
+| r0 = 0
+| r1 = 8109120 <build/felucca_size.ll+0x7BBC40 : 7bbc40 >
+| r2 = 0
+| [r2+r1<<2] = r0
+| r2 += 4
+| if (r2 != 128) goto -10 <fm1_cstart+0xCA : 200479c >
+| r0 = 255
+| r1 = <settings>
+| [r1+212] = r0
+| r2 = -1
+| r0 = r1 + -3728  #
+| [r1+4] = r2
+| r3 = [r0+0]
+| if ((r3 & 0x1) == 0) {
+| [r0+0] = 0xE7
+| [r0+8] = r2
+| r3 = 0
+| r6 = <fm1_fatal_stubs >
+| r2 = 29883904 <settings+0x3D48 : 1c7fe00 >
+| [r2+r3<<2] = r6
+| r3 += 1
+| r6 += 6
+| if (r3 != 128) goto <fm1_cstart>
+| [r1+48] |= 0xF0
+| [r1+0] &= 0xFFFFFFFB
+| r3 = r0 + 3968
+| [r3+0] |= 0x1
+| r3 = <_bss_end >
+| r6 = <fm1_fault_c.in_fault >
+| if (r6 >= r3) goto <fm1_cstart>
+| r5 = 0
+| [r6++=4] = r5
+| if (r< r3) goto -6 <fm1_cstart>
+| r3 = <_pool_end >
+| r6 = <cv_px >
+| if (r6 >= r3) goto 8 <fm1_cstart+0x14E : 2004820 >
+| r5 = 0
+| [r6++=4] = r5
+| if (r< r3) goto -6 <fm1_cstart>
+| r3 = <_data_end >
+| r6 = <fm1__dim_k >
+| if (r6 >= r3) goto 14 <fm1_cstart+0x16C : 200483e >
+| r7 = <_data_load >
+| r5 = [r7++=4]
+| [r6++=4] = r5
+| if (r< r3) goto -8 <fm1_cstart>
+| r3 = <_rt_end >
+| r5 = <fl_jedec_ram >
+| if (r5 >= r3) goto 16 <fm1_cstart+0x18C : 200485e >
+| r7 = <_rt_load >
+| r6 = r5
+| r4 = [r7++=4]
+| [r6++=4] = r4
+| if (r< r3) goto -8 <fm1_cstart>
+| r6 = r2 + -128
+| r7 = 0
+| [r6++=4] = r7
+| if (r< r2) goto -6 <fm1_cstart>
+| r2 = [r0+0]
+| if ((r2 & 0x1) == 0) {
+| [r0+0] = 0xE7
+| [r0+8] = 0xFFFFFFFF
+| [r1+0] &= 0xFFFFFFF7
+| r2 = <_ustack_lo >
+| [r1+12] = r2
+| r4 = <fm1_crash >
+| [r1+8] = r4
+| [r1+20] = r2
+| [r1+16] = r4
+| [r1+0] |= 0x8
+| r1 = <_guard0 >
+| r4 = r0 + 128
+| r1 = r2 + -1  #
+| [r4+0] = r1
+| r2 = r0 + 64
+| [r2+0] = r1
+| r1 = <_ustack_top >
+| [r4+4] = r1
+| r1 = 29860095 <_ustack_top+0xFE : 1c7a0fe >
+| r1 = r0 + 256  #
+| [r2+4] = r1
+| [r1+8] |= 0x3
+| r2 = 4128816 <build/felucca_size.ll+0x3F0030 : 3f0030 >
+| [r1+0] |= r2
+| r7 = <_start >
+| r1 += 64
+| [r1+4] = r7
+| r2 = <_rt_load >
+| [r1+0] = r2
+| [sp+4] = r5
+| [sp] = r3
+| r3 = [sp]
+| r4 = [sp+4]
+| if (r3 > r4) {
+| r7 = [sp+4]
+| [r1+12] = r7
+| r3 = [sp]
+| r4 = [sp+4]
+| if (r3 > r4) {
+| r2 = [sp]
+| r2 += -1
+| [r1+8] = r2
+| r1 = [r0+0]
+| if ((r1 & 0x1) != 0) {
+| [r0+0] = 0xE7
+| b[r9+0] = r12
+| [r10+0] = r11
+| b[r8+0] = r13
+| call <fm1_main >
+| goto <fm1_cstart>
+fm1_timer5_irq:
+| [--sp] = {rets, r15-r4}
+| sp += -12
+| r2 = <build/felucca_size.ll>
+| r0 = [r2+0]
+| r0 = r2 + 252  #
+| [sp+8] = r0
+| r15 = <fm1__tick_col >
+| r1 = [r15+40]
+| [r0+0] |= 0x4000
+| r0 = <felucca_dbg >
+| [r0+24] += 1
+| r5 = b[r15+0] (u)
+| r4 = [r2+0]
+| r8 = <rc >
+| r0 = [r8+224]
+| r13 = 0x50000
+| r2 = [r13+0]
+| r9 = r13 + 448
+| r3 = [r9+0]
+| r2 = r2 & 0xFFFFF9FF
+| [r13+0] = r2
+| r2 = r3 & 0xFFFFFDBF
+| [r9+0] = r2
+| [r8+224] = r4
+| r2 = 5
+| r2 = r1 / r2 (u)
+| r2 = r2 * 0x5
+| r1 = r1 - r2
+| r10 = r5 + 1  #
+| [sp+4] = r1
+| r3 = 0
+| r14 = 0
+| if (r10 != 11) {
+| r14 = r10
+| r1 = 2048  # <build/felucca_size.ll+0x800 : 800 >
+| [sp] = r4
+| r1 = r1 << r14
+| r2 = 1
+| r2 = r2 << r14
+| r0 = r4 - r0
+| r4 = 3600 <build/felucca_size.ll+0xE10 : e10 >
+| r6 = r3 + 1
+| if (r3 > 6) goto 10 <fm1_timer5_irq+0xA0 : 200162c >
+| r7 = r4 << r3
+| r3 = r6
+| if (r0 >= r7) goto <fm1_timer5_irq>
+| r3 = r8 + 228
+| r4 = r6 << 2
+| r3 += r4
+| [r3+0] += 1
+| if (r14 >= 2) {
+| r1 = 0
+| r3 = [r8+228]
+| if (r0 > r3) {
+| [r8+228] = r0
+| r3 = r5 << 2
+| r3 += r8
+| r3 = r3 + 264
+| [r3+0] += r0
+| r1 ^= r2  #
+| r4 = [r3+44]
+| if (r0 > r4) {
+| [r3+44] = r0
+| r2 = [r13+4]
+| r0 = 65535 <build/felucca_size.ll+0xFFFE : fffe >
+| r0 ^= r1
+| r12 = <fm1_in >
+| r1 = r2 & 0x1
+| r2 = r2 >> 4
+| r3 = r9 + -380
+| r2 = r2 & 0x1E  #
+| r3 = [r3+0]
+| r1 |= r2
+| r4 = r5 + r12
+| r2 = r3 >> 2
+| r2 = r2 & 0x20
+| r1 |= r2
+| r1 = r1 ^ 0x3F
+| b[++r4=20] = r1
+| if (r5 != 0) goto <fm1_timer5_irq>
+| r1 = 0
+| b[r15+2] = r1
+| h[r15+12] = r1
+| b[r15+3] = r1
+| h[r15+10] = r1
+| b[r15+1] = r1
+| r1 = 0
+| r2 = 16
+| r11 = 0
+| call <fm1__sr_bits >
+| [r13+0] |= 0x2
+| [r13+0] &= 0xFFFFFFFD
+| r0 = [r13+0]
+| r1 = [r9+0]
+| r0 = r0 & 0xFFFFF9FF
+| [r13+0] = r0
+| r0 = r1 & 0xFFFFFDBF
+| [r9+0] = r0
+| b[r15+0] = r14
+| r0 = <FM1_KEYMAP >
+| r9 = b[r4+0] (u)
+| r0 += r5
+| r13 = r0 + 11
+| r2 = 1
+| r6 = b[r13++=11] (s)
+| ifs (r< 0) goto 202 <fm1_timer5_irq>
+| r14 = r6 + -14
+| r7 = r6.b0 (u)
+| r3 = r14
+| if (r7 <= 13) {
+| r3 = r6
+| r4 = r12 + 4
+| r0 = r12
+| if (r7 <= 13) {
+| r0 = r4
+| r1 = [r0+0]
+| r4 = r1 & (1 << r3)
+| r0 = 1
+| r3 = r0 << r3
+| r5 = 1
+| if ((r1 & r3) == 0) {
+| r5 = 0
+| r1 = r0 << r2
+| if ((r1 & r9) == 0) {
+| r0 = 0
+| r0 ^= r5
+| r1 = r6 + r12
+| r6 = r1 + 31
+| if (r0 == 0) goto 110 <fm1_timer5_irq+0x21C : 20017a8 >
+| r0 = 1
+| if (r4 == 0) goto 2 <fm1_timer5_irq+0x1B4 : 2001740 >
+| r0 = 0
+| if (r7 < 14) goto 22 <fm1_timer5_irq+0x1CE : 200175a >
+| if (r0 == 0) goto 20 <fm1_timer5_irq+0x1CE : 200175a >
+| r0 = b[r6+0] (u)
+| if (r0 != 0) goto 16 <fm1_timer5_irq+0x1CE : 200175a >
+| r0 = <build/felucca_size.ll>
+| r1 = r12 + 72  #
+| r0 = [r0+0]
+| [r1+r14<<2] = r0
+| r0 = b[r6+0] (u)
+| r0 += 1
+| b[r6+0] = r0
+| r5 = 8
+| if (r4 != 0) goto 2 <fm1_timer5_irq+0x1DA : 2001766 >
+| r5 = 2
+| r0 = r0.b0 (u)
+| if (r< r5) goto 86 <fm1_timer5_irq>
+| b[r6+0] = r11
+| if (r< 14) goto 58 <fm1_timer5_irq>
+| if (r4 != 0) goto <fm1_timer5_irq>
+| r0 = <build/felucca_size.ll>
+| r1 = r12 + 72  #
+| r0 = [r0+0]
+| r1 = [r1+r14<<2]
+| [r12+16] |= r3
+| r4 = r8 + 420
+| [r4+0] += 1
+| r0 = r0 - r1
+| [r4+4] += r0
+| r1 = [r4+8]
+| if (r0 > r1) {
+| [r8+428] = r0
+| [r12+0] ^= r3
+| goto <fm1_timer5_irq>
+| b[r6+0] = r11
+| goto <fm1_timer5_irq>
+| [r12+4] ^= r3
+| r5 = r12 + 8
+| r0 = r12 + 12
+| if (r4 != 0) goto <fm1_timer5_irq>
+| r0 = r5
+| [r0+0] |= r3
+| r2 += 1
+| if (r2 != 5) goto <fm1_timer5_irq>
+| if (r10 != 11) goto 372 <fm1_timer5_irq+0x3B4 : 2001940 >
+| r1 = <FM1_ENC >
+| r10 = <build/felucca_size.ll>
+| r6 = 0
+| goto 12 <fm1_timer5_irq+0x25A : 20017e6 >
+| ifs (r4 > -1) goto <fm1_timer5_irq>
+| r0 = b[r14+0] (u)
+| r0 += -2
+| goto <fm1_timer5_irq>
+| r3 = r12 + 20  #
+| r2 = b[r1+0] (u)
+| r2 = b[r2+r3] (u)
+| r4 = b[r1+2] (u)
+| r5 = b[r1+1] (u)
+| r3 = b[r4+r3] (u)
+| r2 >>= r5  #
+| r4 = b[r1+3] (u)
+| r2 = r2 << 1
+| r4 = r3 >> r4
+| r7 = r6 + r12
+| r3 = r7 + 187
+| r2 = r2 & 0x2  #
+| r5 = b[r3+0] (u)
+| r4 = r4 & 0x1
+| r9 = r4 | r2
+| if (r9 != r5) goto 140 <fm1_timer5_irq+0x31C : 20018a8 >
+| r2 = r7
+| r4 = b[++r2=180] (u)
+| if (r4 == 255) {
+| b[r2+0] = r9
+| b[r7+194] = r9
+| r4 = r6 << 1
+| r13 = r4 + r12
+| r4 = r13
+| r0 = h[++r4=202] (u)
+| r14 = r7 + 216
+| r5 = 65535 <build/felucca_size.ll+0xFFFE : fffe >
+| if (r0 == r5) goto 32 <fm1_timer5_irq+0x2DC : 2001868 >
+| r0 = h[r4+0] (u)
+| r0 += 1
+| r5 = r0.l (u)
+| h[r4+0] = r0
+| if (r5 != 900) goto 18 <fm1_timer5_irq+0x2DC : 2001868 >
+| r4 = r7
+| r0 = b[++r4=194] (u)
+| if (r9 != r0) {
+| b[r4+0] = r9
+| b[r14+0] = r11
+| r0 = b[r2+0] (u)
+| if (r9 == r0) goto 194 <fm1_timer5_irq+0x3A4 : 2001930 >
+| r0 = b[r2+0] (u)
+| r0 = r0 << 2
+| r4 = r0 | r9
+| r0 = r10 >> r4
+| if ((r0 & 1) != 0) goto 56 <fm1_timer5_irq+0x32A : 20018b6 >
+| r0 = <build/felucca_size.ll>
+| r0 >>= r4
+| if ((r0 & 1) != 0) goto <fm1_timer5_irq>
+| r0 = r6 << 2
+| r0 += r8
+| r0 = r0 + 392
+| [r0+0] += 1
+| r0 = b[r3+29] (s)
+| r4 = b[r3+29] (s)
+| ifs (r0 < 1) goto -198 <fm1_timer5_irq+0x24E : 20017da >
+| r0 = r4 + 2
+| b[r14+0] = r0
+| goto <fm1_timer5_irq>
+| b[r3+0] = r9
+| r2 = r12 + 202
+| h[r2+r6<<1] = r11
+| goto 122 <fm1_timer5_irq+0x3A4 : 2001930 >
+| r0 = b[r14+0] (u)
+| r0 += 1
+| goto <fm1_timer5_irq>
+| r0 = b[r14+0] (u)
+| r0 += -1
+| b[r14+0] = r0
+| r0 = r6 << 2
+| r0 += r8
+| r0 = r0 + 364
+| [r0+0] += 1
+| b[r2+0] = r9
+| r0 = b[r3+29] (s)
+| ifs (r0 > 100) goto 8 <fm1_timer5_irq+0x35C : 20018e8 >
+| r0 = b[r3+29] (s)
+| ifs (r0 > -101) goto <fm1_timer5_irq>
+| b[r14+0] = r11
+| r0 = b[r7+194] (u)
+| if (r9 != r0) goto 60 <fm1_timer5_irq+0x3A4 : 2001930 >
+| r0 = b[r3+29] (s)
+| r2 = b[r3+29] (s)
+| r4 = 0x0 - r2
+| ifs (r0 >= 0) {
+| r4 = r2
+| r2 = 0
+| ifs (r4 >= 2) {
+| r0 = r4 + 2
+| r2 = 4
+| r2 = r0 / r2 (s)
+| r4 = h[r13+224] (u)
+| r0 = b[r3+29] (s)
+| r3 = 0x0 - r2
+| ifs (r0 >= 0) {
+| r3 = r2
+| r0 = r3 + r4
+| h[r13+224] = r0
+| b[r14+0] = r11
+| r6 += 1
+| r1 += 4
+| if (r6 != 7) goto -338 <fm1_timer5_irq+0x25A : 20017e6 >
+| r0 = r12 + 240
+| [r0+0] += 1
+| r0 = <build/felucca_size.ll>
+| r0 = [r0+0]
+| r1 = [sp]
+| r0 = r0 - r1
+| r1 = r8 + 352
+| [r1+0] += r0
+| [r1+8] += 1
+| r1 = [r1+4]
+| if (r0 > r1) {
+| [r8+356] = r0
+| r1_r0 = d[r15+48]
+| r4 = [sp+8]
+| r0 = r4 - r0
+| r0 += r1
+| [r15+52] = r0
+| r1 = r0 >> 6
+| [r15+48] = r4
+| r3 = [sp+4]
+| if (r< 375) goto 20 <fm1_timer5_irq>
+| r1 = -24000 <_data_load+0xFFFFFFFFFDFE9E28 : ffffffffffffa240 >
+| r0 += r1
+| [r15+52] = r0
+| [r15+56] += 1
+| r2 = r0 >> 6
+| if (r2 > 374) goto -16 <fm1_timer5_irq+0x3F4 : 2001980 >
+| if (r3 != 0) goto 4 <fm1_timer5_irq+0x40A : 2001996 >
+| [r15+44] |= 0x1
+| r0 = [r15+40]
+| r1 = 5
+| r1 = r0 / r1 (u)
+| r1 = r1 * 0x5
+| r1 = r0 - r1
+| r2 = <felucca_dbg >
+| if (r1 == 2) {
+| [r15+44] |= 0x2
+| r1 = r0 + 1
+| r0 = 0
+| if (r1 != 10) {
+| r0 = r1
+| r1 = [r2+16]
+| [r15+40] = r0
+| if (r1 == 0) goto <fm1_timer5_irq>
+| [r2+12] += 1
+| if (r3 != 0) goto <fm1_timer5_irq>
+| call <uac_service >
+| r0 = <build/felucca_size.ll>
+| r0 = [r0+0]
+| r0 = r0 - r4
+| [r15+20] += r0
+| goto 1966 <fm1_timer5_irq+0xC02 : 200218e >
+| r0 = [r15+44]
+| if ((r0 & 0x1) == 0) goto 1668 <fm1_timer5_irq+0xAE2 : 200206e >
+| r5 = <usb >
+| r1 = b[r5+0] (u)
+| if (r1 == 0) goto 1654 <fm1_timer5_irq+0xAE2 : 200206e >
+| r9 = 0x11800
+| r0 = [r9+0]
+| if ((r0 & 8192) != 0) goto <fm1_timer5_irq>
+| r0 = [r5+40]
+| r0 += 1
+| [r5+40] = r0
+| r1 = [r5+48]
+| if (r0 > r1) {
+| [r5+48] = r0
+| goto <fm1_timer5_irq>
+| [r9+0] |= 0x1000
+| [r5+32] += 1
+| [r5+40] = 0x0
+| r0 = b[r5+1] (u)
+| if (r0 == 0) goto 96 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| r0 = [r15+68]
+| r0 += 1
+| [r15+68] = r0
+| if (r0 < 20) goto 82 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| r4 = 0
+| [r15+68] = r4
+| r0 = 12
+| call <sie_rd >
+| r6 = r0
+| r0 = 13
+| call <sie_rd >
+| r0 = r0 << 8
+| r1 = h[r5+60] (u)
+| r0 = r0 & 0x700
+| r0 |= r6
+| r2 = r0.l (u)
+| if (r1 != r2) goto 34 <fm1_timer5_irq+0x4EE : 2001a7a >
+| r0 = h[r5+62] (u)
+| r0 += 1
+| r1 = r0.l (u)
+| h[r5+62] = r0
+| if (r1 < 10) goto 28 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| r0 = b[r5+65] (u)
+| if (r0 != 0) goto 22 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| r0 = 1
+| b[r5+65] = r0
+| [r5+56] += 1
+| goto 10 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| r1 = r5
+| h[++r1=60] = r0
+| h[r1+2] = r4
+| b[r1+5] = r4
+| r0 = 6
+| call <sie_rd >
+| r6 = r0
+| r0 = 2
+| call <sie_rd >
+| r4 = r0
+| r0 = 4
+| call <sie_rd >
+| r13 = r0
+| if ((r6 & 0x1) != 0) {
+| [r5+44] += 1
+| r0 = 1
+| b[r5+65] = r0
+| if ((r6 & 0x2) != 0) {
+| r0 = 0
+| b[r5+65] = r0
+| r14 = <fm1__dim_k >
+| r8 = <ep0buf >
+| if ((r6 & 4) == 0) goto 106 <fm1_timer5_irq+0x5A2 : 2001b2e >
+| [r5+16] += 1
+| r1_r0 = 0
+| r6 = 0
+| call <sie_wr >
+| b[r5+1] = r6
+| b[r5+65] = r6
+| r0 = r15 + 72
+| r1 = [r0+0]
+| [r0+4] = r1
+| b[r5+91] = r6
+| r1 = [r0+8]
+| [r0+12] = r1
+| b[r15+4] = r6
+| b[r5+4] = r6
+| b[r5+3] = r6
+| b[r5+92] = r6
+| b[r14+11] = r6
+| b[r14+12] = r6
+| b[r14+13] = r6
+| r0 = r15 + 284
+| b[r0+6] = r6
+| b[r0+1] = r6
+| b[r0+2] = r6
+| b[r0+3] = r6
+| b[r0+5] = r6
+| b[r0+0] = r6
+| [r0+12] = r6
+| [r0+16] = r6
+| [r9+24] = r8
+| r0 = 11
+| r1 = 7
+| call <sie_wr >
+| r0 = 7
+| r1 = 1
+| call <sie_wr >
+| r0 = 9
+| r1 = 0
+| call <sie_wr >
+| r7 = <ep1tx >
+| r10 = <ep3tx >
+| r11 = <ep3rx >
+| if ((r4 & 1) == 0) goto <fm1_timer5_irq>
+| r0 = b[r5+3] (u)
+| if (r0 == 0) goto 12 <fm1_timer5_irq+0x5C8 : 2001b54 >
+| r1 = b[r5+2] (u)
+| r0 = 0
+| r4 = 0
+| call <sie_wr >
+| b[r5+3] = r4
+| r0 = 14
+| r1 = 0
+| r4 = 0
+| call <sie_wr >
+| r0 = 17
+| call <sie_rd >
+| r6 = r0
+| if ((r6 & 4) != 0) goto 18 <fm1_timer5_irq+0x5F0 : 2001b7c >
+| if ((r6 & 16) != 0) goto <fm1_timer5_irq>
+| r0 = b[r5+4] (u)
+| if (r0 == 0) goto <fm1_timer5_irq>
+| if ((r6 & 2) != 0) goto <fm1_timer5_irq>
+| call <e0_chunk >
+| goto <fm1_timer5_irq>
+| r0 = 17
+| r1 = 0
+| call <sie_wr >
+| r0 = 290  # <build/felucca_size.ll+0x122 : 122 >
+| b[r5+4] = r4
+| b[r14+12] = r4
+| b[r15+r0] = r4
+| goto <fm1_timer5_irq>
+| r0 = 17
+| r1 = 128
+| call <sie_wr >
+| r0 = 0
+| r1 = 290  # <build/felucca_size.ll+0x122 : 122 >
+| b[r5+4] = r0
+| b[r14+12] = r0
+| b[r15+r1] = r0
+| if ((r6 & 1) == 0) goto <fm1_timer5_irq>
+| ssync
+| r0 = b[r14+12] (u)
+| if (r0 == 0) goto <fm1_timer5_irq>
+| r6 = r7
+| r7 = r13
+| r0 = 22
+| call <sie_rd >
+| if (r0 == 0) goto 22 <fm1_timer5_irq+0x64E : 2001bda >
+| r1 = 0
+| r2 = b[r1+r8] (u)
+| r3 = r1 + r14
+| r1 += 1
+| b[r3+4] = r2
+| if (r1 > 6) goto 4 <fm1_timer5_irq+0x64E : 2001bda >
+| if (r1 < r0) goto -20 <fm1_timer5_irq+0x63A : 2001bc6 >
+| r0 = 0
+| b[r14+12] = r0
+| goto 24 <fm1_timer5_irq+0x66E : 2001bfa >
+| r0 = <build/felucca_size.ll>
+| r1 = b[r15+r0] (u)
+| if (r1 == 0) goto 1508 <fm1_timer5_irq+0xC48 : 20021d4 >
+| r6 = r7
+| r7 = r13
+| r1 = 0
+| b[r15+r0] = r1
+| r0 = 14
+| r1 = 0
+| call <sie_wr >
+| r0 = 17
+| r1 = 72
+| call <sie_wr >
+| r13 = r7
+| r7 = r6
+| if ((r13 & 2) != 0) goto 8 <fm1_timer5_irq+0x68E : 2001c1a >
+| r0 = b[r5+92] (u)
+| if (r0 != 0) goto <fm1_timer5_irq>
+| goto 618 <fm1_timer5_irq+0x8F8 : 2001e84 >
+| r0 = 1
+| b[r5+92] = r0
+| r0 = 14
+| r1 = 1
+| call <sie_wr >
+| r0 = 20
+| call <sie_rd >
+| r4 = r0
+| r0 = 21
+| call <sie_rd >
+| if ((r4 & 1) != 0) goto 8 <fm1_timer5_irq+0x6B6 : 2001c42 >
+| r0 = 0
+| b[r5+92] = r0
+| goto 578 <fm1_timer5_irq+0x8F8 : 2001e84 >
+| r0 = r0 << 8
+| r0 |= r4
+| [sp+8] = r0
+| r0 = 22
+| call <sie_rd >
+| r6 = r0
+| r0 = 23
+| call <sie_rd >
+| r0 = r0 << 8
+| r8 = r0 | r6
+| if (r8 >= 64) {
+| r8 = 64
+| ssync
+| r0 = [r15+88]
+| r1 = [r15+92]
+| r0 = 0x40 - r0
+| r0 += r1
+| if (r0 < 24) goto 522 <fm1_timer5_irq+0x8F8 : 2001e84 >
+| [sp] = r4
+| [sp+4] = r13
+| if (r8 < 4) goto 440 <fm1_timer5_irq+0x8B0 : 2001e3c >
+| r13 = 0
+| r0 = 3
+| r9 = <sysex_byte.UBOOT_KEY >
+| r10 = <build/felucca_size.ll >
+| r11 = 0
+| goto 50 <fm1_timer5_irq+0x73C : 2001cc8 >
+| if (r2 != 15) goto <fm1_timer5_irq>
+| r0 = r7 + -248
+| if (r0 > 4) goto 398 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| if (r0 == 1) goto 394 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| r0 = 1
+| call <midi_enqueue >
+| goto 386 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| r1 = r1 << 16
+| if ((r1 & 8388608) != 0) goto 380 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| r1 = r7 >> 4
+| if (r1 != r2) goto 374 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| r1 = r2 | 0x1
+| if (r1 == 13) goto -28 <fm1_timer5_irq+0x71A : 2001ca6 >
+| ifs (r0 < 0) goto 362 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| goto -34 <fm1_timer5_irq+0x71A : 2001ca6 >
+| r1 = <ep1rx >
+| r4 = r1
+| r3 = b[r11+r4] (u)
+| r1 = r11 | 0x1
+| r2 = b[r1+r4] (u)
+| r1 = r11 | 0x2
+| r1 = b[r1+r4] (u)
+| r4 = b[r0+r4] (u)
+| r0 = r3
+| r0 <= insert(r2, p:8, l:8)
+| r0 <= insert(r1, p:16, l:8)
+| r0 <= insert(r4, p:24, l:8)
+| r4 = r3 & 0xFFFFFF0C
+| r2 = r3 & 0xFFFFFF0F
+| if (r4 != 4) goto <fm1_timer5_irq>
+| r1 = 3
+| if (r2 == 4) goto <fm1_timer5_irq>
+| if (r2 == 7) goto <fm1_timer5_irq>
+| r1 = 2
+| if (r2 != 6) {
+| r1 = 1
+| r2 = 0
+| r2 += 1
+| r3 = r2 << 3
+| r14 = r0 >> r3
+| r3 = uextra(r14, p:0, l:8)
+| if (r3 >= 248) goto <fm1_timer5_irq>
+| if ((r14 & 128) != 0) goto 46 <fm1_timer5_irq+0x7CC : 2001d58 >
+| r4 = b[r5+91] (u)
+| if (r4 == 0) goto <fm1_timer5_irq>
+| r4 = b[r15+4] (u)
+| if (r4 == 0) goto <fm1_timer5_irq>
+| if (r3 == 240) goto <fm1_timer5_irq>
+| if (r3 == 247) goto <fm1_timer5_irq>
+| r4 = [r15+96]
+| if (r4 > 639) goto 66 <fm1_timer5_irq+0x7FC : 2001d88 >
+| r6 = r4 + 1
+| [r15+96] = r6
+| r6 = <sx_frame >
+| b[r4+r6] = r14
+| goto <fm1_timer5_irq>
+| if (r3 == 240) goto 14 <fm1_timer5_irq+0x7DE : 2001d6a >
+| if (r3 == 247) goto -54 <fm1_timer5_irq+0x79E : 2001d2a >
+| b[r5+91] = r13
+| b[r15+4] = r13
+| goto <fm1_timer5_irq>
+| r7 = 1
+| b[r5+91] = r7
+| r4 = 0
+| b[r5+90] = r4
+| r6 = b[r15+6] (u)
+| if (r6 == 0) goto 2 <fm1_timer5_irq+0x7F2 : 2001d7e >
+| r7 = 0
+| b[r15+4] = r7
+| [r15+96] = r4
+| goto -94 <fm1_timer5_irq+0x79E : 2001d2a >
+| b[r15+4] = r13
+| r4 = b[r5+90] (u)
+| if (r4 <= 15) {
+| r6 = r4 + 1
+| b[r5+90] = r6
+| r4 += r5
+| b[r4+74] = r14
+| if (r3 != 247) goto <fm1_timer5_irq>
+| r3 = b[r5+90] (u)
+| if (r3 != 6) goto <fm1_timer5_irq>
+| r7 = 0
+| r4 = b[r7+r9] (u)
+| r6 = r7 + r5
+| r6 = b[r6+74] (u)
+| r7 += 1
+| if (r7 > 5) goto <fm1_timer5_irq>
+| if (r6 == r4) goto <fm1_timer5_irq>
+| if (r6 != r4) goto <fm1_timer5_irq>
+| b[r5+93] = r10
+| goto 58 <fm1_timer5_irq+0x87A : 2001e06 >
+| r7 = r5 + 75
+| if (r3 != 6) goto <fm1_timer5_irq>
+| r3 = b[r7+0] (u)
+| if (r3 != 34) goto <fm1_timer5_irq>
+| r3 = b[r7+1] (u)
+| if (r3 != 36) goto <fm1_timer5_irq>
+| r3 = b[r7+2] (u)
+| if (r3 != 53) goto <fm1_timer5_irq>
+| r3 = b[r7+3] (u)
+| if (r3 != 127) goto <fm1_timer5_irq>
+| b[r5+94] = r10
+| goto 20 <fm1_timer5_irq+0x87A : 2001e06 >
+| r3 = b[r15+4] (u)
+| if (r3 == 0) goto 14 <fm1_timer5_irq+0x87A : 2001e06 >
+| r3 = [r15+96]
+| if (r3 == 0) goto 8 <fm1_timer5_irq+0x87A : 2001e06 >
+| [r15+100] = r3
+| b[r15+6] = r10
+| b[r15+4] = r13
+| b[r5+91] = r13
+| if (r2 < r1) goto -252 <fm1_timer5_irq+0x78A : 2001d16 >
+| goto 28 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| r4 = r0 >> 8
+| r7 = r4.b0 (u)
+| r4 = r7 + -128
+| if (r4 <= 119) {
+| b[r5+91] = r13
+| b[r15+4] = r13
+| r3 = sextra(r3, p:0, l:4)
+| ifs (r3 <= -1) goto -410 <fm1_timer5_irq+0x70A : 2001c96 >
+| r11 = r11 + 4
+| r0 = r11 | 0x3
+| if (r0 < r8) goto -372 <fm1_timer5_irq+0x73C : 2001cc8 >
+| r0 = 0
+| b[r5+92] = r0
+| [r5+24] += 1
+| r0 = [sp]
+| r0 = r0 & 0x8B
+| r1 = r0 | 0x10
+| r0 = 20
+| call <sie_wr >
+| r0 = [sp+8]
+| r0 = r0 >> 9
+| r1 = r0 << 1
+| r0 = 21
+| call <sie_wr >
+| r9 = 0x11800
+| r7 = <fm1__dim_k >
+| r14 = r7
+| r10 = <ep3tx >
+| r11 = <ep3rx >
+| r13 = [sp+4]
+| r7 = <ep1tx >
+| r0 = b[r5+1] (u)
+| if (r0 == 0) goto 476 <fm1_timer5_irq+0xADA : 2002066 >
+| r0 = [r15+72]
+| r1 = [r15+76]
+| if (r0 != r1) goto <fm1_timer5_irq>
+| r0 = [r15+80]
+| r1 = [r15+84]
+| if (r0 == r1) goto 138 <fm1_timer5_irq+0x9A0 : 2001f2c >
+| r0 = 14
+| r1 = 1
+| call <sie_wr >
+| r0 = 17
+| call <sie_rd >
+| if ((r0 & 1) != 0) goto 120 <fm1_timer5_irq+0x9A0 : 2001f2c >
+| if ((r0 & 0x80) != 0) {
+| r1 = r0 & 0xFFFFFF7F
+| r0 = 17
+| call -3190
+| r1 = [r15+84]
+| r2 = [r15+80]
+| r0 = 0
+| if (r1 == r2) goto <fm1_timer5_irq>
+| r2 = r15 + 80
+| r3 = r12 + 244  #
+| r1 = [r2+4]
+| r1 = r1 & 0x3F
+| r1 = [r3+r1<<2]
+| r3 = r7
+| b[++r3=r0] = r1
+| r4 = r1 >> 8
+| b[r3+1] = r4
+| r4 = r1 >> 16
+| b[r3+2] = r4
+| r1 = r1 >> 24
+| b[r3+3] = r1
+| [r2+4] += 1
+| r1 = [r2+4]
+| r2 = [r2+0]
+| r0 += 4
+| if (r<= 63) goto -54 <fm1_timer5_irq>
+| r1 = b[r15+8] (u)
+| if (r1 == 0) goto 646 <fm1_timer5_irq+0xC06 : 2002192 >
+| if (r0 == 0) goto 30 <fm1_timer5_irq+0x9A0 : 2001f2c >
+| csync
+| [r9+28] = r7
+| [r9+12] = r0
+| r0 = 17
+| call <sie_rd >
+| r1 = r0 | 0x1
+| r0 = 17
+| call <sie_wr >
+| [r5+28] += 1
+| r0 = b[r5+1] (u)
+| if (r0 == 0) goto 308 <fm1_timer5_irq+0xADA : 2002066 >
+| if ((r13 & 8) != 0) goto 8 <fm1_timer5_irq+0x9B2 : 2001f3e >
+| r0 = b[r14+13] (u)
+| if (r0 != 0) goto 8 <fm1_timer5_irq+0x9B8 : 2001f44 >
+| goto 158 <fm1_timer5_irq+0xA50 : 2001fdc >
+| r0 = 1
+| b[r14+13] = r0
+| r0 = 14
+| r1 = 3
+| call <sie_wr >
+| r0 = 20
+| call <sie_rd >
+| r4 = r0
+| r0 = 21
+| call <sie_rd >
+| if ((r4 & 1) != 0) goto 8 <fm1_timer5_irq+0x9DA : 2001f66 >
+| r0 = 0
+| b[r14+13] = r0
+| goto 118 <fm1_timer5_irq+0xA50 : 2001fdc >
+| r0 = r0 << 8
+| r6 = r0 | r4
+| r0 = 22
+| call <sie_rd >
+| r5 = r0
+| r0 = 23
+| call <sie_rd >
+| r0 = r0 << 8
+| r0 |= r5
+| if (r0 >= 64) {
+| r0 = 64
+| r1 = [r15+104]
+| r2 = [r15+108]
+| r1 = 0x100 - r1
+| r1 += r2
+| if (r1 < r0) goto 70 <fm1_timer5_irq+0xA50 : 2001fdc >
+| r1 = 0
+| b[r14+13] = r1
+| ssync
+| if (r0 == 0) goto 28 <fm1_timer5_irq+0xA30 : 2001fbc >
+| r2 = <cdc_in >
+| r3 = b[r1+r11] (u)
+| r5 = [r15+104]
+| r5 += r1
+| r5 = r5.b0 (u)
+| r1 += 1
+| b[r5+r2] = r3
+| if (r1 < r0) goto -22 <fm1_timer5_irq+0xA1A : 2001fa6 >
+| [r15+104] += r0
+| [r14+16] += 1
+| r0 = r4 & 0x8B
+| r1 = r0 | 0x10
+| r0 = 20
+| call <sie_wr >
+| r0 = r6 >> 9
+| r1 = r0 << 1
+| r0 = 21
+| call <sie_wr >
+| r0 = b[r14+11] (u)
+| if (r0 == 0) goto 132 <fm1_timer5_irq+0xADA : 2002066 >
+| r0 = [r15+112]
+| r1 = [r15+116]
+| if (r0 == r1) goto 120 <fm1_timer5_irq+0xADA : 2002066 >
+| r0 = 14
+| r1 = 3
+| call <sie_wr >
+| r0 = 17
+| call <sie_rd >
+| if ((r0 & 1) != 0) goto 102 <fm1_timer5_irq+0xADA : 2002066 >
+| if ((r0 & 0x80) != 0) {
+| r1 = r0 & 0xFFFFFF7F
+| r0 = 17
+| call -3522
+| r1 = [r15+116]
+| r2 = [r15+112]
+| r0 = 0
+| if (r1 == r2) goto 44 <fm1_timer5_irq+0xABC : 2002048 >
+| r1 = 2047 <build/felucca_size.ll+0x7FE : 7fe >
+| r2 = <cdc_out >
+| r4 = r15 + 112
+| r3 = [r4+4]
+| r5 = r3 + 1
+| r3 &= r1  #
+| [r4+4] = r5
+| r3 = b[r3+r2] (u)
+| b[r0+r10] = r3
+| r3 = [r4+4]
+| r4 = [r4+0]
+| r0 += 1
+| if (r0 > 62) goto 4 <fm1_timer5_irq+0xABC : 2002048 >
+| if (r3 != r4) goto -34 <fm1_timer5_irq+0xA9A : 2002026 >
+| csync
+| [r9+44] = r10
+| [r9+20] = r0
+| r0 = 17
+| call <sie_rd >
+| r1 = r0 | 0x1
+| r0 = 17
+| call <sie_wr >
+| [r14+20] += 1
+| call <uac_service >
+| r0 = [r15+44]
+| if ((r0 & 2) == 0) goto 280 <fm1_timer5_irq+0xBFE : 200218a >
+| r0 = <build/felucca_size.ll>
+| [r0+0] |= 0x80
+| csync
+| [r0+0] |= 0x1400
+| r0 = [r0+40]
+| r1 = [r15+168]
+| r0 = r0.l (u)
+| r0 += r1
+| [r15+168] = r0
+| if (r0 < 129) goto 244 <fm1_timer5_irq+0xBFC : 2002188 >
+| r1 = r15 + 164
+| r2 = [r1+12]
+| r2 += r0
+| r2 += -128
+| [r1+12] = r2
+| r2 = [r1+0]
+| r0 += r2
+| r0 = r0 & 0x7F
+| r2 = r15 + 184  #
+| [r1+0] = r0
+| r0 = 128
+| [r1+4] = r0
+| r1 = 0
+| b[r2+4] = r1
+| b[r2+2] = r1
+| b[r2+0] = r1
+| r1 = 1
+| b[r15+7] = r1
+| goto 198 <fm1_timer5_irq+0xBFC : 2002188 >
+| r0 = [r15+164]
+| r1 = <um_ring >
+| r1 = b[r0+r1] (u)
+| if (r1 < 248) goto 36 <fm1_timer5_irq+0xB6C : 20020f8 >
+| r0 = r1 + -248
+| if (r0 > 4) goto 148 <fm1_timer5_irq+0xBE4 : 2002170 >
+| if (r0 == 1) goto 144 <fm1_timer5_irq+0xBE4 : 2002170 >
+| r0 = 2
+| call <midi_enqueue >
+| r2 = r15 + 176
+| r1 = r15 + 180
+| if (r0 != 0) goto 2 <fm1_timer5_irq+0xB66 : 20020f2 >
+| r1 = r2
+| [r1+0] += 1
+| goto 120 <fm1_timer5_irq+0xBE4 : 2002170 >
+| r0 = r1
+| if ((r0 & 128) != 0) goto 38 <fm1_timer5_irq+0xB98 : 2002124 >
+| r1 = b[r15+188] (u)
+| if (r1 != 0) goto 108 <fm1_timer5_irq+0xBE4 : 2002170 >
+| r1 = b[r15+184] (u)
+| if (r1 == 0) goto 102 <fm1_timer5_irq+0xBE4 : 2002170 >
+| r1 = b[r15+185] (u)
+| if (r1 != 2) goto 60 <fm1_timer5_irq+0xBC2 : 200214e >
+| r1 = b[r15+186] (u)
+| if (r1 != 0) goto 54 <fm1_timer5_irq+0xBC2 : 200214e >
+| b[r15+187] = r0
+| r0 = 1
+| b[r15+186] = r0
+| goto 76 <fm1_timer5_irq+0xBE4 : 2002170 >
+| r2 = 0
+| r3 = 1
+| r5 = 1
+| if (r0 != 240) {
+| r5 = 0
+| r4 = r15 + 184
+| b[r4+4] = r5
+| if (r0 >= 240) {
+| r0 = 0
+| r1 = r1 & 0xFFFFFFE0  #
+| b[r4+0] = r0
+| if (r1 != 192) {
+| r3 = 2
+| b[r4+1] = r3
+| b[r4+2] = r2
+| goto 34 <fm1_timer5_irq+0xBE4 : 2002170 >
+| r0 = 0
+| b[r15+186] = r0
+| r0 = 2
+| call <midi_enqueue >
+| if (r0 == 0) {
+| r0 = 1
+| b[r15+7] = r0
+| r0 = r15 + 176
+| r0 = r15 + 180
+| [r0+0] += 1
+| r1 = r15
+| r0 = [++r1=164]
+| r0 += 1
+| r0 = r0 & 0x7F
+| [r1+0] = r0
+| r0 = [r1+4]
+| r0 += -1
+| [r1+4] = r0
+| [r1+8] += 1
+| if (r0 != 0) goto -200 <fm1_timer5_irq+0xB36 : 20020c2 >
+| [r15+44] = 0x0
+| sp += 12
+| {pc, r15-r4} = [sp++]
+| r1 = 0
+| r2 = [r15+84]
+| r3 = [r15+80]
+| if (r2 != r3) goto <fm1_timer5_irq>
+| r2 = [r15+76]
+| r3 = [r15+72]
+| if (r0 > 63) goto <fm1_timer5_irq>
+| if (r2 == r3) goto <fm1_timer5_irq>
+| r2 = [r15+76]
+| r2 = r7
+| b[++r2=r0] = r1
+| b[r2+1] = r1
+| b[r2+2] = r1
+| b[r2+3] = r1
+| [r15+76] += 1
+| r2 = b[r15+8] (u)
+| r0 += 4
+| if (r2 == 0) goto -62 <fm1_timer5_irq+0xC08 : 2002194 >
+| goto <fm1_timer5_irq>
+| r0 = 0
+| r1 = b[r0+r8] (u)
+| r2 = r0 + r5
+| r0 += 1
+| b[r2+66] = r1
+| if (r0 != 8) goto -16 <fm1_timer5_irq+0xC4A : 20021d6 >
+| [r5+20] += 1
+| r0 = r5 + 64
+| r1 = b[r0+9] (u)
+| r2 = b[r0+8] (u)
+| r2 <= insert(r1, p:8, l:24)  #
+| r4 = b[r0+2] (u)
+| r6 = b[r0+3] (u)
+| r6 <= insert(r4, p:8, l:24)  #
+| r3 = b[r0+5] (u)
+| r8 = b[r0+4] (u)
+| r1 = r6.l (u)
+| r4 = <build/felucca_size.ll>
+| r0 = <ep0_service.zero2 >
+| r6 = r7
+| r7 = r13
+| ifs (r1 > r4) goto 40 <fm1_timer5_irq+0xCB6 : 2002242 >
+| r4 = 8479 <build/felucca_size.ll+0x211E : 211e >
+| ifs (r1 <= r4) goto 78 <fm1_timer5_irq+0xCE4 : 2002270 >
+| r4 += 3
+| ifs (r1 <= r4) goto 422 <fm1_timer5_irq+0xE42 : 20023ce >
+| r4 += 1
+| if (r1 == r4) goto -1590 <fm1_timer5_irq+0x66E : 2001bfa >
+| r4 = <build/felucca_size.ll>
+| if (r1 == r4) goto 558 <fm1_timer5_irq+0xEDC : 2002468 >
+| if (r1 == 32768) goto 540 <fm1_timer5_irq+0xED0 : 200245c >
+| goto 728 <fm1_timer5_irq+0xF8E : 200251a >
+| ifs (r1 < 33280) goto 342 <fm1_timer5_irq+0xE12 : 200239e >
+| r4 = 4294925695 <_data_load+0xFDFE5966 : ffff5d7e >
+| r4 += r1
+| if (r4 >= 3) goto 352 <fm1_timer5_irq+0xE28 : 20023b4 >
+| if (r3 != 1) goto 704 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = b[r5+70] (u)
+| if (r0 != 132) goto 694 <fm1_timer5_irq+0xF8E : 200251a >
+| r2 = r2.l (u)
+| r0 = <ep0_service.RATE >
+| r1 = 3
+| goto 496 <fm1_timer5_irq+0xED4 : 2002460 >
+| ifs (r1 > 266) goto 370 <fm1_timer5_irq+0xE5A : 20023e6 >
+| if (r1 == 5) goto 526 <fm1_timer5_irq+0xEFC : 2002488 >
+| if (r1 != 9) goto 666 <fm1_timer5_irq+0xF8E : 200251a >
+| if (r8 > 1) goto 660 <fm1_timer5_irq+0xF8E : 200251a >
+| b[r5+1] = r8
+| if (r8 != 1) goto 688 <fm1_timer5_irq+0xFB4 : 2002540 >
+| r4 = r9
+| [r4+28] = r6
+| r0 = <ep1rx >
+| r8 = 1  # <build/felucca_size.ll : 0 >
+| [r4+32] = r0
+| r0 = 14
+| r1 = 1
+| call <sie_wr >
+| r0 = 16
+| r1 = 255
+| call <sie_wr >
+| r0 = 17
+| r1 = 72
+| call <sie_wr >
+| r0 = 18
+| r1 = 0
+| r9 = 0
+| call <sie_wr >
+| r0 = 19
+| r1 = 255
+| call <sie_wr >
+| r0 = 20
+| r1 = 144
+| call <sie_wr >
+| r0 = 21
+| r1 = 0
+| call <sie_wr >
+| r0 = 9
+| r1 = 2
+| call <sie_wr >
+| [r4+0] &= 0xFFEFFFFF
+| r0 = <ep2tx >
+| [r4+36] = r0
+| r0 = 14
+| r1 = 2
+| call <sie_wr >
+| r0 = 16
+| r1 = 255
+| call <sie_wr >
+| r0 = 17
+| r1 = 72
+| call <sie_wr >
+| r0 = 18
+| r1 = 0
+| call <sie_wr >
+| [r4+44] = r10
+| [r4+48] = r11
+| r0 = 14
+| r1 = 3
+| call <sie_wr >
+| r0 = 16
+| r1 = 255
+| call <sie_wr >
+| r0 = 17
+| r1 = 72
+| call <sie_wr >
+| r0 = 18
+| r1 = 0
+| call <sie_wr >
+| r0 = 19
+| r1 = 255
+| call <sie_wr >
+| r0 = 20
+| r1 = 144
+| call <sie_wr >
+| r0 = 21
+| r1 = 0
+| call <sie_wr >
+| r0 = 9
+| r1 = 10
+| call <sie_wr >
+| [r4+0] &= 0xFF9FFFFF
+| b[r14+13] = r8
+| r0 = r5 + 208
+| [r4+56] = r0
+| r0 = 14
+| r1 = 4
+| call <sie_wr >
+| r0 = 16
+| r1 = 255
+| call <sie_wr >
+| call <uac_ep4_reset >
+| [r4+0] &= 0xFF7FFFFF
+| r0 = r15 + 284
+| b[r0+1] = r9
+| b[r0+2] = r9
+| b[r0+3] = r9
+| b[r0+5] = r9
+| b[r0+0] = r9
+| r2 = 0
+| r3 = 0
+| d[r0+12] = r3_r2
+| goto 426 <fm1_timer5_irq+0xFBC : 2002548 >
+| ifs (r1 >= 33024) goto 142 <fm1_timer5_irq+0xEA6 : 2002432 >
+| r0 = r4 + 1
+| if (r1 == r0) goto 236 <fm1_timer5_irq+0xF0A : 2002496 >
+| r0 += 2
+| if (r1 != r0) goto 362 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = r5 + 1
+| goto 162 <fm1_timer5_irq+0xECA : 2002456 >
+| if (r1 == 33280) goto 162 <fm1_timer5_irq+0xED0 : 200245c >
+| r0 = 41249 <build/felucca_size.ll+0xA120 : a120 >
+| if (r1 != r0) goto 342 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = r14 + 4
+| r2 = r2.l (u)
+| r1 = 7
+| goto 146 <fm1_timer5_irq+0xED4 : 2002460 >
+| r0 = <build/felucca_size.ll>
+| if (r1 == r0) goto 218 <fm1_timer5_irq+0xF24 : 20024b0 >
+| r0 = r4
+| if (r1 != r0) goto 318 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = r8 & 0xFFFFFF01
+| b[r14+11] = r0
+| goto -2028 <fm1_timer5_irq+0x66E : 2001bfa >
+| r4 = r8
+| r4 <= insert(r3, p:8, l:8)
+| if (r1 == 267) goto 222 <fm1_timer5_irq+0xF42 : 20024ce >
+| if (r1 != 513) goto 292 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = b[r5+70] (u)
+| if (r4 != 0) goto 6 <fm1_timer5_irq+0xE76 : 2002402 >
+| if (r0 == 132) goto -2056 <fm1_timer5_irq+0x66E : 2001bfa >
+| if (r4 != 0) goto 276 <fm1_timer5_irq+0xF8E : 200251a >
+| r1 = r0 & 0xFFFFFF0F
+| if (r1 > 3) goto 268 <fm1_timer5_irq+0xF8E : 200251a >
+| if (r1 == 0) goto -2074 <fm1_timer5_irq+0x66E : 2001bfa >
+| r0 = 14
+| call <sie_wr >
+| r0 = b[r5+70] (s)
+| ifs (r0 > -1) {
+| r0 = 20
+| r1 = 128
+| r0 = 17
+| r1 = 64
+| call <sie_wr >
+| goto -2104 <fm1_timer5_irq+0x66E : 2001bfa >
+| if (r1 == 33024) goto 36 <fm1_timer5_irq+0xED0 : 200245c >
+| r3 = r4 + 261
+| if (r1 != r3) goto 218 <fm1_timer5_irq+0xF8E : 200251a >
+| r1 = b[r5+70] (u)
+| if (r1 == 2) {
+| r0 = 284 <build/felucca_size.ll+0x11C : 11c >
+| r1 = b[r15+r0] (u)
+| r0 = r15
+| b[++r0=5] = r1
+| r2 = r2.l (u)
+| r1 = 1
+| goto 4 <fm1_timer5_irq+0xED4 : 2002460 >
+| r2 = r2.l (u)
+| r1 = 2
+| call <e0_send >
+| goto -2142 <fm1_timer5_irq+0x67E : 2001c0a >
+| if (r3 != 1) goto 174 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = b[r5+70] (u)
+| if (r0 != 132) goto 166 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = r2.l (u)
+| if (r0 == 0) goto -2178 <fm1_timer5_irq+0x66E : 2001bfa >
+| r0 = <build/felucca_size.ll>
+| r1 = 1
+| b[r15+r0] = r1
+| goto 54 <fm1_timer5_irq+0xF32 : 20024be >
+| r0 = r8 & 0xFFFFFF7F
+| b[r5+2] = r0
+| r0 = 1
+| b[r5+3] = r0
+| goto -2204 <fm1_timer5_irq+0x66E : 2001bfa >
+| r13 = r10
+| r4 = r14
+| if (r3 == 1) goto 210 <fm1_timer5_irq+0xFE4 : 2002570 >
+| if (r3 == 3) goto 136 <fm1_timer5_irq+0xF9E : 200252a >
+| if (r3 != 2) goto 116 <fm1_timer5_irq+0xF8E : 200251a >
+| r1 = 249
+| r0 = <DEV_DESC>
+| goto <fm1_timer5_irq>
+| r0 = r2.l (u)
+| if (r0 == 0) goto -2238 <fm1_timer5_irq+0x66E : 2001bfa >
+| r0 = 1
+| b[r14+12] = r0
+| r0 = 14
+| r1 = 0
+| call <sie_wr >
+| r0 = 17
+| r1 = 64
+| goto -2248 <fm1_timer5_irq+0x67A : 2001c06 >
+| if (r4 > 1) goto 66 <fm1_timer5_irq+0xF88 : 2002514 >
+| r0 = b[r5+70] (u)
+| if (r0 != 2) goto 58 <fm1_timer5_irq+0xF88 : 2002514 >
+| r0 = b[r5+1] (u)
+| if (r0 == 0) goto 54 <fm1_timer5_irq+0xF88 : 2002514 >
+| call <uac_ep4_reset >
+| r0 = 0
+| r1 = r15 + 284
+| b[r1+1] = r0
+| b[r1+2] = r0
+| b[r1+3] = r0
+| b[r1+5] = r0
+| b[r1+0] = r8
+| r2 = 0
+| r3 = 0
+| d[r1+12] = r3_r2
+| if (r4 == 0) goto -2312 <fm1_timer5_irq+0x66E : 2001bfa >
+| r1 = r15 + 304
+| [r1+0] += 1
+| [r1+36] = 0xFFFFFFFF
+| [r1+40] = r0
+| goto -2330 <fm1_timer5_irq+0x66E : 2001bfa >
+| if (r4 == 0) goto -2336 <fm1_timer5_irq+0x66E : 2001bfa >
+| r0 = 14
+| r1 = 0
+| call <sie_wr >
+| r0 = 17
+| r1 = 96
+| goto -2340 <fm1_timer5_irq+0x67A : 2001c06 >
+| if (r8 == 0) goto 76 <fm1_timer5_irq+0xFEE : 200257a >
+| if (r8 == 2) goto 82 <fm1_timer5_irq+0xFF8 : 2002584 >
+| if (r8 != 1) goto -28 <fm1_timer5_irq+0xF8E : 200251a >
+| r1 = 42
+| r0 = <STR1 >
+| goto <fm1_timer5_irq>
+| r0 = 9
+| r1 = 0
+| call <sie_wr >
+| r9 = 0x11800  #
+| r0 = b[r5+1] (u)
+| if (r0 == 1) goto -2394 <fm1_timer5_irq+0x66E : 2001bfa >
+| r0 = 0
+| r1 = r15 + 284
+| b[r1+1] = r0
+| b[r1+2] = r0
+| b[r1+3] = r0
+| b[r1+5] = r0
+| b[r1+0] = r0
+| r2 = 0
+| r3 = 0
+| d[r1+12] = r3_r2
+| goto -2422 <fm1_timer5_irq+0x66E : 2001bfa >
+| r1 = 18
+| r0 = <ep0_service.RATE>
+| goto <fm1_timer5_irq>
+| r1 = 4
+| r0 = <STR0 >
+| goto <fm1_timer5_irq>
+| r1 = 16
+| r0 = <STR2 >
+| r2 = r2.l (u)
+| if (r2 != 0) goto -306 <fm1_timer5_irq+0xED4 : 2002460 >
+| goto -2460 <fm1_timer5_irq+0x66E : 2001bfa >
+midi_enqueue:
+| r1 = <fm1__tick_col >
+| r0 = [r1+88]
+| r2 = b[r1+7] (u)
+| r0 = 0
+| if (r2 != 0) goto 28 <midi_enqueue+0x2C : 200158a >
+| r2 = [r1+88]
+| r3 = [r1+92]
+| r2 = r2 - r3
+| if (r2 >= 64) {
+| r2 = 1
+| b[r1+7] = r2
+| rts
+| r0 = [r1+56]
+| [r1+88] += 1
+| r0 = 1
+| rts
+ota_crc16:
+| [--sp] = {rets, r7-r4}
+| if (r1 == 0) goto 38 <ota_crc16+0x2A : 2002d6c >
+| r3 = <build/felucca_size.ll>
+| r4 = b[r0++=1] (u)
+| r4 = r4 << 8
+| r2 ^= r4
+| r1 += -1
+| r4 = 8
+| r5 = r2 << 1
+| r6 = r5 ^ r3
+| r7 = r2.l (s)
+| r2 = r6
+| ifs (r7 >= 0) {
+| r2 = r5
+| if (--r4 != 0) goto <ota_crc16>
+| r2 = r2.l (u)
+| if (r1 != 0) goto <ota_crc16>
+| r0 = r2
+| {pc, r7-r4} = [sp++]
+ota_erase:
+| [--sp] = rets
+| sp += -8
+| r2 = 4095 <build/felucca_size.ll+0xFFE : ffe >
+| r1 = -8
+| if ((r0 & r2) != 0) goto 64 <ota_erase+0x4E : 20026ac >
+| r2 = r0 - 0xE0000
+| if (r2 > 20480) goto 54 <ota_erase+0x4E : 20026ac >
+| r2 = 0xE5000 - r0
+| if (r2 < 4096) goto 44 <ota_erase+0x4E : 20026ac >
+| r1 = 0
+| r2 = <abuf >
+| r3 = 0
+| [r2+r3<<2] = r1
+| r3 += 1
+| if (r3 != 512) goto -12 <ota_erase+0x2C : 200268a >
+| cli
+| r1 = <fl_erase4k_ram >
+| [sp+4] = r1
+| r2 = [sp+4]
+| r1 = sp + 0
+| call r2
+| csync
+| sti
+| r1 = r0
+| r0 = r1
+| sp += 8
+| pc = [sp++]
+ota_jl_enc:
+| [--sp] = {rets, r4}
+| if (r1 == 0) goto <ota_jl_enc>
+| r3 = 65535 <build/felucca_size.ll+0xFFFE : fffe >
+| r2 = <build/felucca_size.ll>
+| r4 = b[r0+0] (u)
+| r4 ^= r3
+| r4 = sextra(r3, p:15, l:1)  #
+| b[r0++=1] = r4
+| r4 &= r2
+| r3 = r3 << 1
+| r3 = r3.l (u)
+| r3 ^= r4
+| if (--r1 != 0) goto -22 <ota_jl_enc+0xE : 2002d2a >
+| {pc, r4} = [sp++]
+ota_prog:
+| [--sp] = {rets, r10-r4}
+| sp += -8
+| r5 = r2
+| r6 = r1
+| r7 = r0
+| r0 = r7 - 0xE0000
+| r8 = -8 <_data_load+0xFFFFFFFFFDFEFBE0 : fffffffffffffff8 >
+| if (r0 > 20480) goto 66 <ota_prog+0x5A : 2002dca >
+| r0 = 0xE5000 - r7
+| if (r0 < r5) goto 58 <ota_prog+0x5A : 2002dca >
+| r8 = 0
+| if (r5 == 0) goto 54 <ota_prog+0x5A : 2002dca >
+| r9 = <fl_prog_ram >
+| cli
+| [sp+4] = r9
+| r10 = [sp+4]
+| r0 = r7.b0 (u)
+| r0 = 0x100 - r0
+| r4 = umin(r0, r5)
+| r3 = sp + 0
+| r0 = r7
+| r1 = r6
+| r2 = r4
+| call r10
+| csync
+| sti
+| if (r0 != 0) goto <ota_prog>
+| r5 = r5 - r4
+| r6 += r4
+| r7 += r4
+| if (r5 != 0) goto -44 <ota_prog+0x2A : 2002d9a >
+| goto 2 <ota_prog+0x5A : 2002dca >
+| r8 = r0
+| r0 = r8
+| sp += 8
+| {pc, r10-r4} = [sp++]
+ota_read:
+| [--sp] = {rets, r13-r4}
+| sp += -8
+| r6 = <fm1__tick_col >
+| r3 = [r6+136]
+| r12 = r2
+| r9_r8 = r1_r0
+| if (r3 == 0) goto <ota_read>
+| r10 = -1  # <_data_load+0xFFFFFFFFFDFEFBE6 : fffffffffffffffe >
+| r0 = [r6+56]
+| r0 = r0 - r3
+| ifs (r0 > 0) goto <ota_read>
+| r13 = 0
+| b[sp] = r13
+| b[sp+1] = r8
+| r0 = r8 >> 8
+| b[sp+2] = r0
+| r0 = r8 >> 16
+| b[sp+3] = r0
+| r0 = r8 >> 24
+| b[sp+4] = r0
+| b[sp+5] = r2
+| r0 = r2 >> 8
+| b[sp+6] = r0
+| b[sp+7] = r13
+| r11 = r2 + 8
+| r7 = r2 + 15
+| r4 = <ota_dec >
+| r1 = sp + 0
+| r0 = 48
+| r2 = 8
+| call <ota_send_msg >
+| r10 = -1 <_data_load+0xFFFFFFFFFDFEFBE6 : fffffffffffffffe >
+| if (r0 != 0) goto <ota_read>
+| r5 = [r6+56]
+| r0 = [r6+56]
+| r0 = r0 - r5
+| r0 = r0 >> 3
+| if (r0 > 624) goto 112 <ota_read+0xE8 : 2002cfa >
+| r0 = 1
+| r1 = 128
+| r2 = 64
+| call <fm1__p33_op >
+| call <ota_take >
+| if (r0 == 0) goto 86 <ota_read+0xDE : 2002cf0 >
+| if (r0 != 7) goto <ota_read>
+| r1 = b[r4+2] (u)
+| if (r1 != 17) goto 8 <ota_read+0x9A : 2002cac >
+| call <ota_reply_identity >
+| goto 70 <ota_read+0xDE : 2002cf0 >
+| r1 = b[r4+2] (u)
+| if (r0 != r7) goto 64 <ota_read+0xDE : 2002cf0 >
+| if (r1 != 48) goto 60 <ota_read+0xDE : 2002cf0 >
+| r0 = b[r4+4] (u)
+| r1 = b[r4+3] (u)
+| r1 <= insert(r0, p:8, l:8)  #
+| r2 = b[r4+5] (u)
+| r1 <= insert(r2, p:16, l:8)
+| if (r1 != r11) goto 42 <ota_read+0xDE : 2002cf0 >
+| r0 = b[r4+8] (u)
+| r1 = b[r4+7] (u)
+| r1 <= insert(r0, p:8, l:8)  #
+| r2 = b[r4+9] (u)
+| r1 <= insert(r2, p:16, l:8)  #
+| r3 = b[r4+10] (u)
+| r1 <= insert(r3, p:24, l:8)
+| if (r1 != r8) goto 18 <ota_read+0xDE : 2002cf0 >
+| r0 = b[r4+12] (u)
+| r1 = b[r4+11] (u)
+| r1 <= insert(r0, p:8, l:8)  #
+| r2 = b[r4+13] (u)
+| r1 <= insert(r2, p:16, l:8)
+| if (r1 == r12) goto 20 <ota_read+0xF2 : 2002d04 >
+| r0 = [r6+56]
+| r0 = r0 - r5
+| r0 = r0 >> 3
+| if (r< 625) goto -112 <ota_read>
+| r13 = r13 + 1
+| if (r13 < 3) goto -148 <ota_read+0x5C : 2002c6e >
+| goto <ota_read>
+| r10 = 0
+| if (r12 == 0) goto <ota_read>
+| r0 = r4 + 14
+| r1 = b[r0++=1] (u)
+| b[r9++=1] = r1
+| if (--r12 != 0) goto -10 <ota_read+0xFA : 2002d0c >
+| r0 = r10
+| sp += 8
+| {pc, r13-r4} = [sp++]
+ota_reply_identity:
+| [--sp] = rets
+| sp += -28
+| r0 = 0
+| r1 = <ota_reply_identity.ID >
+| r2 = 0
+| if (r0 <= 7) {
+| r2 = b[r0+r1] (u)
+| r3 = sp + 1
+| b[r3+r0] = r2
+| r0 += 1
+| if (r0 != 27) goto -22 <ota_reply_identity+0xC : 2002a78 >
+| r1 = sp + 1
+| r0 = 17
+| r2 = 27
+| call <ota_send_msg >
+| sp += 28
+| pc = [sp++]
+ota_reply_identity.ID:
+ota_send_msg:
+| [--sp] = {rets, r15-r4}
+| r4 = <fm1__tick_col >
+| r3 = 0
+| r5 = r4
+| b[++r5=192] = r3
+| r6 = 89
+| b[r5+1] = r6
+| b[r5+2] = r0
+| b[r5+3] = r2
+| b[r5+4] = r3
+| b[r5+5] = r3
+| if (r2 == 0) goto <ota_send_msg>
+| r0 = r4 + 198
+| r5 = r2
+| r6 = b[r1+0] (u)
+| b[r0++=1] = r6
+| r6 = b[r1++=1] (u)
+| r3 += r6
+| if (--r5 != 0) goto <ota_send_msg>
+| r0 = r2 + r4
+| r1 = ~r3
+| b[r0+198] = r1
+| r0 = 240
+| r1 = r2 + 7
+| b[r4+232] = r0
+| if (r1 != 0) goto <ota_send_msg>
+| r0 = 0
+| goto <ota_send_msg>
+| r0 = r2 + r4
+| r1 = 255
+| b[r0+198] = r1
+| r0 = 240
+| b[r4+232] = r0
+| r1 = 7
+| r2 = r4 + 192
+| r0 = 0
+| r5 = 0
+| r3 = 0
+| r6 = b[r2++=1] (u)
+| r6 <<= r5
+| r3 |= r6
+| r5 += 8
+| r1 += -1
+| if (r< 7) goto 20 <ota_send_msg>
+| r6 = r0 + r4
+| r7 = r3 & 0x7F
+| b[r6+233] = r7
+| r5 += -7
+| r3 = r3 >> 7
+| r0 += 1
+| if (r5 > 6) goto -20 <ota_send_msg+0x6E : 200297a >
+| if (r1 != 0) goto <ota_send_msg>
+| if (r5 == 0) goto <ota_send_msg>
+| r1 = r0 + r4
+| r2 = r3 & 0x7F
+| b[r1+233] = r2
+| r0 += 1
+| r1 = r0 + r4
+| r2 = 247
+| b[r1+233] = r2
+| r6 = [r4+56]
+| r1 = 1
+| r11 = r0 + 2  #
+| b[r4+8] = r1
+| r8 = 0
+| r0 = 0
+| if (r11 == 0) goto 174 <ota_send_msg+0x15A : 2002a66 >
+| r5 = 0
+| r9 = <usb >
+| r10 = <sx_out_q >
+| r0 = r11 - r5
+| r7 = 3
+| if (r0 <= 2) {
+| r7 = r0
+| r1 = r7 + 4
+| r12 = <build/felucca_size.ll>
+| if (r7 != 3) {
+| r12 = r1
+| r2 = r5 + 3
+| if (r2 >= r11) {
+| r12 = r1
+| r1 = r5 + r4
+| r15 = b[r1+232] (u)
+| r13 = 0
+| r14 = 0
+| if (r7 >= 2) {
+| r2 = b[r1+233] (u)
+| r14 = r2 << 16
+| if (r0 >= 3) {
+| r0 = b[r1+234] (u)
+| r13 = r0 << 24
+| r0 = [r4+80]
+| r1 = [r4+84]
+| r0 = r0 - r1
+| if (r< 64) goto 40 <ota_send_msg>
+| r1 = b[r9+1] (u)
+| r0 = -1
+| if (r1 == 0) goto 72 <ota_send_msg+0x15A : 2002a66 >
+| r1 = [r4+56]
+| r1 = r1 - r6
+| if (r1 > 200) goto 64 <ota_send_msg+0x15A : 2002a66 >
+| r0 = 1
+| r1 = 128
+| r2 = 64
+| call <fm1__p33_op >
+| r0 = [r4+80]
+| r1 = [r4+84]
+| r0 = r0 - r1
+| if (r0 > 63) goto -40 <ota_send_msg+0x10A : 2002a16 >
+| r0 = r15 << 8
+| r1 = [r4+80]
+| r0 = r0 | r12
+| r0 = r0 | r14
+| r0 = r0 | r13
+| r1 = r1 & 0x3F
+| [r10+r1<<2] = r0
+| [r4+80] += 1
+| r5 += r7
+| if (r5 < r11) goto -158 <ota_send_msg+0xBA : 20029c6 >
+| r0 = 0
+| b[r4+8] = r8
+| {pc, r15-r4} = [sp++]
+ota_show:
+| [--sp] = {rets, r9-r4}
+| sp += -40
+| r9 = <fm1__tick_col >
+| r6 = r9
+| r2 = b[++r6=144] (u)
+| r7 = r1
+| r4 = r0
+| r5 = <build/felucca_size.ll>
+| r0 = r5
+| if (r2 != 0) goto 2 <ota_show+0x1E : 2002ae2 >
+| r0 = r2
+| call <lcd_fill >
+| r0 = b[r6+4] (u)
+| r1 = b[r6+0] (u)
+| r2 = 1
+| [sp+12] = r2
+| if (r1 != 0) goto 2 <ota_show+0x2E : 2002af2 >
+| r5 = r1
+| r1 = -12711  # <_data_load+0xFFFFFFFFFDFECA40 : ffffffffffffce58 >
+| [sp+8] = r5
+| if (r0 != 0) goto <ota_show>
+| r1 = r0
+| r0 = r1.l (u)
+| [sp+4] = r0
+| r5 = <ota_reply_identity.ID>
+| r3 = <AF_M >
+| r0 = 0
+| r1 = 92
+| r2 = 240
+| [sp] = r5
+| call <draw_text_line >
+| r8 = <AF_S >
+| if (r4 > 8) goto 66 <ota_show+0xA0 : 2002b64 >
+| r0 = b[r9+152] (u)
+| r1 = b[r9+144] (u)
+| r2 = 1
+| r2 = 2113  # <build/felucca_size.ll+0x840 : 840 >
+| [sp+12] = r2
+| if (r1 != 0) goto <ota_show>
+| r2 = r1
+| r1 = -4259  # <_data_load+0xFFFFFFFFFDFEEB44 : ffffffffffffef5c >
+| [sp+8] = r2
+| if (r0 != 0) goto 2 <ota_show+0x7C : 2002b40 >
+| r1 = r0
+| r0 = r1.l (u)
+| [sp+4] = r0
+| if (r4 >= 6) {
+| r4 = 0
+| r0 = <ota_show.STEP >
+| r3 = [r0+r4<<2]
+| r0 = 0
+| r1 = 124
+| r2 = 240
+| r3 = r8  #
+| [sp] = r3
+| call <draw_text_line >
+| goto 170 <ota_show+0x14A : 2002c0e >
+| if (r7 != 1) goto 14 <ota_show+0xB2 : 2002b76 >
+| r0 = sp + 16
+| r1 = <ota_reply_identity.ID>
+| call <str_cpy >
+| goto 76 <ota_show+0xFE : 2002bc2 >
+| r0 = sp + 16
+| r1 = 33616793 <ota_reply_identity.ID+0x6A : 200f398 >
+| call <str_cpy >
+| r0 = -1
+| r1 = sp + 16
+| r1 += r0
+| r1 = b[r1+1] (u)
+| r0 += 1
+| if (r1 != 0) goto -10 <ota_show+0xC0 : 2002b84 >
+| r1 = 0x0 - r7
+| if (r1 < 10) goto 18 <ota_show+0xE4 : 2002ba8 >
+| r2 = r0 + 1
+| r3 = 10
+| r3 = r1 / r3 (u)
+| r3 += 48
+| r4 = sp + 16
+| b[r4+r0] = r3
+| r0 = r2
+| r2 = sp + 16
+| r3 = 10
+| r3 = r1 / r3 (u)
+| r3 = r3 * 0xA
+| r1 = r1 - r3
+| r1 = r1 | 0x30
+| b[++r2=r0] = r1
+| r0 = 0
+| b[r2+1] = r0
+| r0 = b[r9+152] (u)
+| r1 = b[r9+144] (u)
+| r2 = 1
+| r2 = 2113  # <build/felucca_size.ll+0x840 : 840 >
+| [sp+12] = r2
+| if (r1 != 0) goto <ota_show>
+| r2 = r1
+| r1 = -4259  # <_data_load+0xFFFFFFFFFDFEEB44 : ffffffffffffef5c >
+| [sp+8] = r2
+| if (r0 != 0) goto 2 <ota_show+0x11C : 2002be0 >
+| r1 = r0
+| r0 = r1.l (u)
+| [sp+4] = r0
+| r3 = sp + 16
+| r0 = 0
+| r1 = 124
+| r2 = 240
+| r3 = r8  #
+| [sp] = r3
+| call <draw_text_line >
+| r0 = 1500 <build/felucca_size.ll+0x5DC : 5dc >
+| r1 = <build/felucca_size.ll>
+| r2 = [r1+0]
+| r3 = [r1+0]
+| r3 = r3 - r2
+| r3 = r3 >> 6
+| if (r3 < 375) goto -10 <ota_show+0x13C : 2002c00 >
+| if (--r0 != 0) goto -16 <ota_show+0x13A : 2002bfe >
+| sp += 40
+| {pc, r9-r4} = [sp++]
+ota_show.STEP:
+ota_stage_head.NAME:
+ota_take:
+| [--sp] = {rets, r7-r4}
+| r3 = <fm1__tick_col >
+| r0 = b[r3+6] (u)
+| if (r0 == 0) goto <ota_take>
+| r0 = [r3+100]
+| r4 = 0
+| r5 = <sx_frame >
+| r2 = <ota_dec >
+| r6 = 0
+| r1 = 0
+| goto <ota_take>
+| r7 = b[r5++=1] (u)
+| r0 += -1
+| r7 &= 4294967167
+| r7 <<= r6
+| r6 += 7
+| r4 |= r7
+| if (r< 8) goto 14 <ota_take>
+| if (r1 <= 639) {
+| b[r1+r2] = r4
+| r6 += -8
+| r4 = r4 >> 8
+| r1 += 1
+| if (r0 != 0) goto <ota_take>
+| r0 = 0
+| r4 = r1 + -7
+| b[r3+6] = r0
+| if (r4 > 633) goto <ota_take>
+| r3 = b[r2+0] (u)
+| if (r3 != 0) goto <ota_take>
+| r3 = b[r2+1] (u)
+| if (r3 != 89) goto <ota_take>
+| r3 = b[r2+4] (u)
+| r4 = b[r2+3] (u)
+| r4 <= insert(r3, p:8, l:8)  #
+| r5 = b[r2+5] (u)
+| r4 <= insert(r5, p:16, l:8)
+| r3 = r4 + 7
+| if (r3 != r1) goto <ota_take>
+| r0 = 255
+| if (r1 < 8) goto 22 <ota_take+0x8A : 20028fa >
+| r0 = 0
+| r3 = 7
+| r4 = r3 + r2
+| r4 = b[r4+-1] (u)
+| r3 += 1
+| r0 += r4
+| if (r1 != r3) goto <ota_take>
+| r3 = 255
+| r0 = r3 & ~r0
+| r2 += r1
+| r2 = b[r2+-1] (u)
+| if (r0 != r2) {
+| r1 = 0
+| r0 = r1
+| {pc, r7-r4} = [sp++]
+| r0 = 0
+| {pc, r7-r4} = [sp++]
+ota_unstage:
+| [--sp] = {rets, r4}
+| r4 = 0
+| r0 = r4 + 0xE0000
+| call <ota_erase >
+| r4 = r4 + 4096
+| if (r< 20480) goto -18 <ota_unstage>
+| {pc, r4} = [sp++]
+sie_rd:
+| [--sp] = {rets, r4}
+| r2 = 0x11800
+| r1 = r0  #
+| r3 = [r2+0]
+| r0 = 0
+| if ((r3 & 4) == 0) goto 62 <sie_rd+0x4E : 20012e2 >
+| r1 = r1 << 8
+| r3 = 16760576 <build/felucca_size.ll+0xFFBF00 : ffbf00 >
+| r1 &= r3
+| r1 |= 16384
+| [r2+4] = r1
+| csync
+| r3 = -20000 <_data_load+0xFFFFFFFFFDFEADC8 : ffffffffffffb1e0 >
+| r1 = <usb >
+| r4 = [r2+4]
+| r4 = r4.l (s)
+| ifs (r< 0) goto 20 <sie_rd>
+| r3 += 1
+| if (r3 != 0) goto -12 <sie_rd+0x2A : 20012be >
+| r2 = [r1+36]
+| r2 += 1
+| [r1+36] = r2
+| if (r2 >= 51) {
+| b[r1+0] = r0
+| {pc, r4} = [sp++]
+| {pc, r4} = [sp++]
+| [r1+36] = 0x0
+| r0 = [r2+4]
+| r0 = r0.b0 (u)
+| {pc, r4} = [sp++]
+sie_wr:
+| r2 = 0x11800
+| r3 = [r2+0]
+| if ((r3 & 4) == 0) goto <sie_wr>
+| r0 = r0 << 8
+| r3 = 16776960 <build/felucca_size.ll+0xFFFF00 : ffff00 >
+| r0 &= r3
+| r1 = r1.b0 (u)
+| r0 |= r1
+| [r2+4] = r0
+| csync
+| r1 = -20000 <_data_load+0xFFFFFFFFFDFEADC8 : ffffffffffffb1e0 >
+| r0 = <usb >
+| r3 = [r2+4]
+| r3 = r3.l (s)
+| ifs (r< 0) goto 20 <sie_wr>
+| r1 += 1
+| if (r1 != 0) goto <sie_wr>
+| r1 = [r0+36]
+| r1 += 1
+| [r0+36] = r1
+| if (r1 >= 51) {
+| r1 = 0
+| b[r0+0] = r1
+| rts
+| [r0+36] = 0x0
+| rts
+st_read:
+| [--sp] = {rets, r9-r4}
+| sp += -4
+| r5 = r2
+| r6 = r1
+| r7 = r0
+| r8 = 0
+| if (r5 == 0) goto <st_read>
+| r9 = <fl_read_ram >
+| cli
+| [sp] = r9
+| r4 = r5
+| if (r5 >= 256) {
+| r4 = 256
+| r0 = r7  #
+| r3 = [sp]
+| r1 = r6
+| r2 = r4
+| call r3
+| csync
+| sti
+| if (r0 != 0) goto 10 <st_read+0x3E : 2002656 >
+| r5 = r5 - r4
+| r6 += r4
+| r7 += r4
+| if (r5 != 0) goto <st_read>
+| goto <st_read>
+| r8 = r0
+| r0 = r8
+| sp += 4
+| {pc, r9-r4} = [sp++]
+uac_ep4_reset:
+| [--sp] = rets
+| r0 = 14
+| r1 = 4
+| call <sie_wr >
+| r0 = 17
+| r1 = 72
+| call <sie_wr >
+| r0 = 18
+| r1 = 0
+| call <sie_wr >
+| r0 = 17
+| r1 = 0
+| call <sie_wr >
+| r0 = 18
+| r1 = 64
+| {rets} = [sp++]
+| goto <sie_wr >
+uac_render_start:
+| [--sp] = {rets, r6-r4}
+| r1 = 284 <build/felucca_size.ll+0x11C : 11c >
+| r0 = <fm1__tick_col >
+| r1 = b[r0+r1] (u)
+| if (r1 == 0) goto <uac_render_start>
+| r1 = <usb >
+| r1 = b[r1+1] (u)
+| if (r1 == 0) goto <uac_render_start>
+| r1 = 286 <build/felucca_size.ll+0x11E : 11e >
+| r1 = b[r0+r1] (u)
+| r2 = 1
+| if (r1 != 0) goto 2 <uac_render_start+0x2A : 2000fe4 >
+| r2 = r1
+| r3 = <build/felucca_size.ll>
+| b[r0+r3] = r2
+| if (r1 == 0) goto 58 <uac_render_start+0x6E : 2001028 >
+| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
+| r1 = b[r0+r1] (u)
+| if (r1 == 0) goto 60 <uac_render_start+0x7A : 2001034 >
+| r1 = [r0+64]
+| r2 = [r0+60]
+| r1 = r1 - r2
+| [r0+292] = r1
+| r2 = [r0+340]
+| if (r1 < r2) {
+| [r0+340] = r1
+| r2 = [r0+344]
+| if (r1 > r2) {
+| [r0+344] = r1
+| {pc, r6-r4} = [sp++]
+| r1 = <build/felucca_size.ll>
+| r2 = 0
+| b[r0+r1] = r2
+| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
+| r2 = 0
+| b[r0+r1] = r2
+| {pc, r6-r4} = [sp++]
+| r3 = 511  # <build/felucca_size.ll+0x1FE : 1fe >
+| r1 = [r0+60]
+| r2 = 0
+| r4 = <ua_ring >
+| r5 = 0
+| r6 = r1 + r5
+| r6 &= r3
+| r5 += 1
+| [r4+r6<<2] = r2
+| if (r5 != 104) goto -14 <uac_render_start+0x8A : 2001044 >
+| r1 += 104
+| [r0+64] = r1
+| r1 = 104
+| [r0+292] = r1
+| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
+| r2 = 1
+| b[r0+r1] = r2
+| {pc, r6-r4} = [sp++]
+uac_service:
+| [--sp] = {rets, r10-r4}
+| r10 = <usb >
+| r0 = b[r10+0] (u)
+| if (r0 == 0) goto 380 <uac_service+0x18C : 2001470 >
+| r0 = b[r10+1] (u)
+| if (r0 == 0) goto 372 <uac_service+0x18C : 2001470 >
+| r0 = 284 <build/felucca_size.ll+0x11C : 11c >
+| r9 = <fm1__tick_col >
+| r0 = b[r9+r0] (u)
+| if (r0 == 0) goto 354 <uac_service+0x18C : 2001470 >
+| r0 = 14
+| r1 = 4
+| call <sie_wr >
+| r0 = 17
+| call <sie_rd >
+| if ((r0 & 1) != 0) goto <uac_service>
+| r1 = 287 <build/felucca_size.ll+0x11E : 11e >
+| r1 = b[r9+r1] (u)
+| if (r1 == 0) goto 22 <uac_service+0x5C : 2001340 >
+| if ((r0 & 0x4) != 0) {
+| r0 = r9 + 324
+| [r0+0] += 1
+| r0 = 286 <build/felucca_size.ll+0x11E : 11e >
+| r1 = 1
+| b[r9+r0] = r1
+| r0 = 1
+| r1 = r9 + 284
+| b[r1+3] = r0
+| r0 = 0
+| b[r1+5] = r0
+| r0 = [r1+12]
+| r1 = r0 + 100
+| if (r1 <= 999) {
+| r0 = 44
+| r1 = r0 + -900
+| r0 = 45
+| [r9+296] = r1
+| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
+| r1 = b[r9+r1] (u)
+| if (r1 == 0) goto 62 <uac_service+0xC6 : 20013aa >
+| r1 = [r9+292]
+| if (r1 <= 128) goto 74 <uac_service+0xDA : 20013be >
+| r1 = r9 + 332
+| r2 = 1
+| goto 80 <uac_service+0xE8 : 20013cc >
+| r0 = <build/felucca_size.ll>
+| r1 = b[r9+r0] (u)
+| if (r1 == 255) goto 232 <uac_service+0x18C : 2001470 >
+| r1 += 1
+| r2 = r1.b0 (u)
+| b[r9+r0] = r1
+| if (r2 != 40) goto 220 <uac_service+0x18C : 2001470 >
+| r0 += -3
+| r0 = b[r9+r0] (u)
+| if (r0 == 0) goto 212 <uac_service+0x18C : 2001470 >
+| r0 = 0
+| r1 = r9 + 284
+| b[r1+2] = r0
+| [r1+44] += 1
+| {pc, r10-r4} = [sp++]
+| r1 = 0
+| r2 = 0
+| r3 = r10 + 208
+| [r3+r2<<2] = r1
+| r2 += 1
+| if (r0 != r2) goto -14 <uac_service+0xCA : 20013ae >
+| goto <uac_service>
+| r1 = [r9+292]
+| if (r1 > 79) goto 12 <uac_service+0xEE : 20013d2 >
+| r1 = r9 + 336
+| r2 = -1
+| [r1+0] += 1
+| r0 += r2
+| r1 = [r9+60]
+| r2 = [r9+64]
+| r8 = r2 - r1
+| r3 = 0
+| r2 = umin(r8, r0)
+| if (r2 == 0) goto <uac_service>
+| r7 = 511 <build/felucca_size.ll+0x1FE : 1fe >
+| r6 = <ua_ring >
+| r5 = r1 + r3
+| r5 &= r7
+| r5 = [r6+r5<<2]
+| r4 = r10 + 208
+| [r4+r3<<2] = r5
+| r3 += 1
+| if (r3 < r2) goto -22 <uac_service+0x10C : 20013f0 >
+| r3 = r2
+| if (r8 >= r0) goto <uac_service>
+| r4 = r2 << 2
+| r4 += r10
+| r8 = r4 + 204
+| r7 = r9 + 300
+| r6 = r7
+| if (r2 == 0) goto 2 <uac_service+0x13A : 200141e >
+| r6 = r8
+| r6 = [r6+0]
+| [r7+16] += 1
+| if (r3 >= r0) goto <uac_service>
+| r7 = r0 - r3
+| r3 = r3 << 2
+| r3 += r10
+| r3 = r3 + 208
+| [r3++=4] = r6
+| if (--r7 != 0) goto -6 <uac_service+0x14E : 2001432 >
+| r3 = r10 + 204
+| r3 = [r3+r0<<2]
+| r4 = r9 + 300
+| r1 += r2  #
+| [r4+0] = r3
+| [r9+60] = r1
+| [r4+8] += 1
+| [r4+12] += r0
+| csync
+| r1 = r10 + 208
+| r2 = <build/felucca_size.ll>
+| [r2+4] = r1
+| r0 = r0 << 2
+| [r2+0] = r0
+| csync
+| r0 = 17
+| r1 = 1
+| call <sie_wr >
+| {pc, r10-r4} = [sp++]
+uac_tap:
+| [--sp] = {rets, r12-r4}
+| r8 = <fm1__tick_col >
+| r9 = [r8+64]
+| r1 = <build/felucca_size.ll>
+| r1 = b[r8+r1] (u)
+| if (r1 == 0) goto <uac_tap>
+| r1 = [r8+60]
+| r1 = r1 - r9
+| r1 = r1 & 0xFFFFFFE0
+| if (r1 != -512) goto <uac_tap>
+| r0 = r8 + 320
+| [r0+0] += 1
+| {pc, r12-r4} = [sp++]
+| r3 = 0
+| r4 = -32768 <_data_load+0xFFFFFFFFFDFE7BE8 : ffffffffffff8000 >
+| r10 = 2147418112 <_data_load+0x7DFDFBE8 : 7fff0000 >
+| r11 = 511 <build/felucca_size.ll+0x1FE : 1fe >
+| r12 = <ua_ring >
+| r2 = r9
+| r5 = r0
+| r7 = [++r5=r3]
+| r1 = smax(r7, r4)
+| r6 = r1.l (u)
+| r1 = 32767 <build/felucca_size.ll+0x7FFE : 7ffe >
+| ifs (r7 < 32768) {
+| r1 = r6
+| r7 = [r5+4]
+| r5 = smax(r7, r4)
+| r6 = r5 << 16
+| r5 = r10
+| ifs (r7 < 32768) {
+| r5 = r6
+| r1 |= r5
+| r5 = r2 & r11
+| [r12+r5<<2] = r1
+| r3 += 8
+| r2 += 1
+| if (r3 != 256) goto <uac_tap>
+| r0 = r9 + 32
+| [r8+64] = r0
+| {pc, r12-r4} = [sp++]
+usb_detach:
+| r0 = <usb >
+| r1 = 1
+| b[r0+64] = r1
+| r1 = 0
+| r0 = 0x11800  #
+| b[r0+0] = r1
+| r0 = 0x51000  #
+| [r0+0] = r1
+| [r0+0] = 0xC
+| rts
+usb_start:
+| [--sp] = {rets, r6-r4}
+| r4 = <usb >
+| r0 = 0
+| r5 = 0x11800  #
+| [r4+36] = r0
+| [r5+0] = r0
+| r0 = 0x51000  #
+| [r5+4] = r0
+| [r0+0] = 0xC
+| r1 = 25
+| r2 = r5 + -4092
+| r3 = [r2+0]
+| r6 = [r2+0]
+| r6 = r6 - r3
+| r6 = r6 >> 6
+| if (r< 375) goto -10 <usb_start>
+| if (--r1 != 0) goto <usb_start>
+| r1 = r2 + -2036
+| [r1+0] &= 0xFFFFFFFC
+| r1 = <ep0buf >
+| r3 = 17928  # <build/felucca_size.ll+0x4608 : 4608 >
+| [r5+24] = r1
+| r2 = 0
+| [r2+r3<<2] = r1
+| r2 += 8
+| if (r2 != 24) goto <usb_start>
+| [r5+60] = r1
+| [r0+0] |= 0x600
+| [r0+0] &= 0xFFFFF7FF
+| [r0+0] |= 0x1000
+| r1 = -16438 <_data_load+0xFFFFFFFFFDFEBBB2 : ffffffffffffbfca >
+| [r5+0] &= r1
+| r1 = 0
+| [r5+4] = r1
+| [r5+0] |= 0x1
+| [r0+0] &= 0xFFFFFF0F
+| [r0+0] |= 0x40
+| [r5+0] |= 0x3C
+| r0 = 1
+| r1 = 96
+| r6 = 1
+| call <sie_wr >
+| r0 = 11
+| r1 = 7
+| call <sie_wr >
+| r0 = 7
+| r1 = 1
+| call <sie_wr >
+| r0 = 8
+| r1 = 0
+| call <sie_wr >
+| r0 = 9
+| r1 = 0
+| call <sie_wr >
+| r0 = 10
+| r1 = 0
+| call <sie_wr >
+| [r5+0] &= 0xFF07FFFF
+| r0 = [r4+36]
+| if (r0 >= 3) {
+| r6 = 0
+| b[r4+0] = r6
+| {pc, r6-r4} = [sp++]

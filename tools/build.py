@@ -38,6 +38,7 @@ APP_XIP = 0x02000120                # app.bin offset 0 in the XIP map; the SPL j
 APP_SLOT = fm1pkg_make.APP_SLOT
 LOADER_LOAD = 0x01C0A800
 LOADER_NAME = b"usb_hid_ota.bin"    # the file name the SPL looks for
+LOADER_SHA256 = "e671adf0ce6e4f69ac8514087c8833b1969fa4c470645786f19968e90b9a630f"   # Felucca 1.0.5.2's loader: the way back
 DOCKER_IMAGE = os.environ.get("JIELI_DOCKER_IMAGE", "debian:bookworm-slim")
 CFLAGS = ["-Os", "-ffunction-sections", "-fno-builtin", "-Wall", "-Wno-unused-function"]
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
@@ -171,6 +172,9 @@ def build_loader():
     bss = [int(ln.split()[0], 16) for ln in syms.splitlines() if ln.rstrip().endswith("_bss_end")]
     print(f"loader: image {len(image)} B at {LOADER_LOAD:#x}" + (f", bss end {bss[0]:#x}" if bss else ""))
     print(f"loader: ota.bin {len(ota)} B")
+    got = hashlib.sha256(ota).hexdigest()
+    if got != LOADER_SHA256:          # the update loader must be byte-identical, whatever else changes
+        raise SystemExit(f"build: loader ota.bin sha256 {got} is not the pinned {LOADER_SHA256}")
     return ota
 
 
