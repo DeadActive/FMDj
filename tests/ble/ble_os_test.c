@@ -41,7 +41,13 @@ static void hog(void *p) { (void)p; for (;;) os_time_dly(0); }   /* yields witho
 
 static int cb_sum;
 static int add2(int a, int b) { cb_sum += a + b; return a + b; }
-void *ble_os_host_ptr(uint32_t w) { return w == 1u ? (void *)add2 : 0; }   /* handle 1 = add2 */
+static const char *tmr_task;
+static int tmr_runs;
+static int on_tmr(void *p) { tmr_task = os_current_task(); tmr_runs += (int)(intptr_t)p; return 0; }
+void *ble_os_host_ptr(uint32_t w)              /* host: 32-bit handles for callbacks (pointers are 64-bit here) */
+{
+    return w == 1u ? (void *)add2 : w == 2u ? (void *)on_tmr : ble_os_host_word_ptr(w);
+}
 static void cb_consumer(void *p)                /* a Q_CALLBACK message is run inside the pend, never returned */
 {
     int argv[8];
@@ -115,6 +121,27 @@ int main(void)
         CHECK(cb_sum == 42 && nlog == 1 && log_[0] == (BLE_SDK_Q_EVENT | 1), "Q_CALLBACK runs in the pend, events return");
     }
     CHECK(os_taskq_post_type("nosuchtask", BLE_SDK_Q_MSG, 0, 0) == 14, "post to an unknown task returns OS_TASK_NOT_EXIST");
+    {   /* a timer bound to a task runs its callback in that task; user data, re-run, usr_timeout */
+        unsigned short id;
+        tmr_runs = 0;
+        id = sys_timer_add_to_task("cbtask", (void *)(intptr_t)3, (void (*)(void *))on_tmr, 20);
+        CHECK(sys_timer_get_user_data(id) == (void *)(intptr_t)3, "timer user data read back");
+        sys_timer_set_user_data(id, (void *)(intptr_t)5);
+        test_ms += 20; ble_os_service(1000);
+        CHECK(tmr_runs == 5 && tmr_task && !strcmp(tmr_task, "cbtask"), "to_task timer runs in its task with its user data");
+        test_ms += 15; sys_timer_re_run(id); test_ms += 15; ble_os_service(1000);
+        CHECK(tmr_runs == 5, "re_run restarts the period");
+        test_ms += 5; ble_os_service(1000);
+        CHECK(tmr_runs == 10, "and it fires a period after the re-run");
+        sys_timer_del(id);
+        sys_timeout_add_to_task("cbtask", (void *)(intptr_t)1, (void (*)(void *))on_tmr, 10);
+        test_ms += 10; ble_os_service(1000); test_ms += 10; ble_os_service(1000);
+        CHECK(tmr_runs == 11, "to_task timeout fires once");
+        id = usr_timeout_add((void *)(intptr_t)100, (void (*)(void *))on_tmr, 10, 1);
+        usr_timeout_del(id);
+        test_ms += 20; ble_os_service(1000);
+        CHECK(tmr_runs == 11, "usr_timeout_del cancels");
+    }
     printf(fails ? "ble_os: %d FAILED\n" : "ble_os: all checks passed\n", fails);
     return fails != 0;
 }

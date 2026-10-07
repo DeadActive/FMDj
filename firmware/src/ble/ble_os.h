@@ -25,6 +25,17 @@ unsigned short sys_timeout_add(void *priv, void (*func)(void *priv), unsigned in
 void sys_timer_del(unsigned short id);
 void sys_timeout_del(unsigned short id);
 int sys_timer_modify(unsigned short id, unsigned int msec);
+unsigned short sys_timer_add_to_task(const char *task_name, void *priv, void (*func)(void *priv), unsigned int msec);
+unsigned short sys_timeout_add_to_task(const char *task_name, void *priv, void (*func)(void *priv), unsigned int msec);
+void *sys_timer_get_user_data(unsigned short id);
+void sys_timer_set_user_data(unsigned short id, void *priv);
+void sys_timer_re_run(unsigned short id);
+unsigned short usr_timeout_add(void *priv, void (*func)(void *priv), unsigned int msec, uint8_t priority);
+void usr_timeout_del(unsigned short id);
+void usr_timer_del(unsigned short id);
+#ifdef BLE_OS_HOST
+void *ble_os_host_word_ptr(uint32_t w);
+#endif
 void *ble_malloc(unsigned int n);                 /* the target also exports malloc / zalloc / free */
 void *ble_zalloc(unsigned int n);
 void ble_free(void *p);

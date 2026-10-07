@@ -258,7 +258,13 @@ else
     echo "== skip target cost of the render loops (stripped core: no synth renders in build/felucca.dis)"
 fi
 
-run "update path = the stripped core's (gate 2)" python3 tools/check_update_path.py build/felucca.dis tests/ble/update_path.ref
+run "update path sources = Felucca 1.0.5.2's (gate 2a)" python3 tools/check_update_path.py --sources main
+if grep -q "^ble_service:" build/felucca.dis; then   # a BLE build: its core unit = the reference's (gate 2b, 4)
+    run "update path machine code = the reference core's (gate 2b)" python3 tools/check_update_path.py build/felucca.dis tests/ble/update_path.ref
+    run "no BT start-up at boot (gate 4)" python3 tools/check_ble_boot.py build/felucca.dis
+else
+    echo "== skip gates 2b and 4 (not a BLE build: FELUCCA_BLE=1 ./build.sh)"
+fi
 run "update path check self-test" python3 tools/check_update_path.py --selftest
 mkdir -p build/tests
 run "BLE-MIDI parser" sh -c 'cc -Wall -O1 -o build/tests/ble_midi_test tests/ble/ble_midi_test.c && build/tests/ble_midi_test'

@@ -1,20 +1,20 @@
 e0_chunk:
 | [--sp] = {rets, r6-r4}
-| r4 = <usb >
+| r4 = <addr>
 | r0 = h[r4+12] (u)
 | r1 = r0
 | if (r0 >= 64) {
 | r1 = 64
-| r2 = <ep0buf >
-| if (r1 == 0) goto 18 <e0_chunk+0x2C : 200149e >
+| r2 = <addr>
+| if (r1 == 0) goto <+0x2C>
 | r3 = [r4+8]
 | r5 = 0
 | r6 = b[r3+r5] (u)
 | b[r5+r2] = r6
 | r5 += 1
-| if (r5 < r1) goto -14 <e0_chunk+0x1E : 2001490 >
+| if (r<addr>
 | csync
-| r3 = <build/felucca_size.ll>
+| r3 = 71688
 | [r3+16] = r2
 | [r3+0] = r1
 | [r4+8] += r1
@@ -23,34 +23,34 @@ e0_chunk:
 | r1 = r1.l (u)  #
 | h[r4+12] = r1
 | r5 = 0
-| if (r1 != 0) goto 20 <e0_chunk+0x5C : 20014ce >
+| if (r1 != 0) goto <+0x5C>
 | r2 = 1
 | r3 = 1
 | if (r0 >= 64) {
 | r3 = 0
 | r5 = b[r4+5] (u)
-| if (r5 == 0) goto <e0_chunk>
+| if (r5 == 0) goto <+0x58>
 | r2 = 0
 | r5 = r3 | r2
-| if (r< 64) goto 6 <e0_chunk>
-| if (r1 != 0) goto <e0_chunk>
+| if (r<addr>
+| if (r1 != 0) goto <+0x66>
 | r0 = 0
 | b[r4+5] = r0
 | r0 = 14
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r1 = 10
-| if (r5 != 0) goto <e0_chunk>
+| if (r5 != 0) goto <+0x74>
 | r1 = 2
 | r0 = 17
-| call <sie_wr >
-| if (r5 == 0) goto <e0_chunk>
+| call <sie_wr>
+| if (r5 == 0) goto <+0x80>
 | r0 = 0
 | b[r4+4] = r0
 | {pc, r6-r4} = [sp++]
 e0_send:
 | [--sp] = {rets, r5, r4}
-| r3 = <usb >
+| r3 = <addr>
 | r4 = umin(r1, r2)  #
 | [r3+8] = r0
 | h[r3+12] = r4
@@ -66,40 +66,40 @@ e0_send:
 | b[r3+4] = r0
 | r0 = 14
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 64
-| call <sie_wr >
+| call <sie_wr>
 | {rets, r5, r4} = [sp++]
-| goto <e0_chunk >
+| goto <addr>
 ep0_service.RATE:
 ep0_service.zero2:
 fl_erase4k_ram:
 | [--sp] = {rets, r15-r4}
 | sp += -32
 | r2 = r0 - 0x97000
-| if (r2 > 299008) goto <fl_erase4k_ram>
+| if (r2 > 299008) goto <+0x18>
 | r2 = 0xE0000 - r0
-| if (r2 > 4095) goto 20 <fl_erase4k_ram+0x2C : 1c002e4 >
+| if (r2 > 4095) goto <+0x2C>
 | r2 = r0 - 0xFC000
-| if (r2 > 12288) goto <fl_erase4k_ram>
+| if (r2 > 12288) goto <+0x38>
 | r2 = 0xFF000 - r0
-| if (r<= 4095) goto 12 <fl_erase4k_ram>
-| r3 = 4095 <build/felucca_size.ll+0xFFE : ffe >
+| if (r<addr>
+| r3 = 4095
 | r2 = -1
-| if ((r0 & r3) != 0) goto 788 <fl_erase4k_ram+0x34A : 1c00602 >
-| goto <fl_erase4k_ram>
-| r3 = 4095 <build/felucca_size.ll+0xFFE : ffe >
+| if ((r0 & r3) != 0) goto <+0x34A>
+| goto <+0x56>
+| r3 = 4095
 | r2 = -1
-| if ((r0 & r3) != 0) goto 776 <fl_erase4k_ram+0x34A : 1c00602 >
+| if ((r0 & r3) != 0) goto <+0x34A>
 | r3 = r0 - 0xE0000
-| if (r3 > 20480) goto 766 <fl_erase4k_ram+0x34A : 1c00602 >
+| if (r3 > 20480) goto <+0x34A>
 | r3 = 0xE5000 - r0
-| if (r3 <= 4095) goto 756 <fl_erase4k_ram+0x34A : 1c00602 >
-| r6 = 32432136 <settings+0x271F50 : 1eee008 >
+| if (r<addr>
+| r6 = <addr>
 | r2 = [r6+0]
-| if ((r2 & 16384) == 0) goto -6 <fl_erase4k_ram+0x5C : 1c00314 >
-| r14 = <build/felucca_size.ll>
+| if ((r2 & 16384) == 0) goto <+0x5C>
+| r14 = 262656
 | r10 = [r14+0]
 | r5 = 0x11C00
 | r9 = [r5+0]
@@ -107,15 +107,15 @@ fl_erase4k_ram:
 | r2 = r2 & 0xE
 | r4 = r2 | 0x1
 | r2 = -2
-| if (r4 == 7) goto 706 <fl_erase4k_ram+0x34A : 1c00602 >
+| if (r4 == 7) goto <+0x34A>
 | csync
 | r2 = [r14+0]
-| ifs (r2 < 0) goto -8 <fl_erase4k_ram+0x8A : 1c00342 >
+| ifs (r<addr>
 | r2 = 0
 | [r14+0] = r2
-| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| r8 = 331804
 | [r8+0] &= 0xFFFFFFDF
-| r2 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| r2 = 4137
 | [r5+0] = r2
 | [r5+0] = r2
 | csync
@@ -127,17 +127,17 @@ fl_erase4k_ram:
 | r2 = [sp]
 | r4 = r2 + -1
 | [sp] = r4
-| if (r2 != 0) goto -10 <fl_erase4k_ram+0xBC : 1c00374 >
+| if (r2 != 0) goto <+0xBC>
 | [r5+0] |= 0x8
 | [r5+0] &= 0xFFFFEFFF
 | [r5+8] = 0x6
 | csync
-| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r2 = 4244967296
 | r4 = [r5+0]
 | r4 = r4.l (s)
-| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0xE6 : 1c0039e >
+| ifs (r<addr>
 | r2 += 1
-| if (r2 != 0) goto -12 <fl_erase4k_ram+0xDA : 1c00392 >
+| if (r2 != 0) goto <+0xDA>
 | [r5+0] |= 0x4000
 | [r5+0] &= 0xFFFFFFF7
 | [r13+8] &= 0xFFFFFFFE
@@ -147,7 +147,7 @@ fl_erase4k_ram:
 | r2 = [sp+4]
 | r4 = r2 + -1
 | [sp+4] = r4
-| if (r2 != 0) goto -10 <fl_erase4k_ram+0xFA : 1c003b2 >
+| if (r2 != 0) goto <+0xFA>
 | [r13+8] &= 0xFFFFFFFE
 | [r13+0] &= 0xFFFFFFFE
 | r2 = 10
@@ -155,29 +155,29 @@ fl_erase4k_ram:
 | r2 = [sp+8]
 | r4 = r2 + -1
 | [sp+8] = r4
-| if (r2 != 0) goto <fl_erase4k_ram>
+| if (r2 != 0) goto <+0x110>
 | [r5+0] |= 0x8
 | [r5+0] &= 0xFFFFEFFF
 | [r5+8] = 0x5
 | csync
-| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r2 = 4244967296
 | r4 = [r5+0]
 | r4 = r4.l (s)
-| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x13A : 1c003f2 >
+| ifs (r<addr>
 | r2 += 1
-| if (r2 != 0) goto -12 <fl_erase4k_ram+0x12E : 1c003e6 >
+| if (r2 != 0) goto <+0x12E>
 | [r5+0] |= 0x4000
 | [r5+0] &= 0xFFFFFFF7
 | [r5+0] |= 0x8
 | [r5+0] |= 0x1000
 | [r5+8] = 0xFF
 | csync
-| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r2 = 4244967296
 | r4 = [r5+0]
 | r4 = r4.l (s)
-| ifs (r< 0) goto 4 <fl_erase4k_ram>
+| ifs (r<addr>
 | r2 += 1
-| if (r2 != 0) goto <fl_erase4k_ram>
+| if (r2 != 0) goto <+0x156>
 | [r5+0] |= 0x4000
 | r4 = [r5+8]
 | [r5+0] &= 0xFFFFFFF7
@@ -188,9 +188,9 @@ fl_erase4k_ram:
 | r2 = [sp+12]
 | r7 = r2 + -1
 | [sp+12] = r7
-| if (r2 != 0) goto <fl_erase4k_ram>
+| if (r2 != 0) goto <+0x178>
 | r2 = -3
-| if ((r4 & 2) == 0) goto <fl_erase4k_ram>
+| if ((r4 & 2) == 0) goto <+0x332>
 | [r13+8] &= 0xFFFFFFFE
 | [r13+0] &= 0xFFFFFFFE
 | r2 = 10
@@ -198,17 +198,17 @@ fl_erase4k_ram:
 | r2 = [sp+16]
 | r4 = r2 + -1
 | [sp+16] = r4
-| if (r2 != 0) goto <fl_erase4k_ram>
+| if (r2 != 0) goto <+0x194>
 | [r5+0] |= 0x8
 | [r5+0] &= 0xFFFFEFFF
 | [r5+8] = 0x20
 | csync
-| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r2 = 4244967296
 | r4 = [r5+0]
 | r4 = r4.l (s)
-| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x1BE : 1c00476 >
+| ifs (r<addr>
 | r2 += 1
-| if (r2 != 0) goto -12 <fl_erase4k_ram+0x1B2 : 1c0046a >
+| if (r2 != 0) goto <+0x1B2>
 | [r5+0] |= 0x4000
 | [r5+0] &= 0xFFFFFFF7
 | [r5+0] |= 0x8
@@ -216,12 +216,12 @@ fl_erase4k_ram:
 | r2 = uextra(r0, p:16, l:8)
 | [r5+8] = r2
 | csync
-| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r2 = 4244967296
 | r4 = [r5+0]
 | r4 = r4.l (s)
-| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x1E8 : 1c004a0 >
+| ifs (r<addr>
 | r2 += 1
-| if (r2 != 0) goto -12 <fl_erase4k_ram+0x1DC : 1c00494 >
+| if (r2 != 0) goto <+0x1DC>
 | [r5+0] |= 0x4000
 | [r5+0] &= 0xFFFFFFF7
 | [r5+0] |= 0x8
@@ -229,12 +229,12 @@ fl_erase4k_ram:
 | r2 = uextra(r0, p:8, l:8)
 | [r5+8] = r2
 | csync
-| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r2 = 4244967296
 | r4 = [r5+0]
 | r4 = r4.l (s)
-| ifs (r< 0) goto 4 <fl_erase4k_ram>
+| ifs (r<addr>
 | r2 += 1
-| if (r2 != 0) goto <fl_erase4k_ram>
+| if (r2 != 0) goto <+0x206>
 | [r5+0] |= 0x4000
 | [r5+0] &= 0xFFFFFFF7
 | [r5+0] |= 0x8
@@ -242,12 +242,12 @@ fl_erase4k_ram:
 | r2 = r0.b0 (u)
 | [r5+8] = r2
 | csync
-| r2 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r2 = 4244967296
 | r4 = [r5+0]
 | r4 = r4.l (s)
-| ifs (r4 < 0) goto 4 <fl_erase4k_ram+0x23A : 1c004f2 >
+| ifs (r<addr>
 | r2 += 1
-| if (r2 != 0) goto -12 <fl_erase4k_ram+0x22E : 1c004e6 >
+| if (r2 != 0) goto <+0x22E>
 | [r5+0] |= 0x4000
 | [r5+0] &= 0xFFFFFFF7
 | [r13+8] &= 0xFFFFFFFE
@@ -257,27 +257,27 @@ fl_erase4k_ram:
 | r2 = [sp+20]
 | r4 = r2 + -1
 | [sp+20] = r4
-| if (r2 != 0) goto -10 <fl_erase4k_ram+0x24E : 1c00506 >
-| r2 = 33538048 <settings+0x37FF48 : 1ffc000 >
+| if (r2 != 0) goto <+0x24E>
+| r2 = <addr>
 | r2 += r0
 | r4 = [r6+0]
-| if ((r4 & 16384) == 0) goto <fl_erase4k_ram>
-| r4 = 33542144 <settings+0x380F48 : 1ffd000 >
+| if ((r4 & 16384) == 0) goto <+0x260>
+| r4 = <addr>
 | r0 += r4
 | r2 = r2 & 0xFFFFFFE0
-| if (r2 >= r0) goto <fl_erase4k_ram>
+| if (r2 >= r0) goto <+0x288>
 | csync
 | flushinv [r2]
 | csync
 | r4 = [r6+0]
-| if ((r4 & 16384) == 0) goto -6 <fl_erase4k_ram+0x27C : 1c00534 >
+| if ((r4 & 16384) == 0) goto <+0x27C>
 | r2 += 32
-| if (r< r0) goto -18 <fl_erase4k_ram>
+| if (r<addr>
 | r12 = r5 + -5116
 | r2 = [r12+0]
-| r15 = 10 <build/felucca_size.ll+0xA : a >
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
-| r11 = 12000024 <build/felucca_size.ll+0xB71B18 : b71b18 >
+| r15 = 10
+| r4 = 4244967296
+| r11 = 12000024
 | r0 = [r12+0]
 | [r13+8] &= 0xFFFFFFFE
 | [r13+0] &= 0xFFFFFFFE
@@ -285,7 +285,7 @@ fl_erase4k_ram:
 | r7 = [sp+24]
 | r3 = r7 + -1
 | [sp+24] = r3
-| if (r7 != 0) goto -10 <fl_erase4k_ram+0x2B0 : 1c00568 >
+| if (r7 != 0) goto <+0x2B0>
 | [r5+0] |= 0x8
 | [r5+0] &= 0xFFFFEFFF
 | [r5+8] = 0x5
@@ -294,9 +294,9 @@ fl_erase4k_ram:
 | r7 = r4
 | r3 = [r5+0]
 | r3 = r3.l (s)
-| ifs (r3 < 0) goto 4 <fl_erase4k_ram+0x2D8 : 1c00590 >
+| ifs (r<addr>
 | r7 += 1
-| if (r7 != 0) goto -12 <fl_erase4k_ram+0x2CC : 1c00584 >
+| if (r7 != 0) goto <+0x2CC>
 | [r5+0] |= 0x4000
 | [r5+0] &= 0xFFFFFFF7
 | [r5+0] |= 0x8
@@ -306,9 +306,9 @@ fl_erase4k_ram:
 | r7 = r4
 | r3 = [r5+0]
 | r3 = r3.l (s)
-| ifs (r3 < 0) goto 4 <fl_erase4k_ram+0x2FC : 1c005b4 >
+| ifs (r<addr>
 | r7 += 1
-| if (r7 != 0) goto -12 <fl_erase4k_ram+0x2F0 : 1c005a8 >
+| if (r7 != 0) goto <+0x2F0>
 | [r5+0] |= 0x4000
 | r7 = [r5+8]
 | [r5+0] &= 0xFFFFFFF7
@@ -318,11 +318,11 @@ fl_erase4k_ram:
 | r3 = [sp+28]
 | r6 = r3 + -1
 | [sp+28] = r6
-| if (r3 != 0) goto <fl_erase4k_ram>
-| if ((r7 & 1) == 0) goto <fl_erase4k_ram>
-| if (r0 < r11) goto -132 <fl_erase4k_ram+0x2A0 : 1c00558 >
+| if (r3 != 0) goto <+0x312>
+| if ((r7 & 1) == 0) goto <+0x328>
+| if (r<addr>
 | r2 = -4
-| goto 2 <fl_erase4k_ram+0x32A : 1c005e2 >
+| goto <+0x32A>
 | r2 = 0
 | r3 = 24
 | r0 = r0 / r3 (u)
@@ -331,7 +331,7 @@ fl_erase4k_ram:
 | [r8+0] |= 0x20
 | csync
 | r0 = [r14+0]
-| ifs (r0 < 0) goto -8 <fl_erase4k_ram+0x33C : 1c005f4 >
+| ifs (r<addr>
 | [r14+0] = r10
 | csync
 | r0 = r2
@@ -340,10 +340,10 @@ fl_erase4k_ram:
 fl_jedec_ram:
 | [--sp] = {rets, r8-r4}
 | sp += -8
-| r0 = 32432136 <settings+0x271F50 : 1eee008 >
+| r0 = <addr>
 | r1 = [r0+0]
-| if ((r1 & 16384) == 0) goto -6 <fl_jedec_ram+0xA : 1c0000a >
-| r1 = <build/felucca_size.ll>
+| if ((r1 & 16384) == 0) goto <+0xA>
+| r1 = 262656
 | r3 = 0x11C00  #
 | r2 = [r1+0]
 | r0 = r2 >> 8
@@ -351,15 +351,15 @@ fl_jedec_ram:
 | r4 = [r3+0]
 | r5 = r0 | 0x1
 | r0 = 0
-| if (r5 == 7) goto <fl_jedec_ram>
+| if (r5 == 7) goto <+0x148>
 | csync
 | r0 = [r1+0]
-| ifs (r< 0) goto -6 <fl_jedec_ram>
+| ifs (r<addr>
 | r5 = 0
 | [r1+0] = r5
-| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| r8 = 331804
 | [r8+0] &= 0xFFFFFFDF
-| r5 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| r5 = 4137
 | [r3+0] = r5
 | [r3+0] = r5
 | csync
@@ -371,29 +371,29 @@ fl_jedec_ram:
 | r6 = [sp]
 | r7 = r6 + -1
 | [sp] = r7
-| if (r6 != 0) goto -10 <fl_jedec_ram+0x5E : 1c0005e >
+| if (r6 != 0) goto <+0x5E>
 | [r3+0] |= 0x8
 | [r3+0] &= 0xFFFFEFFF
 | [r3+8] = 0x9F
 | csync
-| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r6 = 4244967296
 | r7 = [r3+0]
 | r7 = r7.l (s)
-| ifs (r< 0) goto 4 <fl_jedec_ram>
+| ifs (r<addr>
 | r6 += 1
-| if (r6 != 0) goto -12 <fl_jedec_ram+0x7C : 1c0007c >
+| if (r6 != 0) goto <+0x7C>
 | [r3+0] |= 0x4000
 | [r3+0] &= 0xFFFFFFF7
 | [r3+0] |= 0x8
 | [r3+0] |= 0x1000
 | [r3+8] = 0xFF
 | csync
-| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r6 = 4244967296
 | r7 = [r3+0]
 | r7 = r7.l (s)
-| ifs (r7 < 0) goto 4 <fl_jedec_ram+0xB0 : 1c000b0 >
+| ifs (r<addr>
 | r6 += 1
-| if (r6 != 0) goto -12 <fl_jedec_ram+0xA4 : 1c000a4 >
+| if (r6 != 0) goto <+0xA4>
 | [r3+0] |= 0x4000
 | r6 = [r3+8]
 | [r3+0] &= 0xFFFFFFF7
@@ -403,12 +403,12 @@ fl_jedec_ram:
 | csync
 | r6 = r6 << 16
 | r6 = r6 & 0xFF0000
-| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = 4244967296
 | r0 = [r3+0]
 | r0 = r0.l (s)
-| ifs (r0 < 0) goto 4 <fl_jedec_ram+0xE0 : 1c000e0 >
+| ifs (r<addr>
 | r7 += 1
-| if (r7 != 0) goto -12 <fl_jedec_ram+0xD4 : 1c000d4 >
+| if (r7 != 0) goto <+0xD4>
 | [r3+0] |= 0x4000
 | r0 = [r3+8]
 | [r3+0] &= 0xFFFFFFF7
@@ -419,12 +419,12 @@ fl_jedec_ram:
 | csync
 | r0 = r0.l (u)
 | r6 |= r0
-| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = 4244967296
 | r0 = [r3+0]
 | r0 = r0.l (s)
-| ifs (r< 0) goto 4 <fl_jedec_ram>
+| ifs (r<addr>
 | r7 += 1
-| if (r7 != 0) goto <fl_jedec_ram>
+| if (r7 != 0) goto <+0x104>
 | [r3+0] |= 0x4000
 | r0 = [r3+8]
 | [r3+0] &= 0xFFFFFFF7
@@ -436,13 +436,13 @@ fl_jedec_ram:
 | r0 = [sp+4]
 | r7 = r0 + -1
 | [sp+4] = r7
-| if (r0 != 0) goto <fl_jedec_ram>
+| if (r0 != 0) goto <+0x128>
 | [r3+0] = r4
 | [r8+0] |= 0x20
 | csync
 | r0 = r6 | r5
 | r3 = [r1+0]
-| ifs (r3 < 0) goto -6 <fl_jedec_ram+0x13E : 1c0013e >
+| ifs (r<addr>
 | [r1+0] = r2
 | csync
 | sp += 8
@@ -451,23 +451,23 @@ fl_prog_ram:
 | [--sp] = {rets, r15-r4}
 | sp += -32
 | r4 = r0 - 0x97000
-| if (r4 > 299008) goto <fl_prog_ram>
+| if (r4 > 299008) goto <+0x16>
 | r4 = 0xE0000 - r0
-| if (r4 >= r2) goto 20 <fl_prog_ram+0x2A : 1c00632 >
+| if (r4 >= r2) goto <+0x2A>
 | r4 = r0 - 0xFC000
-| if (r4 > 12288) goto 814 <fl_prog_ram+0x34E : 1c00956 >
+| if (r4 > 12288) goto <+0x34E>
 | r4 = 0xFF000 - r0
-| if (r4 < r2) goto 804 <fl_prog_ram+0x34E : 1c00956 >
+| if (r<addr>
 | r5 = r2 + -1
 | r4 = -1
-| if (r5 > 255) goto <fl_prog_ram>
+| if (r5 > 255) goto <+0x390>
 | r12 = uextra(r0, p:0, l:8)
 | r5 = r12 + r2
-| if (r5 > 256) goto <fl_prog_ram>
-| r15 = 32432136 <settings+0x271F50 : 1eee008 >
+| if (r5 > 256) goto <+0x390>
+| r15 = <addr>
 | r4 = [r15+0]
-| if ((r4 & 16384) == 0) goto -8 <fl_prog_ram+0x4A : 1c00652 >
-| r13 = <build/felucca_size.ll>
+| if ((r4 & 16384) == 0) goto <+0x4A>
+| r13 = 262656
 | r10 = [r13+0]
 | r7 = 0x11C00
 | r8 = [r7+0]
@@ -475,15 +475,15 @@ fl_prog_ram:
 | r4 = r4 & 0xE
 | r5 = r4 | 0x1
 | r4 = -2
-| if (r5 == 7) goto <fl_prog_ram>
+| if (r5 == 7) goto <+0x390>
 | csync
 | r4 = [r13+0]
-| ifs (r4 < 0) goto -8 <fl_prog_ram+0x7A : 1c00682 >
+| ifs (r<addr>
 | r4 = 0
 | [r13+0] = r4
-| r9 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| r9 = 331804
 | [r9+0] &= 0xFFFFFFDF
-| r4 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| r4 = 4137
 | [r7+0] = r4
 | [r7+0] = r4
 | csync
@@ -495,17 +495,17 @@ fl_prog_ram:
 | r4 = [sp]
 | r5 = r4 + -1
 | [sp] = r5
-| if (r4 != 0) goto -10 <fl_prog_ram+0xAC : 1c006b4 >
+| if (r4 != 0) goto <+0xAC>
 | [r7+0] |= 0x8
 | [r7+0] &= 0xFFFFEFFF
 | [r7+8] = 0x6
 | csync
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = 4244967296
 | r5 = [r7+0]
 | r5 = r5.l (s)
-| ifs (r5 < 0) goto 4 <fl_prog_ram+0xD6 : 1c006de >
+| ifs (r<addr>
 | r4 += 1
-| if (r4 != 0) goto -12 <fl_prog_ram+0xCA : 1c006d2 >
+| if (r4 != 0) goto <+0xCA>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
 | [r11+8] &= 0xFFFFFFFE
@@ -515,7 +515,7 @@ fl_prog_ram:
 | r4 = [sp+4]
 | r5 = r4 + -1
 | [sp+4] = r5
-| if (r4 != 0) goto -10 <fl_prog_ram+0xEA : 1c006f2 >
+| if (r4 != 0) goto <+0xEA>
 | [r11+8] &= 0xFFFFFFFE
 | [r11+0] &= 0xFFFFFFFE
 | r4 = 10
@@ -523,29 +523,29 @@ fl_prog_ram:
 | r4 = [sp+8]
 | r5 = r4 + -1
 | [sp+8] = r5
-| if (r4 != 0) goto <fl_prog_ram>
+| if (r4 != 0) goto <+0x100>
 | [r7+0] |= 0x8
 | [r7+0] &= 0xFFFFEFFF
 | [r7+8] = 0x5
 | csync
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = 4244967296
 | r5 = [r7+0]
 | r5 = r5.l (s)
-| ifs (r5 < 0) goto 4 <fl_prog_ram+0x12A : 1c00732 >
+| ifs (r<addr>
 | r4 += 1
-| if (r4 != 0) goto -12 <fl_prog_ram+0x11E : 1c00726 >
+| if (r4 != 0) goto <+0x11E>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
 | [r7+0] |= 0x8
 | [r7+0] |= 0x1000
 | [r7+8] = 0xFF
 | csync
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = 4244967296
 | r5 = [r7+0]
 | r5 = r5.l (s)
-| ifs (r< 0) goto 4 <fl_prog_ram>
+| ifs (r<addr>
 | r4 += 1
-| if (r4 != 0) goto <fl_prog_ram>
+| if (r4 != 0) goto <+0x146>
 | [r7+0] |= 0x4000
 | r14 = [r7+8]
 | [r7+0] &= 0xFFFFFFF7
@@ -556,9 +556,9 @@ fl_prog_ram:
 | r4 = [sp+12]
 | r5 = r4 + -1
 | [sp+12] = r5
-| if (r4 != 0) goto -10 <fl_prog_ram+0x16A : 1c00772 >
+| if (r4 != 0) goto <+0x16A>
 | r4 = -3
-| if ((r14 & 2) == 0) goto <fl_prog_ram>
+| if ((r14 & 2) == 0) goto <+0x378>
 | [r11+8] &= 0xFFFFFFFE
 | [r11+0] &= 0xFFFFFFFE
 | r4 = 10
@@ -566,17 +566,17 @@ fl_prog_ram:
 | r4 = [sp+16]
 | r5 = r4 + -1
 | [sp+16] = r5
-| if (r4 != 0) goto <fl_prog_ram>
+| if (r4 != 0) goto <+0x186>
 | [r7+0] |= 0x8
 | [r7+0] &= 0xFFFFEFFF
 | [r7+8] = 0x2
 | csync
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = 4244967296
 | r5 = [r7+0]
 | r5 = r5.l (s)
-| ifs (r5 < 0) goto 4 <fl_prog_ram+0x1B0 : 1c007b8 >
+| ifs (r<addr>
 | r4 += 1
-| if (r4 != 0) goto -12 <fl_prog_ram+0x1A4 : 1c007ac >
+| if (r4 != 0) goto <+0x1A4>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
 | [r7+0] |= 0x8
@@ -584,12 +584,12 @@ fl_prog_ram:
 | r4 = uextra(r0, p:16, l:8)
 | [r7+8] = r4
 | csync
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = 4244967296
 | r5 = [r7+0]
 | r5 = r5.l (s)
-| ifs (r5 < 0) goto 4 <fl_prog_ram+0x1DA : 1c007e2 >
+| ifs (r<addr>
 | r4 += 1
-| if (r4 != 0) goto -12 <fl_prog_ram+0x1CE : 1c007d6 >
+| if (r4 != 0) goto <+0x1CE>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
 | [r7+0] |= 0x8
@@ -597,29 +597,29 @@ fl_prog_ram:
 | r4 = uextra(r0, p:8, l:8)
 | [r7+8] = r4
 | csync
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = 4244967296
 | r5 = [r7+0]
 | r5 = r5.l (s)
-| ifs (r< 0) goto 4 <fl_prog_ram>
+| ifs (r<addr>
 | r4 += 1
-| if (r4 != 0) goto -12 <fl_prog_ram+0x1F8 : 1c00800 >
+| if (r4 != 0) goto <+0x1F8>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
 | [r7+0] |= 0x8
 | [r7+0] &= 0xFFFFEFFF
 | [r7+8] = r12
 | csync
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r4 = 4244967296
 | r5 = [r7+0]
 | r5 = r5.l (s)
-| ifs (r5 < 0) goto 4 <fl_prog_ram+0x22C : 1c00834 >
+| ifs (r<addr>
 | r4 += 1
-| if (r4 != 0) goto <fl_prog_ram>
+| if (r4 != 0) goto <+0x220>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
-| if (r2 == 0) goto 52 <fl_prog_ram+0x26A : 1c00872 >
+| if (r2 == 0) goto <+0x26A>
 | r4 = 0
-| r12 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r12 = 4244967296
 | r5 = b[r1+r4] (u)
 | [r7+0] |= 0x8
 | [r7+0] &= 0xFFFFEFFF
@@ -628,13 +628,13 @@ fl_prog_ram:
 | r5 = r12
 | r6 = [r7+0]
 | r6 = r6.l (s)
-| ifs (r6 < 0) goto 4 <fl_prog_ram+0x25C : 1c00864 >
+| ifs (r<addr>
 | r5 += 1
-| if (r5 != 0) goto <fl_prog_ram>
+| if (r5 != 0) goto <+0x250>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
 | r4 += 1
-| if (r4 != r2) goto -44 <fl_prog_ram+0x23E : 1c00846 >
+| if (r4 != r2) goto <+0x23E>
 | [r11+8] &= 0xFFFFFFFE
 | [r11+0] |= 0x1
 | r1 = 10
@@ -642,26 +642,26 @@ fl_prog_ram:
 | r1 = [sp+20]
 | r4 = r1 + -1
 | [sp+20] = r4
-| if (r1 != 0) goto <fl_prog_ram>
-| r1 = 33538048 <settings+0x37FF48 : 1ffc000 >
+| if (r1 != 0) goto <+0x276>
+| r1 = <addr>
 | r1 += r0
 | r0 = [r15+0]
-| if ((r0 & 16384) == 0) goto <fl_prog_ram>
+| if ((r0 & 16384) == 0) goto <+0x288>
 | r0 = r1 + r2
 | r1 = r1 & 0xFFFFFFE0
-| if (r1 >= r0) goto 20 <fl_prog_ram+0x2AE : 1c008b6 >
+| if (r1 >= r0) goto <+0x2AE>
 | csync
 | flushinv [r1]
 | csync
 | r2 = [r15+0]
-| if ((r2 & 16384) == 0) goto -8 <fl_prog_ram+0x2A0 : 1c008a8 >
+| if ((r2 & 16384) == 0) goto <+0x2A0>
 | r1 += 32
-| if (r1 < r0) goto -20 <fl_prog_ram+0x29A : 1c008a2 >
+| if (r<addr>
 | r14 = r7 + -5116
 | r1 = [r14+0]
-| r15 = 10 <build/felucca_size.ll+0xA : a >
-| r4 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
-| r12 = 240024 <build/felucca_size.ll+0x3A998 : 3a998 >
+| r15 = 10
+| r4 = 4244967296
+| r12 = 240024
 | r5 = [r14+0]
 | [r11+8] &= 0xFFFFFFFE
 | [r11+0] &= 0xFFFFFFFE
@@ -669,7 +669,7 @@ fl_prog_ram:
 | r6 = [sp+24]
 | r0 = r6 + -1
 | [sp+24] = r0
-| if (r6 != 0) goto -10 <fl_prog_ram+0x2D6 : 1c008de >
+| if (r6 != 0) goto <+0x2D6>
 | [r7+0] |= 0x8
 | [r7+0] &= 0xFFFFEFFF
 | [r7+8] = 0x5
@@ -678,9 +678,9 @@ fl_prog_ram:
 | r5 = r4
 | r0 = [r7+0]
 | r0 = r0.l (s)
-| ifs (r0 < 0) goto 4 <fl_prog_ram+0x2FE : 1c00906 >
+| ifs (r<addr>
 | r5 += 1
-| if (r5 != 0) goto -12 <fl_prog_ram+0x2F2 : 1c008fa >
+| if (r5 != 0) goto <+0x2F2>
 | [r7+0] |= 0x4000
 | [r7+0] &= 0xFFFFFFF7
 | [r7+0] |= 0x8
@@ -690,9 +690,9 @@ fl_prog_ram:
 | r5 = r4
 | r0 = [r7+0]
 | r0 = r0.l (s)
-| ifs (r< 0) goto 4 <fl_prog_ram>
+| ifs (r<addr>
 | r5 += 1
-| if (r5 != 0) goto <fl_prog_ram>
+| if (r5 != 0) goto <+0x316>
 | [r7+0] |= 0x4000
 | r5 = [r7+8]
 | [r7+0] &= 0xFFFFFFF7
@@ -702,19 +702,19 @@ fl_prog_ram:
 | r0 = [sp+28]
 | r2 = r0 + -1
 | [sp+28] = r2
-| if (r0 != 0) goto <fl_prog_ram>
-| if ((r5 & 1) == 0) goto 40 <fl_prog_ram+0x36E : 1c00976 >
-| if (r6 < r12) goto -132 <fl_prog_ram+0x2C6 : 1c008ce >
+| if (r0 != 0) goto <+0x338>
+| if ((r5 & 1) == 0) goto <+0x36E>
+| if (r<addr>
 | r4 = -4
-| goto <fl_prog_ram>
+| goto <+0x370>
 | r5 = r0 - 0xE0000
 | r4 = -1
-| if (r5 > 20480) goto <fl_prog_ram>
-| if (r2 > 256) goto <fl_prog_ram>
+| if (r5 > 20480) goto <+0x390>
+| if (r2 > 256) goto <+0x390>
 | r5 = 0xE5000 - r0
 | r6 = r2 + -1
-| if (r< r5) goto -822 <fl_prog_ram>
-| goto <fl_prog_ram>
+| if (r<addr>
+| goto <+0x390>
 | r4 = 0
 | r0 = 24
 | r0 = r6 / r0 (u)
@@ -723,7 +723,7 @@ fl_prog_ram:
 | [r9+0] |= 0x20
 | csync
 | r0 = [r13+0]
-| ifs (r< 0) goto -8 <fl_prog_ram>
+| ifs (r<addr>
 | [r13+0] = r10
 | csync
 | r0 = r4
@@ -732,10 +732,10 @@ fl_prog_ram:
 fl_read_ram:
 | [--sp] = {rets, r11-r4}
 | sp += -8
-| r3 = 32432136 <settings+0x271F50 : 1eee008 >
+| r3 = <addr>
 | r4 = [r3+0]
-| if ((r4 & 16384) == 0) goto -6 <fl_read_ram+0xA : 1c009a8 >
-| r4 = <build/felucca_size.ll>
+| if ((r4 & 16384) == 0) goto <+0xA>
+| r4 = 262656
 | r11 = [r4+0]
 | r6 = 0x11C00
 | r10 = [r6+0]
@@ -743,15 +743,15 @@ fl_read_ram:
 | r3 = r3 & 0xE
 | r7 = r3 | 0x1
 | r3 = -2
-| if (r7 == 7) goto 366 <fl_read_ram+0x1A2 : 1c00b40 >
+| if (r7 == 7) goto <+0x1A2>
 | csync
 | r3 = [r4+0]
-| ifs (r< 0) goto -6 <fl_read_ram>
+| ifs (r<addr>
 | r3 = 0
 | [r4+0] = r3
-| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| r8 = 331804
 | [r8+0] &= 0xFFFFFFDF
-| r3 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| r3 = 4137
 | [r6+0] = r3
 | [r6+0] = r3
 | csync
@@ -763,17 +763,17 @@ fl_read_ram:
 | r3 = [sp]
 | r7 = r3 + -1
 | [sp] = r7
-| if (r3 != 0) goto <fl_read_ram>
+| if (r3 != 0) goto <+0x64>
 | [r6+0] |= 0x8
 | [r6+0] &= 0xFFFFEFFF
 | [r6+8] = 0xB
 | csync
-| r3 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r3 = 4244967296
 | r7 = [r6+0]
 | r7 = r7.l (s)
-| ifs (r7 < 0) goto 4 <fl_read_ram+0x8E : 1c00a2c >
+| ifs (r<addr>
 | r3 += 1
-| if (r3 != 0) goto <fl_read_ram>
+| if (r3 != 0) goto <+0x82>
 | [r6+0] |= 0x4000
 | [r6+0] &= 0xFFFFFFF7
 | [r6+0] |= 0x8
@@ -781,12 +781,12 @@ fl_read_ram:
 | r3 = uextra(r0, p:16, l:8)
 | [r6+8] = r3
 | csync
-| r3 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r3 = 4244967296
 | r7 = [r6+0]
 | r7 = r7.l (s)
-| ifs (r7 < 0) goto 4 <fl_read_ram+0xB8 : 1c00a56 >
+| ifs (r<addr>
 | r3 += 1
-| if (r3 != 0) goto -12 <fl_read_ram+0xAC : 1c00a4a >
+| if (r3 != 0) goto <+0xAC>
 | [r6+0] |= 0x4000
 | [r6+0] &= 0xFFFFFFF7
 | [r6+0] |= 0x8
@@ -794,12 +794,12 @@ fl_read_ram:
 | r3 = uextra(r0, p:8, l:8)
 | [r6+8] = r3
 | csync
-| r3 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r3 = 4244967296
 | r7 = [r6+0]
 | r7 = r7.l (s)
-| ifs (r7 < 0) goto 4 <fl_read_ram+0xE2 : 1c00a80 >
+| ifs (r<addr>
 | r3 += 1
-| if (r3 != 0) goto -12 <fl_read_ram+0xD6 : 1c00a74 >
+| if (r3 != 0) goto <+0xD6>
 | [r6+0] |= 0x4000
 | [r6+0] &= 0xFFFFFFF7
 | [r6+0] |= 0x8
@@ -807,29 +807,29 @@ fl_read_ram:
 | r0 = r0.b0 (u)
 | [r6+8] = r0
 | csync
-| r0 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r0 = 4244967296
 | r3 = [r6+0]
 | r3 = r3.l (s)
-| ifs (r3 < 0) goto 4 <fl_read_ram+0x10A : 1c00aa8 >
+| ifs (r<addr>
 | r0 += 1
-| if (r0 != 0) goto -12 <fl_read_ram+0xFE : 1c00a9c >
+| if (r0 != 0) goto <+0xFE>
 | [r6+0] |= 0x4000
 | [r6+0] &= 0xFFFFFFF7
 | [r6+0] |= 0x8
 | [r6+0] &= 0xFFFFEFFF
 | [r6+8] = 0xFF
 | csync
-| r0 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r0 = 4244967296
 | r3 = [r6+0]
 | r3 = r3.l (s)
-| ifs (r< 0) goto 4 <fl_read_ram>
+| ifs (r<addr>
 | r0 += 1
-| if (r0 != 0) goto <fl_read_ram>
+| if (r0 != 0) goto <+0x126>
 | [r6+0] |= 0x4000
 | [r6+0] &= 0xFFFFFFF7
-| if (r2 == 0) goto <fl_read_ram>
+| if (r2 == 0) goto <+0x174>
 | r0 = 0
-| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = 4244967296
 | [r6+0] |= 0x8
 | [r6+0] |= 0x1000
 | [r6+8] = 0xFF
@@ -837,15 +837,15 @@ fl_read_ram:
 | r3 = r7
 | r5 = [r6+0]
 | r5 = r5.l (s)
-| ifs (r< 0) goto 4 <fl_read_ram>
+| ifs (r<addr>
 | r3 += 1
-| if (r3 != 0) goto <fl_read_ram>
+| if (r3 != 0) goto <+0x154>
 | [r6+0] |= 0x4000
 | r3 = [r6+8]
 | [r6+0] &= 0xFFFFFFF7
 | b[r1+r0] = r3
 | r0 += 1
-| if (r0 != r2) goto <fl_read_ram>
+| if (r0 != r2) goto <+0x144>
 | [r9+8] &= 0xFFFFFFFE
 | [r9+0] |= 0x1
 | r0 = 10
@@ -853,12 +853,12 @@ fl_read_ram:
 | r0 = [sp+4]
 | r1 = r0 + -1
 | [sp+4] = r1
-| if (r0 != 0) goto <fl_read_ram>
+| if (r0 != 0) goto <+0x180>
 | [r6+0] = r10
 | [r8+0] |= 0x20
 | csync
 | r0 = [r4+0]
-| ifs (r< 0) goto -6 <fl_read_ram>
+| ifs (r<addr>
 | [r4+0] = r11
 | csync
 | r3 = 0
@@ -869,10 +869,10 @@ fl_read_ram:
 fl_status_ram:
 | [--sp] = {rets, r8-r4}
 | sp += -16
-| r0 = 32432136 <settings+0x271F50 : 1eee008 >
+| r0 = <addr>
 | r1 = [r0+0]
-| if ((r1 & 16384) == 0) goto -6 <fl_status_ram+0xA : 1c00156 >
-| r1 = <build/felucca_size.ll>
+| if ((r1 & 16384) == 0) goto <+0xA>
+| r1 = 262656
 | r3 = 0x11C00  #
 | r2 = [r1+0]
 | r0 = r2 >> 8
@@ -880,15 +880,15 @@ fl_status_ram:
 | r4 = [r3+0]
 | r5 = r0 | 0x1
 | r0 = -1
-| if (r5 == 7) goto <fl_status_ram>
+| if (r5 == 7) goto <+0x168>
 | csync
 | r0 = [r1+0]
-| ifs (r< 0) goto -6 <fl_status_ram>
+| ifs (r<addr>
 | r5 = 0
 | [r1+0] = r5
-| r8 = 331804 <build/felucca_size.ll+0x5101C : 5101c >
+| r8 = 331804
 | [r8+0] &= 0xFFFFFFDF
-| r5 = 4137  # <build/felucca_size.ll+0x1028 : 1028 >
+| r5 = 4137
 | [r3+0] = r5
 | [r3+0] = r5
 | csync
@@ -900,29 +900,29 @@ fl_status_ram:
 | r6 = [sp]
 | r7 = r6 + -1
 | [sp] = r7
-| if (r6 != 0) goto -10 <fl_status_ram+0x5E : 1c001aa >
+| if (r6 != 0) goto <+0x5E>
 | [r3+0] |= 0x8
 | [r3+0] &= 0xFFFFEFFF
 | [r3+8] = 0x5
 | csync
-| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r6 = 4244967296
 | r7 = [r3+0]
 | r7 = r7.l (s)
-| ifs (r< 0) goto 4 <fl_status_ram>
+| ifs (r<addr>
 | r6 += 1
-| if (r6 != 0) goto -12 <fl_status_ram+0x7C : 1c001c8 >
+| if (r6 != 0) goto <+0x7C>
 | [r3+0] |= 0x4000
 | [r3+0] &= 0xFFFFFFF7
 | [r3+0] |= 0x8
 | [r3+0] |= 0x1000
 | [r3+8] = 0xFF
 | csync
-| r6 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r6 = 4244967296
 | r7 = [r3+0]
 | r7 = r7.l (s)
-| ifs (r7 < 0) goto 4 <fl_status_ram+0xB0 : 1c001fc >
+| ifs (r<addr>
 | r6 += 1
-| if (r6 != 0) goto -12 <fl_status_ram+0xA4 : 1c001f0 >
+| if (r6 != 0) goto <+0xA4>
 | [r3+0] |= 0x4000
 | r6 = [r3+8]
 | [r3+0] &= 0xFFFFFFF7
@@ -933,7 +933,7 @@ fl_status_ram:
 | r7 = [sp+4]
 | r0 = r7 + -1
 | [sp+4] = r0
-| if (r7 != 0) goto -10 <fl_status_ram+0xC6 : 1c00212 >
+| if (r7 != 0) goto <+0xC6>
 | [r5+8] &= 0xFFFFFFFE
 | [r5+0] &= 0xFFFFFFFE
 | r0 = 10
@@ -941,30 +941,30 @@ fl_status_ram:
 | r0 = [sp+8]
 | r7 = r0 + -1
 | [sp+8] = r7
-| if (r0 != 0) goto -10 <fl_status_ram+0xDC : 1c00228 >
+| if (r0 != 0) goto <+0xDC>
 | [r3+0] |= 0x8
 | [r3+0] &= 0xFFFFEFFF
 | [r3+8] = 0x35
 | csync
 | r6 = r6.b0 (u)
-| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = 4244967296
 | r0 = [r3+0]
 | r0 = r0.l (s)
-| ifs (r< 0) goto 4 <fl_status_ram>
+| ifs (r<addr>
 | r7 += 1
-| if (r7 != 0) goto -12 <fl_status_ram+0xFC : 1c00248 >
+| if (r7 != 0) goto <+0xFC>
 | [r3+0] |= 0x4000
 | [r3+0] &= 0xFFFFFFF7
 | [r3+0] |= 0x8
 | [r3+0] |= 0x1000
 | [r3+8] = 0xFF
 | csync
-| r7 = 4244967296 <_data_load+0xFB040B68 : fd050f80 >
+| r7 = 4244967296
 | r0 = [r3+0]
 | r0 = r0.l (s)
-| ifs (r< 0) goto 4 <fl_status_ram>
+| ifs (r<addr>
 | r7 += 1
-| if (r7 != 0) goto <fl_status_ram>
+| if (r7 != 0) goto <+0x124>
 | [r3+0] |= 0x4000
 | r7 = [r3+8]
 | [r3+0] &= 0xFFFFFFF7
@@ -975,14 +975,14 @@ fl_status_ram:
 | r0 = [sp+12]
 | r5 = r0 + -1
 | [sp+12] = r5
-| if (r0 != 0) goto <fl_status_ram>
+| if (r0 != 0) goto <+0x146>
 | [r3+0] = r4
 | [r8+0] |= 0x20
 | csync
 | r0 = r7 << 8
 | r0 = r0.l (u)
 | r3 = [r1+0]
-| ifs (r3 < 0) goto -6 <fl_status_ram+0x15C : 1c002a8 >
+| ifs (r<addr>
 | [r1+0] = r2
 | csync
 | r0 |= r6
@@ -993,72 +993,72 @@ fm1_cstart:
 | r0 = 0x10800
 | r1 = [r0+0]
 | r1 = r1 & 0xF
-| if (r1 == 9) goto <fm1_cstart>
+| if (r1 == 9) goto <+0x20>
 | r1 = 0
 | [r0+0] = r1
 | [r0+8] = 0xFFFFFFFF
-| r1 = 16393  # <build/felucca_size.ll+0x4008 : 4008 >
+| r1 = 16393
 | [r0+4] = r1
 | [r0+0] = r1
 | r0 = 18
-| call <fm1_p33_read >
-| r9 = <fm1_boot.0 >
+| call <fm1_p33_read>
+| r9 = <addr>
 | b[r9+0] = r0
-| r0 = 65728 <build/felucca_size.ll+0x100C0 : 100c0 >
+| r0 = 65728
 | r0 = [r0+0]
-| r10 = <fm1_boot.1 >
+| r10 = <addr>
 | [r10+0] = r0
 | r0 = 128
-| call <fm1_p33_read >
+| call <fm1_p33_read>
 | r11 = [r10+0]
 | r12 = b[r9+0] (u)
 | r13 = r0
-| r8 = <fm1_boot.2 >
+| r8 = <addr>
 | b[r8+0] = r0
 | r0 = 0
 | r1 = 128
 | r2 = 0
-| call <fm1__p33_op >
+| call <fm1__p33_op>
 | r0 = 2
 | r1 = 23
 | r2 = 191
-| call <fm1__p33_op >
+| call <fm1__p33_op>
 | r0 = 0
 | r1 = 128
 | r2 = 77
-| call <fm1__p33_op >
+| call <fm1__p33_op>
 | r0 = 1
 | r1 = 128
 | r2 = 16
 | r5 = 1
-| call <fm1__p33_op >
-| r0 = <bootguard >
+| call <fm1__p33_op>
+| r0 = <addr>
 | r1 = [r0+0]
-| r2 = 1111970372 <_data_load+0x40464E2C : 42475244 >
-| if (r1 != r2) goto 32 <fm1_cstart+0xB8 : 200478a >
+| r2 = 1111970372
+| if (r1 != r2) goto <+0xB8>
 | r2 = [r0+8]
 | r1 = [r0+4]
-| if (r2 == 0) goto 4 <fm1_cstart+0xA2 : 2004774 >
+| if (r2 == 0) goto <+0xA2>
 | r1 += 1
 | [r0+4] = r1
 | [r0+8] = 0x1
-| if (r1 <= 1) goto 22 <fm1_cstart+0xC0 : 2004792 >
+| if (r<addr>
 | r2 = 0
 | r3 = 0
 | d[r0+4] = r3_r2
-| call <fm1_enter_uboot >
-| goto -2 <fm1_cstart+0xB6 : 2004788 >
+| call <fm1_enter_uboot>
+| goto <+0xB6>
 | r3 = 0
 | d[r0+0] = r3_r2
 | [r0+8] = r5
 | r0 = 0
-| r1 = 8109120 <build/felucca_size.ll+0x7BBC40 : 7bbc40 >
+| r1 = 8109120
 | r2 = 0
 | [r2+r1<<2] = r0
 | r2 += 4
-| if (r2 != 128) goto -10 <fm1_cstart+0xCA : 200479c >
+| if (r2 != 128) goto <+0xCA>
 | r0 = 255
-| r1 = <settings>
+| r1 = <addr>
 | [r1+212] = r0
 | r2 = -1
 | r0 = r1 + -3728  #
@@ -1068,77 +1068,77 @@ fm1_cstart:
 | [r0+0] = 0xE7
 | [r0+8] = r2
 | r3 = 0
-| r6 = <fm1_fatal_stubs >
-| r2 = 29883904 <settings+0x3D48 : 1c7fe00 >
+| r6 = <addr>
+| r2 = <addr>
 | [r2+r3<<2] = r6
 | r3 += 1
 | r6 += 6
-| if (r3 != 128) goto <fm1_cstart>
+| if (r3 != 128) goto <+0x102>
 | [r1+48] |= 0xF0
 | [r1+0] &= 0xFFFFFFFB
 | r3 = r0 + 3968
 | [r3+0] |= 0x1
-| r3 = <_bss_end >
-| r6 = <fm1_fault_c.in_fault >
-| if (r6 >= r3) goto <fm1_cstart>
+| r3 = <addr>
+| r6 = <addr>
+| if (r6 >= r3) goto <+0x136>
 | r5 = 0
 | [r6++=4] = r5
-| if (r< r3) goto -6 <fm1_cstart>
-| r3 = <_pool_end >
-| r6 = <cv_px >
-| if (r6 >= r3) goto 8 <fm1_cstart+0x14E : 2004820 >
+| if (r<addr>
+| r3 = <addr>
+| r6 = <addr>
+| if (r6 >= r3) goto <+0x14E>
 | r5 = 0
 | [r6++=4] = r5
-| if (r< r3) goto -6 <fm1_cstart>
-| r3 = <_data_end >
-| r6 = <fm1__dim_k >
-| if (r6 >= r3) goto 14 <fm1_cstart+0x16C : 200483e >
-| r7 = <_data_load >
+| if (r<addr>
+| r3 = <addr>
+| r6 = <addr>
+| if (r6 >= r3) goto <+0x16C>
+| r7 = <addr>
 | r5 = [r7++=4]
 | [r6++=4] = r5
-| if (r< r3) goto -8 <fm1_cstart>
-| r3 = <_rt_end >
-| r5 = <fl_jedec_ram >
-| if (r5 >= r3) goto 16 <fm1_cstart+0x18C : 200485e >
-| r7 = <_rt_load >
+| if (r<addr>
+| r3 = <addr>
+| r5 = <addr>
+| if (r5 >= r3) goto <+0x18C>
+| r7 = <addr>
 | r6 = r5
 | r4 = [r7++=4]
 | [r6++=4] = r4
-| if (r< r3) goto -8 <fm1_cstart>
+| if (r<addr>
 | r6 = r2 + -128
 | r7 = 0
 | [r6++=4] = r7
-| if (r< r2) goto -6 <fm1_cstart>
+| if (r<addr>
 | r2 = [r0+0]
 | if ((r2 & 0x1) == 0) {
 | [r0+0] = 0xE7
 | [r0+8] = 0xFFFFFFFF
 | [r1+0] &= 0xFFFFFFF7
-| r2 = <_ustack_lo >
+| r2 = <addr>
 | [r1+12] = r2
-| r4 = <fm1_crash >
+| r4 = <addr>
 | [r1+8] = r4
 | [r1+20] = r2
 | [r1+16] = r4
 | [r1+0] |= 0x8
-| r1 = <_guard0 >
+| r1 = <addr>
 | r4 = r0 + 128
 | r1 = r2 + -1  #
 | [r4+0] = r1
 | r2 = r0 + 64
 | [r2+0] = r1
-| r1 = <_ustack_top >
+| r1 = <addr>
 | [r4+4] = r1
-| r1 = 29860095 <_ustack_top+0xFE : 1c7a0fe >
+| r1 = <addr>
 | r1 = r0 + 256  #
 | [r2+4] = r1
 | [r1+8] |= 0x3
-| r2 = 4128816 <build/felucca_size.ll+0x3F0030 : 3f0030 >
+| r2 = 4128816
 | [r1+0] |= r2
-| r7 = <_start >
+| r7 = <addr>
 | r1 += 64
 | [r1+4] = r7
-| r2 = <_rt_load >
+| r2 = <addr>
 | [r1+0] = r2
 | [sp+4] = r5
 | [sp] = r3
@@ -1159,194 +1159,201 @@ fm1_cstart:
 | b[r9+0] = r12
 | [r10+0] = r11
 | b[r8+0] = r13
-| call <fm1_main >
-| goto <fm1_cstart>
+| call <fm1_main>
+| goto <+0x244>
 fm1_timer5_irq:
 | [--sp] = {rets, r15-r4}
 | sp += -12
-| r2 = <build/felucca_size.ll>
+| r2 = 67588
 | r0 = [r2+0]
-| r0 = r2 + 252  #
 | [sp+8] = r0
-| r15 = <fm1__tick_col >
-| r1 = [r15+40]
+| r0 = <addr>
+| r0 = r2 + 252  #
+| r1 = [r0+0]
 | [r0+0] |= 0x4000
-| r0 = <felucca_dbg >
+| r0 = <addr>
 | [r0+24] += 1
-| r5 = b[r15+0] (u)
+| r0 = <addr>
+| r7 = b[r0+0] (u)
 | r4 = [r2+0]
-| r8 = <rc >
-| r0 = [r8+224]
-| r13 = 0x50000
-| r2 = [r13+0]
-| r9 = r13 + 448
-| r3 = [r9+0]
+| r11 = <addr>
+| r0 = [r11+0]
+| r9 = 0x50000
+| r2 = [r9+0]
+| r10 = r9 + 448
+| r3 = [r10+0]
 | r2 = r2 & 0xFFFFF9FF
-| [r13+0] = r2
-| r2 = r3 & 0xFFFFFDBF
 | [r9+0] = r2
-| [r8+224] = r4
+| r2 = r3 & 0xFFFFFDBF
+| [r10+0] = r2
+| [r11+0] = r4
 | r2 = 5
 | r2 = r1 / r2 (u)
 | r2 = r2 * 0x5
 | r1 = r1 - r2
-| r10 = r5 + 1  #
+| r12 = r7 + 1  #
 | [sp+4] = r1
 | r3 = 0
 | r14 = 0
-| if (r10 != 11) {
-| r14 = r10
-| r1 = 2048  # <build/felucca_size.ll+0x800 : 800 >
+| if (r12 != 11) {
+| r14 = r12
+| r1 = 2048
 | [sp] = r4
 | r1 = r1 << r14
 | r2 = 1
 | r2 = r2 << r14
 | r0 = r4 - r0
-| r4 = 3600 <build/felucca_size.ll+0xE10 : e10 >
-| r6 = r3 + 1
-| if (r3 > 6) goto 10 <fm1_timer5_irq+0xA0 : 200162c >
-| r7 = r4 << r3
-| r3 = r6
-| if (r0 >= r7) goto <fm1_timer5_irq>
-| r3 = r8 + 228
-| r4 = r6 << 2
+| r4 = 3600
+| r5 = r3 + 1
+| if (r3 > 6) goto <+0xA2>
+| r6 = r4 << r3
+| r3 = r5
+| if (r0 >= r6) goto <+0x92>
+| r3 = r11 + 4
+| r4 = r5 << 2
 | r3 += r4
 | [r3+0] += 1
 | if (r14 >= 2) {
 | r1 = 0
-| r3 = [r8+228]
+| r3 = [r11+4]
 | if (r0 > r3) {
-| [r8+228] = r0
-| r3 = r5 << 2
-| r3 += r8
-| r3 = r3 + 264
+| [r11+4] = r0
+| r3 = r7 << 2
+| r3 += r11
+| r3 += 40
 | [r3+0] += r0
 | r1 ^= r2  #
 | r4 = [r3+44]
+| r15 = 65535
 | if (r0 > r4) {
 | [r3+44] = r0
-| r2 = [r13+4]
-| r0 = 65535 <build/felucca_size.ll+0xFFFE : fffe >
-| r0 ^= r1
-| r12 = <fm1_in >
+| r2 = [r9+4]
+| r0 = r1 ^ r15
+| r8 = <addr>
 | r1 = r2 & 0x1
 | r2 = r2 >> 4
-| r3 = r9 + -380
+| r3 = r9 + 68
 | r2 = r2 & 0x1E  #
 | r3 = [r3+0]
 | r1 |= r2
-| r4 = r5 + r12
+| r4 = r7 + r8
 | r2 = r3 >> 2
 | r2 = r2 & 0x20
 | r1 |= r2
 | r1 = r1 ^ 0x3F
 | b[++r4=20] = r1
-| if (r5 != 0) goto <fm1_timer5_irq>
-| r1 = 0
-| b[r15+2] = r1
-| h[r15+12] = r1
-| b[r15+3] = r1
-| h[r15+10] = r1
-| b[r15+1] = r1
+| if (r7 != 0) goto <+0x13A>
+| r1 = <addr>
+| r2 = 0
+| b[r1+0] = r2
+| r1 = <addr>
+| h[r1+0] = r2
+| r1 = <addr>
+| b[r1+0] = r2
+| r1 = <addr>
+| h[r1+0] = r2
+| r1 = <addr>
+| b[r1+0] = r2
 | r1 = 0
 | r2 = 16
-| r11 = 0
-| call <fm1__sr_bits >
-| [r13+0] |= 0x2
-| [r13+0] &= 0xFFFFFFFD
-| r0 = [r13+0]
-| r1 = [r9+0]
+| r13 = 0
+| call <fm1__sr_bits>
+| [r9+0] |= 0x2
+| [r9+0] &= 0xFFFFFFFD
+| r0 = [r9+0]
+| r1 = [r10+0]
 | r0 = r0 & 0xFFFFF9FF
-| [r13+0] = r0
-| r0 = r1 & 0xFFFFFDBF
 | [r9+0] = r0
-| b[r15+0] = r14
-| r0 = <FM1_KEYMAP >
+| r0 = r1 & 0xFFFFFDBF
+| [r10+0] = r0
+| r0 = <addr>
+| b[r0+0] = r14
+| r0 = <addr>
 | r9 = b[r4+0] (u)
-| r0 += r5
-| r13 = r0 + 11
+| r0 += r7
+| r14 = r0 + 11
 | r2 = 1
-| r6 = b[r13++=11] (s)
-| ifs (r< 0) goto 202 <fm1_timer5_irq>
-| r14 = r6 + -14
-| r7 = r6.b0 (u)
-| r3 = r14
+| r0 = b[r14++=11] (s)
+| ifs (r<addr>
+| r10 = r0 + -14
+| r7 = r0.b0 (u)
+| r3 = r10
 | if (r7 <= 13) {
-| r3 = r6
-| r4 = r12 + 4
-| r0 = r12
+| r3 = r0
+| r5 = r8 + 4
+| r4 = r8
 | if (r7 <= 13) {
-| r0 = r4
-| r1 = [r0+0]
+| r4 = r5
+| r1 = [r4+0]
 | r4 = r1 & (1 << r3)
-| r0 = 1
-| r3 = r0 << r3
 | r5 = 1
+| r3 = r5 << r3
+| r6 = 1
 | if ((r1 & r3) == 0) {
-| r5 = 0
-| r1 = r0 << r2
+| r6 = 0
+| r1 = r5 << r2
 | if ((r1 & r9) == 0) {
-| r0 = 0
-| r0 ^= r5
-| r1 = r6 + r12
-| r6 = r1 + 31
-| if (r0 == 0) goto 110 <fm1_timer5_irq+0x21C : 20017a8 >
-| r0 = 1
-| if (r4 == 0) goto 2 <fm1_timer5_irq+0x1B4 : 2001740 >
-| r0 = 0
-| if (r7 < 14) goto 22 <fm1_timer5_irq+0x1CE : 200175a >
-| if (r0 == 0) goto 20 <fm1_timer5_irq+0x1CE : 200175a >
-| r0 = b[r6+0] (u)
-| if (r0 != 0) goto 16 <fm1_timer5_irq+0x1CE : 200175a >
-| r0 = <build/felucca_size.ll>
-| r1 = r12 + 72  #
+| r5 = 0
+| r1 = r5 ^ r6
+| r0 += r8
+| r0 += 31
+| if (r1 == 0) goto <+0x234>
+| r5 = 1
+| if (r4 == 0) goto <+0x1D0>
+| r5 = 0
+| if (r<addr>
+| if (r5 == 0) goto <+0x1E8>
+| r1 = b[r0+0] (u)
+| if (r1 != 0) goto <+0x1E8>
+| r1 = r15 + 2053
+| r5 = r8 + 72  #
+| r1 = [r1+0]
+| [r5+r10<<2] = r1
+| r1 = b[r0+0] (u)
+| r5 = r1 + 1
+| b[r0+0] = r5
+| r6 = 8
+| if (r4 != 0) goto <+0x1F4>
+| r6 = 2
+| r1 = r5.b0 (u)
+| if (r<addr>
+| b[r0+0] = r13
+| if (r<addr>
+| if (r4 != 0) goto <+0x22E>
+| r0 = r15 + 2053
+| r1 = r8 + 72  #
 | r0 = [r0+0]
-| [r1+r14<<2] = r0
-| r0 = b[r6+0] (u)
-| r0 += 1
-| b[r6+0] = r0
-| r5 = 8
-| if (r4 != 0) goto 2 <fm1_timer5_irq+0x1DA : 2001766 >
-| r5 = 2
-| r0 = r0.b0 (u)
-| if (r< r5) goto 86 <fm1_timer5_irq>
-| b[r6+0] = r11
-| if (r< 14) goto 58 <fm1_timer5_irq>
-| if (r4 != 0) goto <fm1_timer5_irq>
-| r0 = <build/felucca_size.ll>
-| r1 = r12 + 72  #
-| r0 = [r0+0]
-| r1 = [r1+r14<<2]
-| [r12+16] |= r3
-| r4 = r8 + 420
+| r1 = [r1+r10<<2]
+| [r8+16] |= r3
+| r4 = r11 + 196
 | [r4+0] += 1
 | r0 = r0 - r1
 | [r4+4] += r0
 | r1 = [r4+8]
 | if (r0 > r1) {
-| [r8+428] = r0
-| [r12+0] ^= r3
-| goto <fm1_timer5_irq>
-| b[r6+0] = r11
-| goto <fm1_timer5_irq>
-| [r12+4] ^= r3
-| r5 = r12 + 8
-| r0 = r12 + 12
-| if (r4 != 0) goto <fm1_timer5_irq>
+| [r11+204] = r0
+| [r8+0] ^= r3
+| goto <+0x24E>
+| b[r0+0] = r13
+| goto <+0x24E>
+| [r8+4] ^= r3
+| r5 = r8 + 8
+| r0 = r8 + 12
+| if (r4 != 0) goto <+0x24A>
 | r0 = r5
 | [r0+0] |= r3
 | r2 += 1
-| if (r2 != 5) goto <fm1_timer5_irq>
-| if (r10 != 11) goto 372 <fm1_timer5_irq+0x3B4 : 2001940 >
-| r1 = <FM1_ENC >
-| r10 = <build/felucca_size.ll>
-| r6 = 0
-| goto 12 <fm1_timer5_irq+0x25A : 20017e6 >
-| ifs (r4 > -1) goto <fm1_timer5_irq>
-| r0 = b[r14+0] (u)
+| if (r2 != 5) goto <+0x180>
+| if (r12 != 11) goto <+0x3C2>
+| r1 = <addr>
+| r12 = 16770
+| r7 = 0
+| goto <+0x272>
+| ifs (r5 > -1) goto <+0x356>
+| r0 = b[r10+0] (u)
 | r0 += -2
-| goto <fm1_timer5_irq>
-| r3 = r12 + 20  #
+| goto <+0x326>
+| r3 = r8 + 20  #
 | r2 = b[r1+0] (u)
 | r2 = b[r2+r3] (u)
 | r4 = b[r1+2] (u)
@@ -1355,401 +1362,403 @@ fm1_timer5_irq:
 | r2 >>= r5  #
 | r4 = b[r1+3] (u)
 | r2 = r2 << 1
-| r4 = r3 >> r4
-| r7 = r6 + r12
-| r3 = r7 + 187
+| r3 >>= r4
+| r6 = r7 + r8
+| r4 = r6 + 187
 | r2 = r2 & 0x2  #
-| r5 = b[r3+0] (u)
-| r4 = r4 & 0x1
-| r9 = r4 | r2
-| if (r9 != r5) goto 140 <fm1_timer5_irq+0x31C : 20018a8 >
-| r2 = r7
-| r4 = b[++r2=180] (u)
-| if (r4 == 255) {
-| b[r2+0] = r9
-| b[r7+194] = r9
-| r4 = r6 << 1
-| r13 = r4 + r12
-| r4 = r13
-| r0 = h[++r4=202] (u)
-| r14 = r7 + 216
-| r5 = 65535 <build/felucca_size.ll+0xFFFE : fffe >
-| if (r0 == r5) goto 32 <fm1_timer5_irq+0x2DC : 2001868 >
-| r0 = h[r4+0] (u)
+| r5 = b[r4+0] (u)
+| r3 = r3 & 0x1
+| r2 |= r3
+| if (r2 != r5) goto <+0x32C>
+| r14 = r6
+| r3 = b[++r14=180] (u)
+| if (r3 == 255) {
+| b[r14+0] = r2
+| b[r6+194] = r2
+| r3 = r7 << 1
+| r3 += r8
+| r5 = r3
+| r0 = h[++r5=202] (u)
+| r10 = r6 + 216
+| if (r0 == r15) goto <+0x2E8>
+| r0 = h[r5+0] (u)
 | r0 += 1
-| r5 = r0.l (u)
-| h[r4+0] = r0
-| if (r5 != 900) goto 18 <fm1_timer5_irq+0x2DC : 2001868 >
-| r4 = r7
-| r0 = b[++r4=194] (u)
-| if (r9 != r0) {
-| b[r4+0] = r9
-| b[r14+0] = r11
-| r0 = b[r2+0] (u)
-| if (r9 == r0) goto 194 <fm1_timer5_irq+0x3A4 : 2001930 >
-| r0 = b[r2+0] (u)
+| r9 = uextra(r0, p:0, l:16)
+| h[r5+0] = r0
+| if (r9 != 900) goto <+0x2E8>
+| r5 = r6
+| r0 = b[++r5=194] (u)
+| if (r2 != r0) {
+| b[r5+0] = r2
+| b[r10+0] = r13
+| r0 = b[r14+0] (u)
+| if (r2 == r0) goto <+0x3B2>
+| r0 = b[r14+0] (u)
 | r0 = r0 << 2
-| r4 = r0 | r9
-| r0 = r10 >> r4
-| if ((r0 & 1) != 0) goto 56 <fm1_timer5_irq+0x32A : 20018b6 >
-| r0 = <build/felucca_size.ll>
-| r0 >>= r4
-| if ((r0 & 1) != 0) goto <fm1_timer5_irq>
-| r0 = r6 << 2
-| r0 += r8
-| r0 = r0 + 392
+| r5 = r0 | r2
+| r0 = r12 >> r5
+| if ((r0 & 1) != 0) goto <+0x338>
+| r0 = 10260
+| r0 >>= r5
+| if ((r0 & 1) != 0) goto <+0x340>
+| r0 = r7 << 2
+| r0 += r11
+| r0 = r0 + 168
 | [r0+0] += 1
-| r0 = b[r3+29] (s)
-| r4 = b[r3+29] (s)
-| ifs (r0 < 1) goto -198 <fm1_timer5_irq+0x24E : 20017da >
-| r0 = r4 + 2
-| b[r14+0] = r0
-| goto <fm1_timer5_irq>
-| b[r3+0] = r9
-| r2 = r12 + 202
-| h[r2+r6<<1] = r11
-| goto 122 <fm1_timer5_irq+0x3A4 : 2001930 >
-| r0 = b[r14+0] (u)
+| r0 = b[r4+29] (s)
+| r5 = b[r4+29] (s)
+| ifs (r<addr>
+| r0 = r5 + 2
+| b[r10+0] = r0
+| goto <+0x356>
+| r2 = r8 + 202  #
+| b[r4+0] = r2
+| h[r2+r7<<1] = r13
+| goto <+0x3B2>
+| r0 = b[r10+0] (u)
 | r0 += 1
-| goto <fm1_timer5_irq>
-| r0 = b[r14+0] (u)
+| goto <+0x346>
+| r0 = b[r10+0] (u)
 | r0 += -1
-| b[r14+0] = r0
-| r0 = r6 << 2
-| r0 += r8
-| r0 = r0 + 364
+| b[r10+0] = r0
+| r0 = r7 << 2
+| r0 += r11
+| r0 = r0 + 140
 | [r0+0] += 1
-| b[r2+0] = r9
-| r0 = b[r3+29] (s)
-| ifs (r0 > 100) goto 8 <fm1_timer5_irq+0x35C : 20018e8 >
-| r0 = b[r3+29] (s)
-| ifs (r0 > -101) goto <fm1_timer5_irq>
-| b[r14+0] = r11
-| r0 = b[r7+194] (u)
-| if (r9 != r0) goto 60 <fm1_timer5_irq+0x3A4 : 2001930 >
-| r0 = b[r3+29] (s)
-| r2 = b[r3+29] (s)
+| b[r14+0] = r2
+| r0 = b[r4+29] (s)
+| ifs (r0 > 100) goto <+0x36A>
+| r0 = b[r4+29] (s)
+| ifs (r0 > -101) goto <+0x36E>
+| b[r10+0] = r13
+| r0 = b[r6+194] (u)
+| if (r2 != r0) goto <+0x3B2>
+| r0 = b[r4+29] (s)
+| r2 = b[r4+29] (s)
+| r5 = 0x0 - r2
+| ifs (r0 >= 0) {
+| r5 = r2
+| r2 = 0
+| ifs (r5 >= 2) {
+| r0 = r5 + 2
+| r2 = 4
+| r2 = r0 / r2 (s)
+| r5 = h[r3+224] (u)
+| r0 = b[r4+29] (s)
 | r4 = 0x0 - r2
 | ifs (r0 >= 0) {
 | r4 = r2
-| r2 = 0
-| ifs (r4 >= 2) {
-| r0 = r4 + 2
-| r2 = 4
-| r2 = r0 / r2 (s)
-| r4 = h[r13+224] (u)
-| r0 = b[r3+29] (s)
-| r3 = 0x0 - r2
-| ifs (r0 >= 0) {
-| r3 = r2
-| r0 = r3 + r4
-| h[r13+224] = r0
-| b[r14+0] = r11
-| r6 += 1
+| r0 = r4 + r5
+| h[r3+224] = r0
+| b[r10+0] = r13
+| r7 += 1
 | r1 += 4
-| if (r6 != 7) goto -338 <fm1_timer5_irq+0x25A : 20017e6 >
-| r0 = r12 + 240
+| if (r7 != 7) goto <+0x272>
+| r0 = r8 + 240
 | [r0+0] += 1
-| r0 = <build/felucca_size.ll>
+| r0 = r15 + 2053
 | r0 = [r0+0]
 | r1 = [sp]
 | r0 = r0 - r1
-| r1 = r8 + 352
+| r1 = r11 + 128
 | [r1+0] += r0
 | [r1+8] += 1
 | r1 = [r1+4]
 | if (r0 > r1) {
-| [r8+356] = r0
-| r1_r0 = d[r15+48]
-| r4 = [sp+8]
-| r0 = r4 - r0
-| r0 += r1
-| [r15+52] = r0
-| r1 = r0 >> 6
-| [r15+48] = r4
-| r3 = [sp+4]
-| if (r< 375) goto 20 <fm1_timer5_irq>
-| r1 = -24000 <_data_load+0xFFFFFFFFFDFE9E28 : ffffffffffffa240 >
-| r0 += r1
-| [r15+52] = r0
-| [r15+56] += 1
-| r2 = r0 >> 6
-| if (r2 > 374) goto -16 <fm1_timer5_irq+0x3F4 : 2001980 >
-| if (r3 != 0) goto 4 <fm1_timer5_irq+0x40A : 2001996 >
-| [r15+44] |= 0x1
-| r0 = [r15+40]
+| [r11+132] = r0
+| r2 = <addr>
+| r1 = [r2+0]
+| r0 = <addr>
+| r5 = [sp+8]
+| r1 = r5 - r1  #
+| r3 = [r0+0]
+| r1 += r3
+| [r0+0] = r1
+| r3 = r1 >> 6
+| [r2+0] = r5
+| if (r<addr>
+| r2 = -24000
+| r3 = <addr>
+| r1 += r2
+| [r0+0] = r1
+| [r3+0] += 1
+| r4 = r1 >> 6
+| if (r4 > 374) goto <+0x40C>
+| r8 = <addr>
+| r4 = [sp+4]
+| if (r4 != 0) goto <+0x428>
+| [r8+0] |= 0x1
+| r2 = <addr>
+| r0 = [r2+0]
 | r1 = 5
 | r1 = r0 / r1 (u)
 | r1 = r1 * 0x5
 | r1 = r0 - r1
-| r2 = <felucca_dbg >
+| r3 = <addr>
 | if (r1 == 2) {
-| [r15+44] |= 0x2
+| [r8+0] |= 0x2
 | r1 = r0 + 1
 | r0 = 0
 | if (r1 != 10) {
 | r0 = r1
-| r1 = [r2+16]
-| [r15+40] = r0
-| if (r1 == 0) goto <fm1_timer5_irq>
-| [r2+12] += 1
-| if (r3 != 0) goto <fm1_timer5_irq>
-| call <uac_service >
-| r0 = <build/felucca_size.ll>
+| r1 = [r3+16]
+| [r2+0] = r0
+| if (r1 == 0) goto <+0x478>
+| [r3+12] += 1
+| if (r4 != 0) goto <+0x464>
+| call <uac_service>
+| r0 = r15 + 2053
 | r0 = [r0+0]
-| r0 = r0 - r4
-| [r15+20] += r0
-| goto 1966 <fm1_timer5_irq+0xC02 : 200218e >
-| r0 = [r15+44]
-| if ((r0 & 0x1) == 0) goto 1668 <fm1_timer5_irq+0xAE2 : 200206e >
-| r5 = <usb >
+| r0 = r0 - r5
+| r1 = <addr>
+| [r1+0] += r0
+| goto <+0xC72>
+| r0 = [r8+0]
+| if ((r0 & 0x1) == 0) goto <+0xB64>
+| r5 = <addr>
 | r1 = b[r5+0] (u)
-| if (r1 == 0) goto 1654 <fm1_timer5_irq+0xAE2 : 200206e >
-| r9 = 0x11800
-| r0 = [r9+0]
-| if ((r0 & 8192) != 0) goto <fm1_timer5_irq>
+| if (r1 == 0) goto <+0xB64>
+| r10 = 0x11800
+| r0 = [r10+0]
+| if ((r0 & 8192) != 0) goto <+0x4AC>
 | r0 = [r5+40]
 | r0 += 1
 | [r5+40] = r0
 | r1 = [r5+48]
 | if (r0 > r1) {
 | [r5+48] = r0
-| goto <fm1_timer5_irq>
-| [r9+0] |= 0x1000
+| goto <+0x4B8>
+| [r10+0] |= 0x1000
 | [r5+32] += 1
 | [r5+40] = 0x0
 | r0 = b[r5+1] (u)
-| if (r0 == 0) goto 96 <fm1_timer5_irq+0x4F8 : 2001a84 >
-| r0 = [r15+68]
-| r0 += 1
-| [r15+68] = r0
-| if (r0 < 20) goto 82 <fm1_timer5_irq+0x4F8 : 2001a84 >
-| r4 = 0
-| [r15+68] = r4
+| if (r0 == 0) goto <+0x51C>
+| r0 = <addr>
+| r1 = [r0+0]
+| r1 += 1
+| [r0+0] = r1
+| if (r<addr>
+| r6 = 0
+| [r0+0] = r6
 | r0 = 12
-| call <sie_rd >
-| r6 = r0
+| call <sie_rd>
+| r4 = r0
 | r0 = 13
-| call <sie_rd >
+| call <sie_rd>
 | r0 = r0 << 8
 | r1 = h[r5+60] (u)
 | r0 = r0 & 0x700
-| r0 |= r6
+| r0 |= r4
 | r2 = r0.l (u)
-| if (r1 != r2) goto 34 <fm1_timer5_irq+0x4EE : 2001a7a >
+| if (r1 != r2) goto <+0x512>
 | r0 = h[r5+62] (u)
 | r0 += 1
 | r1 = r0.l (u)
 | h[r5+62] = r0
-| if (r1 < 10) goto 28 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| if (r<addr>
 | r0 = b[r5+65] (u)
-| if (r0 != 0) goto 22 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| if (r0 != 0) goto <+0x51C>
 | r0 = 1
 | b[r5+65] = r0
 | [r5+56] += 1
-| goto 10 <fm1_timer5_irq+0x4F8 : 2001a84 >
+| goto <+0x51C>
 | r1 = r5
 | h[++r1=60] = r0
-| h[r1+2] = r4
-| b[r1+5] = r4
+| h[r1+2] = r6
+| b[r1+5] = r6
 | r0 = 6
-| call <sie_rd >
-| r6 = r0
+| call <sie_rd>
+| r7 = r0
 | r0 = 2
-| call <sie_rd >
-| r4 = r0
+| call <sie_rd>
+| r6 = r0
 | r0 = 4
-| call <sie_rd >
-| r13 = r0
-| if ((r6 & 0x1) != 0) {
+| call <sie_rd>
+| r14 = r0
+| if ((r7 & 0x1) != 0) {
 | [r5+44] += 1
 | r0 = 1
 | b[r5+65] = r0
-| if ((r6 & 0x2) != 0) {
+| if ((r7 & 0x2) != 0) {
 | r0 = 0
 | b[r5+65] = r0
-| r14 = <fm1__dim_k >
-| r8 = <ep0buf >
-| if ((r6 & 4) == 0) goto 106 <fm1_timer5_irq+0x5A2 : 2001b2e >
+| r9 = <addr>
+| r12 = <addr>
+| r11 = <addr>
+| r4 = <addr>
+| if ((r7 & 4) == 0) goto <+0x5F2>
 | [r5+16] += 1
 | r1_r0 = 0
-| r6 = 0
-| call <sie_wr >
-| b[r5+1] = r6
-| b[r5+65] = r6
-| r0 = r15 + 72
-| r1 = [r0+0]
-| [r0+4] = r1
-| b[r5+91] = r6
-| r1 = [r0+8]
-| [r0+12] = r1
-| b[r15+4] = r6
-| b[r5+4] = r6
-| b[r5+3] = r6
-| b[r5+92] = r6
-| b[r14+11] = r6
-| b[r14+12] = r6
-| b[r14+13] = r6
-| r0 = r15 + 284
-| b[r0+6] = r6
-| b[r0+1] = r6
-| b[r0+2] = r6
-| b[r0+3] = r6
-| b[r0+5] = r6
-| b[r0+0] = r6
-| [r0+12] = r6
-| [r0+16] = r6
-| [r9+24] = r8
+| r7 = 0
+| call <sie_wr>
+| b[r5+1] = r7
+| b[r5+65] = r7
+| r0 = <addr>
+| r0 = [r0+0]
+| r1 = <addr>
+| [r1+0] = r0
+| b[r5+91] = r7
+| r0 = <addr>
+| r0 = [r0+0]
+| r1 = <addr>
+| [r1+0] = r0
+| b[r9+0] = r7
+| b[r5+4] = r7
+| b[r5+3] = r7
+| b[r5+92] = r7
+| b[r12+7] = r7
+| b[r12+8] = r7
+| b[r12+9] = r7
+| b[r11+6] = r7
+| b[r11+1] = r7
+| b[r11+2] = r7
+| b[r11+3] = r7
+| b[r11+5] = r7
+| b[r11+0] = r7
+| [r11+12] = r7
+| [r11+16] = r7
+| [r10+24] = r4
 | r0 = 11
 | r1 = 7
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 7
 | r1 = 1
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 9
 | r1 = 0
-| call <sie_wr >
-| r7 = <ep1tx >
-| r10 = <ep3tx >
-| r11 = <ep3rx >
-| if ((r4 & 1) == 0) goto <fm1_timer5_irq>
+| call <sie_wr>
+| r13 = <addr>
+| r15 = <addr>
+| if ((r6 & 1) == 0) goto <+0x6B2>
 | r0 = b[r5+3] (u)
-| if (r0 == 0) goto 12 <fm1_timer5_irq+0x5C8 : 2001b54 >
+| if (r0 == 0) goto <+0x612>
 | r1 = b[r5+2] (u)
 | r0 = 0
-| r4 = 0
-| call <sie_wr >
-| b[r5+3] = r4
+| r6 = 0
+| call <sie_wr>
+| b[r5+3] = r6
 | r0 = 14
 | r1 = 0
-| r4 = 0
-| call <sie_wr >
+| r7 = 0
+| call <sie_wr>
 | r0 = 17
-| call <sie_rd >
+| call <sie_rd>
 | r6 = r0
-| if ((r6 & 4) != 0) goto 18 <fm1_timer5_irq+0x5F0 : 2001b7c >
-| if ((r6 & 16) != 0) goto <fm1_timer5_irq>
+| if ((r6 & 4) != 0) goto <+0x63A>
+| if ((r6 & 16) != 0) goto <+0x64E>
 | r0 = b[r5+4] (u)
-| if (r0 == 0) goto <fm1_timer5_irq>
-| if ((r6 & 2) != 0) goto <fm1_timer5_irq>
-| call <e0_chunk >
-| goto <fm1_timer5_irq>
+| if (r0 == 0) goto <+0x662>
+| if ((r6 & 2) != 0) goto <+0x6B2>
+| call <e0_chunk>
+| goto <+0x6B2>
 | r0 = 17
 | r1 = 0
-| call <sie_wr >
-| r0 = 290  # <build/felucca_size.ll+0x122 : 122 >
-| b[r5+4] = r4
-| b[r14+12] = r4
-| b[r15+r0] = r4
-| goto <fm1_timer5_irq>
+| call <sie_wr>
+| b[r5+4] = r7
+| b[r12+8] = r7
+| b[r11+6] = r7
+| goto <+0x6B2>
 | r0 = 17
 | r1 = 128
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 0
-| r1 = 290  # <build/felucca_size.ll+0x122 : 122 >
 | b[r5+4] = r0
-| b[r14+12] = r0
-| b[r15+r1] = r0
-| if ((r6 & 1) == 0) goto <fm1_timer5_irq>
+| b[r12+8] = r0
+| b[r11+6] = r0
+| if ((r6 & 1) == 0) goto <+0x6B2>
 | ssync
-| r0 = b[r14+12] (u)
-| if (r0 == 0) goto <fm1_timer5_irq>
-| r6 = r7
-| r7 = r13
+| r0 = b[r12+8] (u)
+| if (r0 == 0) goto <+0x692>
 | r0 = 22
-| call <sie_rd >
-| if (r0 == 0) goto 22 <fm1_timer5_irq+0x64E : 2001bda >
+| call <sie_rd>
+| if (r0 == 0) goto <+0x68A>
 | r1 = 0
-| r2 = b[r1+r8] (u)
-| r3 = r1 + r14
+| r2 = b[r1+r4] (u)
+| b[r1+r12] = r2
 | r1 += 1
-| b[r3+4] = r2
-| if (r1 > 6) goto 4 <fm1_timer5_irq+0x64E : 2001bda >
-| if (r1 < r0) goto -20 <fm1_timer5_irq+0x63A : 2001bc6 >
+| if (r1 > 6) goto <+0x68A>
+| if (r<addr>
 | r0 = 0
-| b[r14+12] = r0
-| goto 24 <fm1_timer5_irq+0x66E : 2001bfa >
-| r0 = <build/felucca_size.ll>
-| r1 = b[r15+r0] (u)
-| if (r1 == 0) goto 1508 <fm1_timer5_irq+0xC48 : 20021d4 >
-| r6 = r7
-| r7 = r13
-| r1 = 0
-| b[r15+r0] = r1
+| b[r12+8] = r0
+| goto <+0x6A2>
+| r0 = b[r11+6] (u)
+| if (r0 == 0) goto <+0xCCE>
+| r0 = 0
+| b[r11+6] = r0
 | r0 = 14
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 72
-| call <sie_wr >
-| r13 = r7
-| r7 = r6
-| if ((r13 & 2) != 0) goto 8 <fm1_timer5_irq+0x68E : 2001c1a >
+| call <sie_wr>
+| if ((r14 & 2) != 0) goto <+0x6BE>
 | r0 = b[r5+92] (u)
-| if (r0 != 0) goto <fm1_timer5_irq>
-| goto 618 <fm1_timer5_irq+0x8F8 : 2001e84 >
+| if (r0 != 0) goto <+0x6C4>
+| goto <+0x944>
 | r0 = 1
 | b[r5+92] = r0
 | r0 = 14
 | r1 = 1
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 20
-| call <sie_rd >
+| call <sie_rd>
 | r4 = r0
 | r0 = 21
-| call <sie_rd >
-| if ((r4 & 1) != 0) goto 8 <fm1_timer5_irq+0x6B6 : 2001c42 >
+| call <sie_rd>
+| if ((r4 & 1) != 0) goto <+0x6E6>
 | r0 = 0
 | b[r5+92] = r0
-| goto 578 <fm1_timer5_irq+0x8F8 : 2001e84 >
+| goto <+0x944>
 | r0 = r0 << 8
 | r0 |= r4
 | [sp+8] = r0
 | r0 = 22
-| call <sie_rd >
-| r6 = r0
+| call <sie_rd>
+| r7 = r0
 | r0 = 23
-| call <sie_rd >
+| call <sie_rd>
 | r0 = r0 << 8
-| r8 = r0 | r6
-| if (r8 >= 64) {
-| r8 = 64
+| r11 = r0 | r7
+| if (r11 >= 64) {
+| r11 = 64
 | ssync
-| r0 = [r15+88]
-| r1 = [r15+92]
-| r0 = 0x40 - r0
+| r0 = <addr>
+| r0 = [r0+0]
+| r1 = <addr>
+| r0 = 0x40 - r0  #
+| r1 = [r1+0]
 | r0 += r1
-| if (r0 < 24) goto 522 <fm1_timer5_irq+0x8F8 : 2001e84 >
+| if (r<addr>
 | [sp] = r4
-| [sp+4] = r13
-| if (r8 < 4) goto 440 <fm1_timer5_irq+0x8B0 : 2001e3c >
-| r13 = 0
+| [sp+4] = r14
+| if (r<addr>
+| r14 = 0
 | r0 = 3
-| r9 = <sysex_byte.UBOOT_KEY >
-| r10 = <build/felucca_size.ll >
-| r11 = 0
-| goto 50 <fm1_timer5_irq+0x73C : 2001cc8 >
-| if (r2 != 15) goto <fm1_timer5_irq>
-| r0 = r7 + -248
-| if (r0 > 4) goto 398 <fm1_timer5_irq+0x8A4 : 2001e30 >
-| if (r0 == 1) goto 394 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| r15 = <addr>
+| r12 = <addr>
+| r8 = 0
+| goto <+0x776>
+| if (r2 != 15) goto <+0x75C>
+| r0 = r6 + -248
+| if (r0 > 4) goto <+0x8F2>
+| if (r0 == 1) goto <+0x8F2>
 | r0 = 1
-| call <midi_enqueue >
-| goto 386 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| call <midi_enqueue>
+| goto <+0x8F2>
 | r1 = r1 << 16
-| if ((r1 & 8388608) != 0) goto 380 <fm1_timer5_irq+0x8A4 : 2001e30 >
-| r1 = r7 >> 4
-| if (r1 != r2) goto 374 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| if ((r1 & 8388608) != 0) goto <+0x8F2>
+| r1 = r6 >> 4
+| if (r1 != r2) goto <+0x8F2>
 | r1 = r2 | 0x1
-| if (r1 == 13) goto -28 <fm1_timer5_irq+0x71A : 2001ca6 >
-| ifs (r0 < 0) goto 362 <fm1_timer5_irq+0x8A4 : 2001e30 >
-| goto -34 <fm1_timer5_irq+0x71A : 2001ca6 >
-| r1 = <ep1rx >
+| if (r1 == 13) goto <+0x754>
+| ifs (r<addr>
+| goto <+0x754>
+| r1 = <addr>
 | r4 = r1
-| r3 = b[r11+r4] (u)
-| r1 = r11 | 0x1
+| r3 = b[r8+r4] (u)
+| r1 = r8 | 0x1
 | r2 = b[r1+r4] (u)
-| r1 = r11 | 0x2
+| r1 = r8 | 0x2
 | r1 = b[r1+r4] (u)
 | r4 = b[r0+r4] (u)
 | r0 = r3
@@ -1758,101 +1767,107 @@ fm1_timer5_irq:
 | r0 <= insert(r4, p:24, l:8)
 | r4 = r3 & 0xFFFFFF0C
 | r2 = r3 & 0xFFFFFF0F
-| if (r4 != 4) goto <fm1_timer5_irq>
+| if (r4 != 4) goto <+0x8D6>
 | r1 = 3
-| if (r2 == 4) goto <fm1_timer5_irq>
-| if (r2 == 7) goto <fm1_timer5_irq>
+| if (r2 == 4) goto <+0x7C2>
+| if (r2 == 7) goto <+0x7C2>
 | r1 = 2
 | if (r2 != 6) {
 | r1 = 1
 | r2 = 0
 | r2 += 1
 | r3 = r2 << 3
-| r14 = r0 >> r3
-| r3 = uextra(r14, p:0, l:8)
-| if (r3 >= 248) goto <fm1_timer5_irq>
-| if ((r14 & 128) != 0) goto 46 <fm1_timer5_irq+0x7CC : 2001d58 >
+| r10 = r0 >> r3
+| r3 = uextra(r10, p:0, l:8)
+| if (r3 >= 248) goto <+0x8D0>
+| if ((r10 & 128) != 0) goto <+0x806>
 | r4 = b[r5+91] (u)
-| if (r4 == 0) goto <fm1_timer5_irq>
-| r4 = b[r15+4] (u)
-| if (r4 == 0) goto <fm1_timer5_irq>
-| if (r3 == 240) goto <fm1_timer5_irq>
-| if (r3 == 247) goto <fm1_timer5_irq>
-| r4 = [r15+96]
-| if (r4 > 639) goto 66 <fm1_timer5_irq+0x7FC : 2001d88 >
+| if (r4 == 0) goto <+0x8D0>
+| r4 = b[r9+0] (u)
+| if (r4 == 0) goto <+0x840>
+| if (r3 == 240) goto <+0x840>
+| if (r3 == 247) goto <+0x840>
+| r4 = [r15+0]
+| if (r4 > 639) goto <+0x83C>
 | r6 = r4 + 1
-| [r15+96] = r6
-| r6 = <sx_frame >
-| b[r4+r6] = r14
-| goto <fm1_timer5_irq>
-| if (r3 == 240) goto 14 <fm1_timer5_irq+0x7DE : 2001d6a >
-| if (r3 == 247) goto -54 <fm1_timer5_irq+0x79E : 2001d2a >
+| [r15+0] = r6
+| r6 = <addr>
+| b[r4+r6] = r10
+| goto <+0x840>
+| if (r3 == 240) goto <+0x818>
+| if (r3 == 247) goto <+0x7D8>
+| b[r5+91] = r14
+| b[r9+0] = r14
+| goto <+0x8D0>
+| r13 = 1
 | b[r5+91] = r13
-| b[r15+4] = r13
-| goto <fm1_timer5_irq>
-| r7 = 1
-| b[r5+91] = r7
-| r4 = 0
-| b[r5+90] = r4
-| r6 = b[r15+6] (u)
-| if (r6 == 0) goto 2 <fm1_timer5_irq+0x7F2 : 2001d7e >
-| r7 = 0
-| b[r15+4] = r7
-| [r15+96] = r4
-| goto -94 <fm1_timer5_irq+0x79E : 2001d2a >
-| b[r15+4] = r13
+| r6 = 0
+| b[r5+90] = r6
+| r4 = <addr>
+| r4 = b[r4+0] (u)
+| if (r4 == 0) goto <+0x832>
+| r13 = 0
+| b[r9+0] = r13
+| [r15+0] = r6
+| goto <+0x7D8>
+| b[r9+0] = r14
 | r4 = b[r5+90] (u)
 | if (r4 <= 15) {
 | r6 = r4 + 1
 | b[r5+90] = r6
 | r4 += r5
-| b[r4+74] = r14
-| if (r3 != 247) goto <fm1_timer5_irq>
+| b[r4+74] = r10
+| if (r3 != 247) goto <+0x8D0>
 | r3 = b[r5+90] (u)
-| if (r3 != 6) goto <fm1_timer5_irq>
-| r7 = 0
-| r4 = b[r7+r9] (u)
-| r6 = r7 + r5
-| r6 = b[r6+74] (u)
-| r7 += 1
-| if (r7 > 5) goto <fm1_timer5_irq>
-| if (r6 == r4) goto <fm1_timer5_irq>
-| if (r6 != r4) goto <fm1_timer5_irq>
-| b[r5+93] = r10
-| goto 58 <fm1_timer5_irq+0x87A : 2001e06 >
-| r7 = r5 + 75
-| if (r3 != 6) goto <fm1_timer5_irq>
-| r3 = b[r7+0] (u)
-| if (r3 != 34) goto <fm1_timer5_irq>
-| r3 = b[r7+1] (u)
-| if (r3 != 36) goto <fm1_timer5_irq>
-| r3 = b[r7+2] (u)
-| if (r3 != 53) goto <fm1_timer5_irq>
-| r3 = b[r7+3] (u)
-| if (r3 != 127) goto <fm1_timer5_irq>
-| b[r5+94] = r10
-| goto 20 <fm1_timer5_irq+0x87A : 2001e06 >
-| r3 = b[r15+4] (u)
-| if (r3 == 0) goto 14 <fm1_timer5_irq+0x87A : 2001e06 >
-| r3 = [r15+96]
-| if (r3 == 0) goto 8 <fm1_timer5_irq+0x87A : 2001e06 >
-| [r15+100] = r3
-| b[r15+6] = r10
-| b[r15+4] = r13
-| b[r5+91] = r13
-| if (r2 < r1) goto -252 <fm1_timer5_irq+0x78A : 2001d16 >
-| goto 28 <fm1_timer5_irq+0x8A4 : 2001e30 >
+| if (r3 != 6) goto <+0x882>
+| r6 = 0
+| r4 = b[r6+r12] (u)
+| r7 = r6 + r5
+| r7 = b[r7+74] (u)
+| r6 += 1
+| if (r6 > 5) goto <+0x876>
+| if (r7 == r4) goto <+0x862>
+| if (r7 != r4) goto <+0x882>
+| r3 = 1
+| b[r5+93] = r3
+| goto <+0x8C8>
+| r6 = r5 + 75
+| if (r3 != 6) goto <+0x8AA>
+| r3 = b[r6+0] (u)
+| if (r3 != 34) goto <+0x8AA>
+| r3 = b[r6+1] (u)
+| if (r3 != 36) goto <+0x8AA>
+| r3 = b[r6+2] (u)
+| if (r3 != 53) goto <+0x8AA>
+| r3 = b[r6+3] (u)
+| if (r3 != 127) goto <+0x8AA>
+| r3 = 1
+| b[r5+94] = r3
+| goto <+0x8C8>
+| r3 = b[r9+0] (u)
+| if (r3 == 0) goto <+0x8C8>
+| r3 = [r15+0]
+| if (r3 == 0) goto <+0x8C8>
+| r4 = <addr>
+| [r4+0] = r3
+| r3 = <addr>
+| r4 = 1
+| b[r3+0] = r4
+| b[r9+0] = r14
+| b[r5+91] = r14
+| if (r<addr>
+| goto <+0x8F2>
 | r4 = r0 >> 8
-| r7 = r4.b0 (u)
-| r4 = r7 + -128
+| r6 = r4.b0 (u)
+| r4 = r6 + -128
 | if (r4 <= 119) {
-| b[r5+91] = r13
-| b[r15+4] = r13
+| b[r5+91] = r14
+| b[r9+0] = r14
 | r3 = sextra(r3, p:0, l:4)
-| ifs (r3 <= -1) goto -410 <fm1_timer5_irq+0x70A : 2001c96 >
-| r11 = r11 + 4
-| r0 = r11 | 0x3
-| if (r0 < r8) goto -372 <fm1_timer5_irq+0x73C : 2001cc8 >
+| ifs (r<addr>
+| r8 = r8 + 4
+| r0 = r8 | 0x3
+| if (r<addr>
 | r0 = 0
 | b[r5+92] = r0
 | [r5+24] += 1
@@ -1860,606 +1875,621 @@ fm1_timer5_irq:
 | r0 = r0 & 0x8B
 | r1 = r0 | 0x10
 | r0 = 20
-| call <sie_wr >
+| call <sie_wr>
 | r0 = [sp+8]
 | r0 = r0 >> 9
 | r1 = r0 << 1
 | r0 = 21
-| call <sie_wr >
-| r9 = 0x11800
-| r7 = <fm1__dim_k >
-| r14 = r7
-| r10 = <ep3tx >
-| r11 = <ep3rx >
-| r13 = [sp+4]
-| r7 = <ep1tx >
+| call <sie_wr>
+| r8 = <addr>
+| r10 = 0x11800
+| r12 = <addr>
+| r13 = <addr>
+| r14 = [sp+4]
+| r15 = <addr>
 | r0 = b[r5+1] (u)
-| if (r0 == 0) goto 476 <fm1_timer5_irq+0xADA : 2002066 >
-| r0 = [r15+72]
-| r1 = [r15+76]
-| if (r0 != r1) goto <fm1_timer5_irq>
-| r0 = [r15+80]
-| r1 = [r15+84]
-| if (r0 == r1) goto 138 <fm1_timer5_irq+0x9A0 : 2001f2c >
+| if (r0 == 0) goto <+0xB5C>
+| r7 = <addr>
+| r9 = r7
+| r0 = [r7+0]
+| r7 = <addr>
+| r11 = r7
+| r1 = [r7+0]
+| r7 = <addr>
+| if (r0 != r1) goto <+0x978>
+| r0 = [r7+0]
+| r1 = <addr>
+| r1 = [r1+0]
+| if (r0 == r1) goto <+0xA1C>
 | r0 = 14
 | r1 = 1
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
-| call <sie_rd >
-| if ((r0 & 1) != 0) goto 120 <fm1_timer5_irq+0x9A0 : 2001f2c >
+| call <sie_rd>
+| if ((r0 & 1) != 0) goto <+0xA1C>
 | if ((r0 & 0x80) != 0) {
 | r1 = r0 & 0xFFFFFF7F
 | r0 = 17
-| call -3190
-| r1 = [r15+84]
-| r2 = [r15+80]
+| call -3268
+| r0 = <addr>
+| r1 = [r0+0]
+| r2 = [r7+0]
 | r0 = 0
-| if (r1 == r2) goto <fm1_timer5_irq>
-| r2 = r15 + 80
-| r3 = r12 + 244  #
-| r1 = [r2+4]
-| r1 = r1 & 0x3F
-| r1 = [r3+r1<<2]
-| r3 = r7
-| b[++r3=r0] = r1
-| r4 = r1 >> 8
+| if (r1 == r2) goto <+0x9E8>
+| r1 = <addr>
+| r2 = <addr>
+| r6 = r2
+| r2 = [r6+0]
+| r2 = r2 & 0x3F
+| r2 = [r1+r2<<2]
+| r3 = <addr>
+| b[++r3=r0] = r2
+| r4 = r2 >> 8
 | b[r3+1] = r4
-| r4 = r1 >> 16
+| r4 = r2 >> 16
 | b[r3+2] = r4
-| r1 = r1 >> 24
-| b[r3+3] = r1
-| [r2+4] += 1
-| r1 = [r2+4]
-| r2 = [r2+0]
+| r2 = r2 >> 24
+| b[r3+3] = r2
+| [r6+0] += 1
+| r2 = [r6+0]
+| r3 = [r7+0]
 | r0 += 4
-| if (r<= 63) goto -54 <fm1_timer5_irq>
-| r1 = b[r15+8] (u)
-| if (r1 == 0) goto 646 <fm1_timer5_irq+0xC06 : 2002192 >
-| if (r0 == 0) goto 30 <fm1_timer5_irq+0x9A0 : 2001f2c >
+| if (r0 > 63) goto <+0x9E8>
+| if (r2 != r3) goto <+0x9AE>
+| r1 = <addr>
+| r2 = b[r1+0] (u)
+| if (r2 == 0) goto <+0xC76>
+| if (r0 == 0) goto <+0xA1C>
 | csync
-| [r9+28] = r7
-| [r9+12] = r0
+| r1 = <addr>
+| [r10+28] = r1
+| [r10+12] = r0
 | r0 = 17
-| call <sie_rd >
+| call <sie_rd>
 | r1 = r0 | 0x1
 | r0 = 17
-| call <sie_wr >
+| call <sie_wr>
 | [r5+28] += 1
 | r0 = b[r5+1] (u)
-| if (r0 == 0) goto 308 <fm1_timer5_irq+0xADA : 2002066 >
-| if ((r13 & 8) != 0) goto 8 <fm1_timer5_irq+0x9B2 : 2001f3e >
-| r0 = b[r14+13] (u)
-| if (r0 != 0) goto 8 <fm1_timer5_irq+0x9B8 : 2001f44 >
-| goto 158 <fm1_timer5_irq+0xA50 : 2001fdc >
+| if (r0 == 0) goto <+0xB5C>
+| if ((r14 & 8) != 0) goto <+0xA2E>
+| r0 = b[r12+9] (u)
+| if (r0 != 0) goto <+0xA34>
+| goto <+0xAD2>
 | r0 = 1
-| b[r14+13] = r0
+| b[r12+9] = r0
 | r0 = 14
 | r1 = 3
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 20
-| call <sie_rd >
-| r4 = r0
-| r0 = 21
-| call <sie_rd >
-| if ((r4 & 1) != 0) goto 8 <fm1_timer5_irq+0x9DA : 2001f66 >
-| r0 = 0
-| b[r14+13] = r0
-| goto 118 <fm1_timer5_irq+0xA50 : 2001fdc >
-| r0 = r0 << 8
-| r6 = r0 | r4
-| r0 = 22
-| call <sie_rd >
+| call <sie_rd>
 | r5 = r0
-| r0 = 23
-| call <sie_rd >
+| r0 = 21
+| call <sie_rd>
+| if ((r5 & 1) != 0) goto <+0xA56>
+| r0 = 0
+| b[r12+9] = r0
+| goto <+0xAD2>
 | r0 = r0 << 8
-| r0 |= r5
+| r4 = r0 | r5
+| r0 = 22
+| call <sie_rd>
+| r6 = r0
+| r0 = 23
+| call <sie_rd>
+| r0 = r0 << 8
+| r0 |= r6
 | if (r0 >= 64) {
 | r0 = 64
-| r1 = [r15+104]
-| r2 = [r15+108]
-| r1 = 0x100 - r1
-| r1 += r2
-| if (r1 < r0) goto 70 <fm1_timer5_irq+0xA50 : 2001fdc >
-| r1 = 0
-| b[r14+13] = r1
+| r1 = <addr>
+| r2 = [r1+0]
+| r3 = <addr>
+| r2 = 0x100 - r2  #
+| r3 = [r3+0]
+| r2 += r3
+| if (r<addr>
+| r2 = 0
+| b[r12+9] = r2
 | ssync
-| if (r0 == 0) goto 28 <fm1_timer5_irq+0xA30 : 2001fbc >
-| r2 = <cdc_in >
-| r3 = b[r1+r11] (u)
-| r5 = [r15+104]
-| r5 += r1
-| r5 = r5.b0 (u)
-| r1 += 1
-| b[r5+r2] = r3
-| if (r1 < r0) goto -22 <fm1_timer5_irq+0xA1A : 2001fa6 >
-| [r15+104] += r0
-| [r14+16] += 1
-| r0 = r4 & 0x8B
+| if (r0 == 0) goto <+0xAB2>
+| r3 = <addr>
+| r6 = b[r2+r15] (u)
+| r7 = [r1+0]
+| r7 += r2
+| r7 = r7.b0 (u)
+| r2 += 1
+| b[r7+r3] = r6
+| if (r<addr>
+| [r1+0] += r0
+| [r12+12] += 1
+| r0 = r5 & 0x8B
 | r1 = r0 | 0x10
 | r0 = 20
-| call <sie_wr >
-| r0 = r6 >> 9
+| call <sie_wr>
+| r0 = r4 >> 9
 | r1 = r0 << 1
 | r0 = 21
-| call <sie_wr >
-| r0 = b[r14+11] (u)
-| if (r0 == 0) goto 132 <fm1_timer5_irq+0xADA : 2002066 >
-| r0 = [r15+112]
-| r1 = [r15+116]
-| if (r0 == r1) goto 120 <fm1_timer5_irq+0xADA : 2002066 >
+| call <sie_wr>
+| r0 = b[r12+7] (u)
+| if (r0 == 0) goto <+0xB5C>
+| r4 = <addr>
+| r0 = [r4+0]
+| r5 = <addr>
+| r1 = [r5+0]
+| if (r0 == r1) goto <+0xB5C>
 | r0 = 14
 | r1 = 3
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
-| call <sie_rd >
-| if ((r0 & 1) != 0) goto 102 <fm1_timer5_irq+0xADA : 2002066 >
+| call <sie_rd>
+| if ((r0 & 1) != 0) goto <+0xB5C>
 | if ((r0 & 0x80) != 0) {
 | r1 = r0 & 0xFFFFFF7F
 | r0 = 17
-| call -3522
-| r1 = [r15+116]
-| r2 = [r15+112]
+| call -3640
+| r1 = [r5+0]
+| r2 = [r4+0]
 | r0 = 0
-| if (r1 == r2) goto 44 <fm1_timer5_irq+0xABC : 2002048 >
-| r1 = 2047 <build/felucca_size.ll+0x7FE : 7fe >
-| r2 = <cdc_out >
-| r4 = r15 + 112
-| r3 = [r4+4]
-| r5 = r3 + 1
+| if (r1 == r2) goto <+0xB3E>
+| r1 = 2047
+| r2 = <addr>
+| r3 = [r5+0]
+| r6 = r3 + 1
 | r3 &= r1  #
-| [r4+4] = r5
+| [r5+0] = r6
 | r3 = b[r3+r2] (u)
-| b[r0+r10] = r3
-| r3 = [r4+4]
-| r4 = [r4+0]
+| b[r0+r13] = r3
+| r3 = [r5+0]
+| r6 = [r4+0]
 | r0 += 1
-| if (r0 > 62) goto 4 <fm1_timer5_irq+0xABC : 2002048 >
-| if (r3 != r4) goto -34 <fm1_timer5_irq+0xA9A : 2002026 >
+| if (r0 > 62) goto <+0xB3E>
+| if (r3 != r6) goto <+0xB20>
 | csync
-| [r9+44] = r10
-| [r9+20] = r0
+| [r10+44] = r13
+| [r10+20] = r0
 | r0 = 17
-| call <sie_rd >
+| call <sie_rd>
 | r1 = r0 | 0x1
 | r0 = 17
-| call <sie_wr >
-| [r14+20] += 1
-| call <uac_service >
-| r0 = [r15+44]
-| if ((r0 & 2) == 0) goto 280 <fm1_timer5_irq+0xBFE : 200218a >
-| r0 = <build/felucca_size.ll>
+| call <sie_wr>
+| [r12+16] += 1
+| call <uac_service>
+| r0 = [r8+0]
+| if ((r0 & 2) == 0) goto <+0xC6E>
+| r0 = 73984
 | [r0+0] |= 0x80
 | csync
 | [r0+0] |= 0x1400
 | r0 = [r0+40]
-| r1 = [r15+168]
-| r0 = r0.l (u)
+| r4 = <addr>
+| r0 = r0.l (u)  #
+| r1 = [r4+4]
 | r0 += r1
-| [r15+168] = r0
-| if (r0 < 129) goto 244 <fm1_timer5_irq+0xBFC : 2002188 >
-| r1 = r15 + 164
-| r2 = [r1+12]
-| r2 += r0
-| r2 += -128
-| [r1+12] = r2
-| r2 = [r1+0]
-| r0 += r2
+| [r4+4] = r0
+| r5 = <addr>
+| if (r<addr>
+| r1 = [r4+12]
+| r1 += r0
+| r1 += -128
+| [r4+12] = r1
+| r1 = [r4+0]
+| r0 += r1
 | r0 = r0 & 0x7F
-| r2 = r15 + 184  #
-| [r1+0] = r0
+| [r4+0] = r0
 | r0 = 128
-| [r1+4] = r0
+| [r4+4] = r0
 | r1 = 0
+| r2 = r4 + 20
 | b[r2+4] = r1
 | b[r2+2] = r1
 | b[r2+0] = r1
 | r1 = 1
-| b[r15+7] = r1
-| goto 198 <fm1_timer5_irq+0xBFC : 2002188 >
-| r0 = [r15+164]
-| r1 = <um_ring >
+| b[r5+0] = r1
+| goto <+0xC6C>
+| r0 = [r4+0]
+| r1 = <addr>
 | r1 = b[r0+r1] (u)
-| if (r1 < 248) goto 36 <fm1_timer5_irq+0xB6C : 20020f8 >
+| if (r<addr>
 | r0 = r1 + -248
-| if (r0 > 4) goto 148 <fm1_timer5_irq+0xBE4 : 2002170 >
-| if (r0 == 1) goto 144 <fm1_timer5_irq+0xBE4 : 2002170 >
+| if (r0 > 4) goto <+0xC58>
+| if (r0 == 1) goto <+0xC58>
 | r0 = 2
-| call <midi_enqueue >
-| r2 = r15 + 176
-| r1 = r15 + 180
-| if (r0 != 0) goto 2 <fm1_timer5_irq+0xB66 : 20020f2 >
+| call <midi_enqueue>
+| r2 = r4 + 12
+| r1 = r4 + 16
+| if (r0 != 0) goto <+0xBE2>
 | r1 = r2
 | [r1+0] += 1
-| goto 120 <fm1_timer5_irq+0xBE4 : 2002170 >
+| goto <+0xC58>
 | r0 = r1
-| if ((r0 & 128) != 0) goto 38 <fm1_timer5_irq+0xB98 : 2002124 >
-| r1 = b[r15+188] (u)
-| if (r1 != 0) goto 108 <fm1_timer5_irq+0xBE4 : 2002170 >
-| r1 = b[r15+184] (u)
-| if (r1 == 0) goto 102 <fm1_timer5_irq+0xBE4 : 2002170 >
-| r1 = b[r15+185] (u)
-| if (r1 != 2) goto 60 <fm1_timer5_irq+0xBC2 : 200214e >
-| r1 = b[r15+186] (u)
-| if (r1 != 0) goto 54 <fm1_timer5_irq+0xBC2 : 200214e >
-| b[r15+187] = r0
+| if ((r0 & 128) != 0) goto <+0xC14>
+| r1 = b[r4+24] (u)
+| if (r1 != 0) goto <+0xC58>
+| r1 = b[r4+20] (u)
+| if (r1 == 0) goto <+0xC58>
+| r1 = b[r4+21] (u)
+| if (r1 != 2) goto <+0xC3C>
+| r1 = b[r4+22] (u)
+| if (r1 != 0) goto <+0xC3C>
+| b[r4+23] = r0
 | r0 = 1
-| b[r15+186] = r0
-| goto 76 <fm1_timer5_irq+0xBE4 : 2002170 >
+| b[r4+22] = r0
+| goto <+0xC58>
 | r2 = 0
 | r3 = 1
-| r5 = 1
+| r7 = 1
 | if (r0 != 240) {
-| r5 = 0
-| r4 = r15 + 184
-| b[r4+4] = r5
+| r7 = 0
+| r6 = r4 + 20
+| b[r6+4] = r7
 | if (r0 >= 240) {
 | r0 = 0
 | r1 = r1 & 0xFFFFFFE0  #
-| b[r4+0] = r0
+| b[r6+0] = r0
 | if (r1 != 192) {
 | r3 = 2
-| b[r4+1] = r3
-| b[r4+2] = r2
-| goto 34 <fm1_timer5_irq+0xBE4 : 2002170 >
+| b[r6+1] = r3
+| b[r6+2] = r2
+| goto <+0xC58>
 | r0 = 0
-| b[r15+186] = r0
+| b[r4+22] = r0
 | r0 = 2
-| call <midi_enqueue >
+| call <midi_enqueue>
 | if (r0 == 0) {
 | r0 = 1
-| b[r15+7] = r0
-| r0 = r15 + 176
-| r0 = r15 + 180
+| b[r5+0] = r0
+| r0 = r4 + 12
+| r0 = r4 + 16
 | [r0+0] += 1
-| r1 = r15
-| r0 = [++r1=164]
+| r0 = [r4+0]
 | r0 += 1
 | r0 = r0 & 0x7F
-| [r1+0] = r0
-| r0 = [r1+4]
+| [r4+0] = r0
+| r0 = [r4+4]
 | r0 += -1
-| [r1+4] = r0
-| [r1+8] += 1
-| if (r0 != 0) goto -200 <fm1_timer5_irq+0xB36 : 20020c2 >
-| [r15+44] = 0x0
+| [r4+4] = r0
+| [r4+8] += 1
+| if (r0 != 0) goto <+0xBB8>
+| [r8+0] = 0x0
 | sp += 12
 | {pc, r15-r4} = [sp++]
-| r1 = 0
-| r2 = [r15+84]
-| r3 = [r15+80]
-| if (r2 != r3) goto <fm1_timer5_irq>
-| r2 = [r15+76]
-| r3 = [r15+72]
-| if (r0 > 63) goto <fm1_timer5_irq>
-| if (r2 == r3) goto <fm1_timer5_irq>
-| r2 = [r15+76]
-| r2 = r7
-| b[++r2=r0] = r1
-| b[r2+1] = r1
-| b[r2+2] = r1
-| b[r2+3] = r1
-| [r15+76] += 1
-| r2 = b[r15+8] (u)
+| r2 = <addr>
+| r3 = <addr>
+| r3 = [r3+0]
+| r4 = [r7+0]
+| if (r3 != r4) goto <+0x9F6>
+| r3 = [r11+0]
+| r4 = [r9+0]
+| if (r0 > 63) goto <+0x9F6>
+| if (r3 == r4) goto <+0x9F6>
+| r3 = [r11+0]
+| r3 = r3 & 0x3F
+| r3 = [r2+r3<<2]
+| r4 = <addr>
+| b[++r4=r0] = r3
+| r6 = r3 >> 8
+| b[r4+1] = r6
+| r6 = r3 >> 16
+| b[r4+2] = r6
+| r3 = r3 >> 24
+| b[r4+3] = r3
+| [r11+0] += 1
+| r3 = b[r1+0] (u)
 | r0 += 4
-| if (r2 == 0) goto -62 <fm1_timer5_irq+0xC08 : 2002194 >
-| goto <fm1_timer5_irq>
+| if (r3 == 0) goto <+0xC7C>
+| goto <+0x9F8>
 | r0 = 0
-| r1 = b[r0+r8] (u)
+| r1 = b[r0+r4] (u)
 | r2 = r0 + r5
 | r0 += 1
 | b[r2+66] = r1
-| if (r0 != 8) goto -16 <fm1_timer5_irq+0xC4A : 20021d6 >
+| if (r0 != 8) goto <+0xCD0>
 | [r5+20] += 1
 | r0 = r5 + 64
 | r1 = b[r0+9] (u)
 | r2 = b[r0+8] (u)
 | r2 <= insert(r1, p:8, l:24)  #
-| r4 = b[r0+2] (u)
-| r6 = b[r0+3] (u)
-| r6 <= insert(r4, p:8, l:24)  #
+| r6 = b[r0+2] (u)
+| r7 = b[r0+3] (u)
+| r7 <= insert(r6, p:8, l:24)  #
 | r3 = b[r0+5] (u)
-| r8 = b[r0+4] (u)
-| r1 = r6.l (u)
-| r4 = <build/felucca_size.ll>
-| r0 = <ep0_service.zero2 >
-| r6 = r7
-| r7 = r13
-| ifs (r1 > r4) goto 40 <fm1_timer5_irq+0xCB6 : 2002242 >
-| r4 = 8479 <build/felucca_size.ll+0x211E : 211e >
-| ifs (r1 <= r4) goto 78 <fm1_timer5_irq+0xCE4 : 2002270 >
-| r4 += 3
-| ifs (r1 <= r4) goto 422 <fm1_timer5_irq+0xE42 : 20023ce >
-| r4 += 1
-| if (r1 == r4) goto -1590 <fm1_timer5_irq+0x66E : 2001bfa >
-| r4 = <build/felucca_size.ll>
-| if (r1 == r4) goto 558 <fm1_timer5_irq+0xEDC : 2002468 >
-| if (r1 == 32768) goto 540 <fm1_timer5_irq+0xED0 : 200245c >
-| goto 728 <fm1_timer5_irq+0xF8E : 200251a >
-| ifs (r1 < 33280) goto 342 <fm1_timer5_irq+0xE12 : 200239e >
-| r4 = 4294925695 <_data_load+0xFDFE5966 : ffff5d7e >
+| r1 = r7.l (u)  #
+| r4 = b[r0+4] (u)
+| r6 = 32773
+| r0 = <addr>
+| ifs (r1 > r6) goto <+0xD36>
+| r6 = 8479
+| ifs (r<addr>
+| r6 += 3
+| ifs (r<addr>
+| r4 = r6 + 1
+| if (r1 == r4) goto <+0x6A2>
+| r4 = 8705
+| if (r1 == r4) goto <+0xF5A>
+| if (r1 == 32768) goto <+0xF4E>
+| goto <+0x100C>
+| ifs (r<addr>
+| r4 = 4294925695
 | r4 += r1
-| if (r4 >= 3) goto 352 <fm1_timer5_irq+0xE28 : 20023b4 >
-| if (r3 != 1) goto 704 <fm1_timer5_irq+0xF8E : 200251a >
+| if (r4 >= 3) goto <+0xEA8>
+| if (r3 != 1) goto <+0x100C>
 | r0 = b[r5+70] (u)
-| if (r0 != 132) goto 694 <fm1_timer5_irq+0xF8E : 200251a >
+| if (r0 != 132) goto <+0x100C>
 | r2 = r2.l (u)
-| r0 = <ep0_service.RATE >
+| r0 = <addr>
 | r1 = 3
-| goto 496 <fm1_timer5_irq+0xED4 : 2002460 >
-| ifs (r1 > 266) goto 370 <fm1_timer5_irq+0xE5A : 20023e6 >
-| if (r1 == 5) goto 526 <fm1_timer5_irq+0xEFC : 2002488 >
-| if (r1 != 9) goto 666 <fm1_timer5_irq+0xF8E : 200251a >
-| if (r8 > 1) goto 660 <fm1_timer5_irq+0xF8E : 200251a >
-| b[r5+1] = r8
-| if (r8 != 1) goto 688 <fm1_timer5_irq+0xFB4 : 2002540 >
-| r4 = r9
-| [r4+28] = r6
-| r0 = <ep1rx >
-| r8 = 1  # <build/felucca_size.ll : 0 >
-| [r4+32] = r0
+| goto <+0xF52>
+| ifs (r1 > 266) goto <+0xEDA>
+| if (r1 == 5) goto <+0xF76>
+| if (r1 != 9) goto <+0x100C>
+| if (r4 > 1) goto <+0x100C>
+| b[r5+1] = r4
+| if (r4 != 1) goto <+0x1030>
+| r7 = r10
+| r0 = <addr>
+| [r7+28] = r0
+| r0 = <addr>
+| [r7+32] = r0
 | r0 = 14
 | r1 = 1
-| call <sie_wr >
+| r6 = 1
+| call <sie_wr>
 | r0 = 16
 | r1 = 255
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 72
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 18
 | r1 = 0
-| r9 = 0
-| call <sie_wr >
+| r4 = 0
+| call <sie_wr>
 | r0 = 19
 | r1 = 255
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 20
 | r1 = 144
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 21
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 9
 | r1 = 2
-| call <sie_wr >
-| [r4+0] &= 0xFFEFFFFF
-| r0 = <ep2tx >
-| [r4+36] = r0
+| call <sie_wr>
+| [r7+0] &= 0xFFEFFFFF
+| r0 = <addr>
+| [r7+36] = r0
 | r0 = 14
 | r1 = 2
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 16
 | r1 = 255
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 72
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 18
 | r1 = 0
-| call <sie_wr >
-| [r4+44] = r10
-| [r4+48] = r11
+| call <sie_wr>
+| [r7+44] = r13
+| [r7+48] = r15
 | r0 = 14
 | r1 = 3
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 16
 | r1 = 255
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 72
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 18
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 19
 | r1 = 255
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 20
 | r1 = 144
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 21
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 9
 | r1 = 10
-| call <sie_wr >
-| [r4+0] &= 0xFF9FFFFF
-| b[r14+13] = r8
-| r0 = r5 + 208
-| [r4+56] = r0
+| call <sie_wr>
+| [r7+0] &= 0xFF9FFFFF
+| b[r12+9] = r6
+| r0 = <addr>
+| [r7+56] = r0
 | r0 = 14
 | r1 = 4
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 16
 | r1 = 255
-| call <sie_wr >
-| call <uac_ep4_reset >
-| [r4+0] &= 0xFF7FFFFF
-| r0 = r15 + 284
-| b[r0+1] = r9
-| b[r0+2] = r9
-| b[r0+3] = r9
-| b[r0+5] = r9
-| b[r0+0] = r9
-| r2 = 0
-| r3 = 0
-| d[r0+12] = r3_r2
-| goto 426 <fm1_timer5_irq+0xFBC : 2002548 >
-| ifs (r1 >= 33024) goto 142 <fm1_timer5_irq+0xEA6 : 2002432 >
-| r0 = r4 + 1
-| if (r1 == r0) goto 236 <fm1_timer5_irq+0xF0A : 2002496 >
+| call <sie_wr>
+| call <uac_ep4_reset>
+| [r7+0] &= 0xFF7FFFFF
+| b[r11+1] = r4
+| b[r11+2] = r4
+| b[r11+3] = r4
+| b[r11+5] = r4
+| b[r11+0] = r4
+| r0 = 0
+| r1 = 0
+| d[r11+12] = r1_r0
+| goto <+0x1038>
+| ifs (r1 >= 33024) goto <+0xF26>
+| r0 = r6 + 1
+| if (r1 == r0) goto <+0xF84>
 | r0 += 2
-| if (r1 != r0) goto 362 <fm1_timer5_irq+0xF8E : 200251a >
+| if (r1 != r0) goto <+0x100C>
 | r0 = r5 + 1
-| goto 162 <fm1_timer5_irq+0xECA : 2002456 >
-| if (r1 == 33280) goto 162 <fm1_timer5_irq+0xED0 : 200245c >
-| r0 = 41249 <build/felucca_size.ll+0xA120 : a120 >
-| if (r1 != r0) goto 342 <fm1_timer5_irq+0xF8E : 200251a >
-| r0 = r14 + 4
+| goto <+0xF48>
+| if (r1 == 33280) goto <+0xF4E>
+| r0 = 41249
+| if (r1 != r0) goto <+0x100C>
 | r2 = r2.l (u)
 | r1 = 7
-| goto 146 <fm1_timer5_irq+0xED4 : 2002460 >
-| r0 = <build/felucca_size.ll>
-| if (r1 == r0) goto 218 <fm1_timer5_irq+0xF24 : 20024b0 >
-| r0 = r4
-| if (r1 != r0) goto 318 <fm1_timer5_irq+0xF8E : 200251a >
-| r0 = r8 & 0xFFFFFF01
-| b[r14+11] = r0
-| goto -2028 <fm1_timer5_irq+0x66E : 2001bfa >
-| r4 = r8
-| r4 <= insert(r3, p:8, l:8)
-| if (r1 == 267) goto 222 <fm1_timer5_irq+0xF42 : 20024ce >
-| if (r1 != 513) goto 292 <fm1_timer5_irq+0xF8E : 200251a >
+| r0 = r12
+| goto <+0xF52>
+| r0 = 8480
+| if (r1 == r0) goto <+0xFA0>
+| r0 = r6
+| if (r1 != r0) goto <+0x100C>
+| r0 = r4 & 0xFFFFFF01
+| b[r12+7] = r0
+| goto <+0x6A2>
+| r6 = r4
+| r6 <= insert(r3, p:8, l:8)
+| if (r1 == 267) goto <+0xFBE>
+| if (r1 != 513) goto <+0x100C>
 | r0 = b[r5+70] (u)
-| if (r4 != 0) goto 6 <fm1_timer5_irq+0xE76 : 2002402 >
-| if (r0 == 132) goto -2056 <fm1_timer5_irq+0x66E : 2001bfa >
-| if (r4 != 0) goto 276 <fm1_timer5_irq+0xF8E : 200251a >
+| if (r6 != 0) goto <+0xEF6>
+| if (r0 == 132) goto <+0x6A2>
+| if (r6 != 0) goto <+0x100C>
 | r1 = r0 & 0xFFFFFF0F
-| if (r1 > 3) goto 268 <fm1_timer5_irq+0xF8E : 200251a >
-| if (r1 == 0) goto -2074 <fm1_timer5_irq+0x66E : 2001bfa >
+| if (r1 > 3) goto <+0x100C>
+| if (r1 == 0) goto <+0x6A2>
 | r0 = 14
-| call <sie_wr >
+| call <sie_wr>
 | r0 = b[r5+70] (s)
 | ifs (r0 > -1) {
 | r0 = 20
 | r1 = 128
 | r0 = 17
 | r1 = 64
-| call <sie_wr >
-| goto -2104 <fm1_timer5_irq+0x66E : 2001bfa >
-| if (r1 == 33024) goto 36 <fm1_timer5_irq+0xED0 : 200245c >
-| r3 = r4 + 261
-| if (r1 != r3) goto 218 <fm1_timer5_irq+0xF8E : 200251a >
+| call <sie_wr>
+| goto <+0x6A2>
+| if (r1 == 33024) goto <+0xF4E>
+| r3 = r6 + 261
+| if (r1 != r3) goto <+0x100C>
 | r1 = b[r5+70] (u)
 | if (r1 == 2) {
-| r0 = 284 <build/felucca_size.ll+0x11C : 11c >
-| r1 = b[r15+r0] (u)
-| r0 = r15
-| b[++r0=5] = r1
+| r1 = b[r11+0] (u)
+| r0 = <addr>
+| b[r0+0] = r1
 | r2 = r2.l (u)
 | r1 = 1
-| goto 4 <fm1_timer5_irq+0xED4 : 2002460 >
+| goto <+0xF52>
 | r2 = r2.l (u)
 | r1 = 2
-| call <e0_send >
-| goto -2142 <fm1_timer5_irq+0x67E : 2001c0a >
-| if (r3 != 1) goto 174 <fm1_timer5_irq+0xF8E : 200251a >
+| call <e0_send>
+| goto <+0x6B2>
+| if (r3 != 1) goto <+0x100C>
 | r0 = b[r5+70] (u)
-| if (r0 != 132) goto 166 <fm1_timer5_irq+0xF8E : 200251a >
+| if (r0 != 132) goto <+0x100C>
 | r0 = r2.l (u)
-| if (r0 == 0) goto -2178 <fm1_timer5_irq+0x66E : 2001bfa >
-| r0 = <build/felucca_size.ll>
-| r1 = 1
-| b[r15+r0] = r1
-| goto 54 <fm1_timer5_irq+0xF32 : 20024be >
-| r0 = r8 & 0xFFFFFF7F
+| if (r0 == 0) goto <+0x6A2>
+| r0 = 1
+| b[r11+6] = r0
+| goto <+0xFAE>
+| r0 = r4 & 0xFFFFFF7F
 | b[r5+2] = r0
 | r0 = 1
 | b[r5+3] = r0
-| goto -2204 <fm1_timer5_irq+0x66E : 2001bfa >
-| r13 = r10
-| r4 = r14
-| if (r3 == 1) goto 210 <fm1_timer5_irq+0xFE4 : 2002570 >
-| if (r3 == 3) goto 136 <fm1_timer5_irq+0xF9E : 200252a >
-| if (r3 != 2) goto 116 <fm1_timer5_irq+0xF8E : 200251a >
+| goto <+0x6A2>
+| r7 = r14
+| r11 = r12
+| r6 = r8
+| if (r3 == 1) goto <+0x1060>
+| if (r3 == 3) goto <+0x101C>
+| if (r3 != 2) goto <+0x100C>
 | r1 = 249
-| r0 = <DEV_DESC>
-| goto <fm1_timer5_irq>
+| r0 = <addr>
+| goto <+0x107C>
 | r0 = r2.l (u)
-| if (r0 == 0) goto -2238 <fm1_timer5_irq+0x66E : 2001bfa >
+| if (r0 == 0) goto <+0x6A2>
 | r0 = 1
-| b[r14+12] = r0
+| b[r12+8] = r0
 | r0 = 14
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 64
-| goto -2248 <fm1_timer5_irq+0x67A : 2001c06 >
-| if (r4 > 1) goto 66 <fm1_timer5_irq+0xF88 : 2002514 >
+| goto <+0x6AE>
+| if (r6 > 1) goto <+0x1006>
 | r0 = b[r5+70] (u)
-| if (r0 != 2) goto 58 <fm1_timer5_irq+0xF88 : 2002514 >
+| if (r0 != 2) goto <+0x1006>
 | r0 = b[r5+1] (u)
-| if (r0 == 0) goto 54 <fm1_timer5_irq+0xF88 : 2002514 >
-| call <uac_ep4_reset >
+| if (r0 == 0) goto <+0x1006>
+| call <uac_ep4_reset>
 | r0 = 0
-| r1 = r15 + 284
-| b[r1+1] = r0
-| b[r1+2] = r0
-| b[r1+3] = r0
-| b[r1+5] = r0
-| b[r1+0] = r8
+| b[r11+1] = r0
+| b[r11+2] = r0
+| b[r11+3] = r0
+| b[r11+5] = r0
+| b[r11+0] = r4
 | r2 = 0
 | r3 = 0
-| d[r1+12] = r3_r2
-| if (r4 == 0) goto -2312 <fm1_timer5_irq+0x66E : 2001bfa >
-| r1 = r15 + 304
-| [r1+0] += 1
-| [r1+36] = 0xFFFFFFFF
-| [r1+40] = r0
-| goto -2330 <fm1_timer5_irq+0x66E : 2001bfa >
-| if (r4 == 0) goto -2336 <fm1_timer5_irq+0x66E : 2001bfa >
+| d[r11+12] = r3_r2
+| if (r6 == 0) goto <+0x6A2>
+| [r11+20] += 1
+| [r11+56] = 0xFFFFFFFF
+| [r11+60] = r0
+| goto <+0x6A2>
+| if (r6 == 0) goto <+0x6A2>
 | r0 = 14
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 96
-| goto -2340 <fm1_timer5_irq+0x67A : 2001c06 >
-| if (r8 == 0) goto 76 <fm1_timer5_irq+0xFEE : 200257a >
-| if (r8 == 2) goto 82 <fm1_timer5_irq+0xFF8 : 2002584 >
-| if (r8 != 1) goto -28 <fm1_timer5_irq+0xF8E : 200251a >
+| goto <+0x6AE>
+| if (r4 == 0) goto <+0x106A>
+| if (r4 == 2) goto <+0x1074>
+| if (r4 != 1) goto <+0x100C>
 | r1 = 42
-| r0 = <STR1 >
-| goto <fm1_timer5_irq>
+| r0 = <addr>
+| goto <+0x107C>
 | r0 = 9
 | r1 = 0
-| call <sie_wr >
-| r9 = 0x11800  #
+| call <sie_wr>
 | r0 = b[r5+1] (u)
-| if (r0 == 1) goto -2394 <fm1_timer5_irq+0x66E : 2001bfa >
+| if (r0 == 1) goto <+0x6A2>
 | r0 = 0
-| r1 = r15 + 284
-| b[r1+1] = r0
-| b[r1+2] = r0
-| b[r1+3] = r0
-| b[r1+5] = r0
-| b[r1+0] = r0
-| r2 = 0
-| r3 = 0
-| d[r1+12] = r3_r2
-| goto -2422 <fm1_timer5_irq+0x66E : 2001bfa >
+| b[r11+1] = r0
+| b[r11+2] = r0
+| b[r11+3] = r0
+| b[r11+5] = r0
+| b[r11+0] = r0
+| r1 = 0
+| d[r11+12] = r1_r0
+| goto <+0x6A2>
 | r1 = 18
-| r0 = <ep0_service.RATE>
-| goto <fm1_timer5_irq>
+| r0 = <addr>
+| goto <+0x107C>
 | r1 = 4
-| r0 = <STR0 >
-| goto <fm1_timer5_irq>
+| r0 = <addr>
+| goto <+0x107C>
 | r1 = 16
-| r0 = <STR2 >
+| r0 = <addr>
 | r2 = r2.l (u)
-| if (r2 != 0) goto -306 <fm1_timer5_irq+0xED4 : 2002460 >
-| goto -2460 <fm1_timer5_irq+0x66E : 2001bfa >
+| if (r2 != 0) goto <+0xF52>
+| goto <+0x6A2>
 midi_enqueue:
-| r1 = <fm1__tick_col >
-| r0 = [r1+88]
-| r2 = b[r1+7] (u)
+| [--sp] = {rets, r4}
+| r1 = <addr>
+| r0 = [r1+0]
+| r2 = <addr>
+| r3 = b[r2+0] (u)
 | r0 = 0
-| if (r2 != 0) goto 28 <midi_enqueue+0x2C : 200158a >
-| r2 = [r1+88]
-| r3 = [r1+92]
-| r2 = r2 - r3
-| if (r2 >= 64) {
-| r2 = 1
-| b[r1+7] = r2
-| rts
-| r0 = [r1+56]
-| [r1+88] += 1
+| if (r3 != 0) goto <+0x3A>
+| r3 = [r1+0]
+| r4 = <addr>
+| r4 = [r4+0]
+| r3 = r3 - r4
+| if (r3 >= 64) {
+| r1 = 1
+| b[r2+0] = r1
+| {pc, r4} = [sp++]
+| r0 = <addr>
+| r0 = [r0+0]
+| [r1+0] += 1
 | r0 = 1
-| rts
+| {pc, r4} = [sp++]
 ota_crc16:
 | [--sp] = {rets, r7-r4}
-| if (r1 == 0) goto 38 <ota_crc16+0x2A : 2002d6c >
-| r3 = <build/felucca_size.ll>
+| if (r1 == 0) goto <+0x2A>
+| r3 = 4129
 | r4 = b[r0++=1] (u)
 | r4 = r4 << 8
 | r2 ^= r4
@@ -2471,29 +2501,29 @@ ota_crc16:
 | r2 = r6
 | ifs (r7 >= 0) {
 | r2 = r5
-| if (--r4 != 0) goto <ota_crc16>
+| if (--r4 != 0) goto <+0x12>
 | r2 = r2.l (u)
-| if (r1 != 0) goto <ota_crc16>
+| if (r1 != 0) goto <+0x8>
 | r0 = r2
 | {pc, r7-r4} = [sp++]
 ota_erase:
 | [--sp] = rets
 | sp += -8
-| r2 = 4095 <build/felucca_size.ll+0xFFE : ffe >
+| r2 = 4095
 | r1 = -8
-| if ((r0 & r2) != 0) goto 64 <ota_erase+0x4E : 20026ac >
+| if ((r0 & r2) != 0) goto <+0x4E>
 | r2 = r0 - 0xE0000
-| if (r2 > 20480) goto 54 <ota_erase+0x4E : 20026ac >
+| if (r2 > 20480) goto <+0x4E>
 | r2 = 0xE5000 - r0
-| if (r2 < 4096) goto 44 <ota_erase+0x4E : 20026ac >
+| if (r<addr>
 | r1 = 0
-| r2 = <abuf >
+| r2 = <addr>
 | r3 = 0
 | [r2+r3<<2] = r1
 | r3 += 1
-| if (r3 != 512) goto -12 <ota_erase+0x2C : 200268a >
+| if (r3 != 512) goto <+0x2C>
 | cli
-| r1 = <fl_erase4k_ram >
+| r1 = <addr>
 | [sp+4] = r1
 | r2 = [sp+4]
 | r1 = sp + 0
@@ -2506,9 +2536,9 @@ ota_erase:
 | pc = [sp++]
 ota_jl_enc:
 | [--sp] = {rets, r4}
-| if (r1 == 0) goto <ota_jl_enc>
-| r3 = 65535 <build/felucca_size.ll+0xFFFE : fffe >
-| r2 = <build/felucca_size.ll>
+| if (r1 == 0) goto <+0x24>
+| r3 = 65535
+| r2 = 4129
 | r4 = b[r0+0] (u)
 | r4 ^= r3
 | r4 = sextra(r3, p:15, l:1)  #
@@ -2517,7 +2547,7 @@ ota_jl_enc:
 | r3 = r3 << 1
 | r3 = r3.l (u)
 | r3 ^= r4
-| if (--r1 != 0) goto -22 <ota_jl_enc+0xE : 2002d2a >
+| if (--r1 != 0) goto <+0xE>
 | {pc, r4} = [sp++]
 ota_prog:
 | [--sp] = {rets, r10-r4}
@@ -2526,13 +2556,13 @@ ota_prog:
 | r6 = r1
 | r7 = r0
 | r0 = r7 - 0xE0000
-| r8 = -8 <_data_load+0xFFFFFFFFFDFEFBE0 : fffffffffffffff8 >
-| if (r0 > 20480) goto 66 <ota_prog+0x5A : 2002dca >
+| r8 = -8
+| if (r0 > 20480) goto <+0x5A>
 | r0 = 0xE5000 - r7
-| if (r0 < r5) goto 58 <ota_prog+0x5A : 2002dca >
+| if (r<addr>
 | r8 = 0
-| if (r5 == 0) goto 54 <ota_prog+0x5A : 2002dca >
-| r9 = <fl_prog_ram >
+| if (r5 == 0) goto <+0x5A>
+| r9 = <addr>
 | cli
 | [sp+4] = r9
 | r10 = [sp+4]
@@ -2546,12 +2576,12 @@ ota_prog:
 | call r10
 | csync
 | sti
-| if (r0 != 0) goto <ota_prog>
+| if (r0 != 0) goto <+0x58>
 | r5 = r5 - r4
 | r6 += r4
 | r7 += r4
-| if (r5 != 0) goto -44 <ota_prog+0x2A : 2002d9a >
-| goto 2 <ota_prog+0x5A : 2002dca >
+| if (r5 != 0) goto <+0x2A>
+| goto <+0x5A>
 | r8 = r0
 | r0 = r8
 | sp += 8
@@ -2559,15 +2589,16 @@ ota_prog:
 ota_read:
 | [--sp] = {rets, r13-r4}
 | sp += -8
-| r6 = <fm1__tick_col >
-| r3 = [r6+136]
-| r12 = r2
+| r3 = <addr>
+| r12 = r2  #
+| r3 = [r3+0]
 | r9_r8 = r1_r0
-| if (r3 == 0) goto <ota_read>
-| r10 = -1  # <_data_load+0xFFFFFFFFFDFEFBE6 : fffffffffffffffe >
-| r0 = [r6+56]
+| r6 = <addr>
+| if (r3 == 0) goto <+0x24>
+| r10 = -1
+| r0 = [r6+0]
 | r0 = r0 - r3
-| ifs (r0 > 0) goto <ota_read>
+| ifs (r0 > 0) goto <+0x108>
 | r13 = 0
 | b[sp] = r13
 | b[sp+1] = r8
@@ -2583,38 +2614,38 @@ ota_read:
 | b[sp+7] = r13
 | r11 = r2 + 8
 | r7 = r2 + 15
-| r4 = <ota_dec >
+| r4 = <addr>
 | r1 = sp + 0
 | r0 = 48
 | r2 = 8
-| call <ota_send_msg >
-| r10 = -1 <_data_load+0xFFFFFFFFFDFEFBE6 : fffffffffffffffe >
-| if (r0 != 0) goto <ota_read>
-| r5 = [r6+56]
-| r0 = [r6+56]
+| call <ota_send_msg>
+| r10 = -1
+| if (r0 != 0) goto <+0x108>
+| r5 = [r6+0]
+| r0 = [r6+0]
 | r0 = r0 - r5
 | r0 = r0 >> 3
-| if (r0 > 624) goto 112 <ota_read+0xE8 : 2002cfa >
+| if (r0 > 624) goto <+0xEC>
 | r0 = 1
 | r1 = 128
 | r2 = 64
-| call <fm1__p33_op >
-| call <ota_take >
-| if (r0 == 0) goto 86 <ota_read+0xDE : 2002cf0 >
-| if (r0 != 7) goto <ota_read>
+| call <fm1__p33_op>
+| call <ota_take>
+| if (r0 == 0) goto <+0xE2>
+| if (r0 != 7) goto <+0x9C>
 | r1 = b[r4+2] (u)
-| if (r1 != 17) goto 8 <ota_read+0x9A : 2002cac >
-| call <ota_reply_identity >
-| goto 70 <ota_read+0xDE : 2002cf0 >
+| if (r1 != 17) goto <+0x9E>
+| call <ota_reply_identity>
+| goto <+0xE2>
 | r1 = b[r4+2] (u)
-| if (r0 != r7) goto 64 <ota_read+0xDE : 2002cf0 >
-| if (r1 != 48) goto 60 <ota_read+0xDE : 2002cf0 >
+| if (r0 != r7) goto <+0xE2>
+| if (r1 != 48) goto <+0xE2>
 | r0 = b[r4+4] (u)
 | r1 = b[r4+3] (u)
 | r1 <= insert(r0, p:8, l:8)  #
 | r2 = b[r4+5] (u)
 | r1 <= insert(r2, p:16, l:8)
-| if (r1 != r11) goto 42 <ota_read+0xDE : 2002cf0 >
+| if (r1 != r11) goto <+0xE2>
 | r0 = b[r4+8] (u)
 | r1 = b[r4+7] (u)
 | r1 <= insert(r0, p:8, l:8)  #
@@ -2622,26 +2653,26 @@ ota_read:
 | r1 <= insert(r2, p:16, l:8)  #
 | r3 = b[r4+10] (u)
 | r1 <= insert(r3, p:24, l:8)
-| if (r1 != r8) goto 18 <ota_read+0xDE : 2002cf0 >
+| if (r1 != r8) goto <+0xE2>
 | r0 = b[r4+12] (u)
 | r1 = b[r4+11] (u)
 | r1 <= insert(r0, p:8, l:8)  #
 | r2 = b[r4+13] (u)
 | r1 <= insert(r2, p:16, l:8)
-| if (r1 == r12) goto 20 <ota_read+0xF2 : 2002d04 >
-| r0 = [r6+56]
+| if (r1 == r12) goto <+0xF6>
+| r0 = [r6+0]
 | r0 = r0 - r5
 | r0 = r0 >> 3
-| if (r< 625) goto -112 <ota_read>
+| if (r<addr>
 | r13 = r13 + 1
-| if (r13 < 3) goto -148 <ota_read+0x5C : 2002c6e >
-| goto <ota_read>
+| if (r<addr>
+| goto <+0x108>
 | r10 = 0
-| if (r12 == 0) goto <ota_read>
+| if (r12 == 0) goto <+0x108>
 | r0 = r4 + 14
 | r1 = b[r0++=1] (u)
 | b[r9++=1] = r1
-| if (--r12 != 0) goto -10 <ota_read+0xFA : 2002d0c >
+| if (--r12 != 0) goto <+0xFE>
 | r0 = r10
 | sp += 8
 | {pc, r13-r4} = [sp++]
@@ -2649,218 +2680,232 @@ ota_reply_identity:
 | [--sp] = rets
 | sp += -28
 | r0 = 0
-| r1 = <ota_reply_identity.ID >
+| r1 = <addr>
 | r2 = 0
 | if (r0 <= 7) {
 | r2 = b[r0+r1] (u)
 | r3 = sp + 1
 | b[r3+r0] = r2
 | r0 += 1
-| if (r0 != 27) goto -22 <ota_reply_identity+0xC : 2002a78 >
+| if (r0 != 27) goto <+0xC>
 | r1 = sp + 1
 | r0 = 17
 | r2 = 27
-| call <ota_send_msg >
+| call <ota_send_msg>
 | sp += 28
 | pc = [sp++]
 ota_reply_identity.ID:
 ota_send_msg:
 | [--sp] = {rets, r15-r4}
-| r4 = <fm1__tick_col >
-| r3 = 0
-| r5 = r4
-| b[++r5=192] = r3
-| r6 = 89
-| b[r5+1] = r6
-| b[r5+2] = r0
-| b[r5+3] = r2
-| b[r5+4] = r3
-| b[r5+5] = r3
-| if (r2 == 0) goto <ota_send_msg>
-| r0 = r4 + 198
-| r5 = r2
-| r6 = b[r1+0] (u)
-| b[r0++=1] = r6
-| r6 = b[r1++=1] (u)
-| r3 += r6
-| if (--r5 != 0) goto <ota_send_msg>
-| r0 = r2 + r4
-| r1 = ~r3
-| b[r0+198] = r1
+| sp += -4
+| r3 = <addr>
+| r5 = 0
+| b[r3+0] = r5
+| r4 = 89
+| b[r3+1] = r4
+| b[r3+2] = r0
+| b[r3+3] = r2
+| b[r3+4] = r5
+| b[r3+5] = r5
+| r4 = <addr>
+| if (r2 == 0) goto <+0x44>
+| r0 = r3 + 6
+| r6 = r2
+| r7 = b[r1+0] (u)
+| b[r0++=1] = r7
+| r7 = b[r1++=1] (u)
+| r5 += r7
+| if (--r6 != 0) goto <+0x26>
+| r0 = r2 + r3
+| r1 = ~r5
+| b[r0+6] = r1
 | r0 = 240
 | r1 = r2 + 7
-| b[r4+232] = r0
-| if (r1 != 0) goto <ota_send_msg>
+| b[r4+0] = r0
+| if (r1 != 0) goto <+0x50>
 | r0 = 0
-| goto <ota_send_msg>
-| r0 = r2 + r4
+| goto <+0x84>
+| r0 = r2 + r3
 | r1 = 255
-| b[r0+198] = r1
+| b[r0+6] = r1
 | r0 = 240
-| b[r4+232] = r0
+| b[r4+0] = r0
 | r1 = 7
-| r2 = r4 + 192
 | r0 = 0
 | r5 = 0
-| r3 = 0
-| r6 = b[r2++=1] (u)
+| r2 = 0
+| r6 = b[r3++=1] (u)
 | r6 <<= r5
-| r3 |= r6
+| r2 |= r6
 | r5 += 8
 | r1 += -1
-| if (r< 7) goto 20 <ota_send_msg>
+| if (r<addr>
 | r6 = r0 + r4
-| r7 = r3 & 0x7F
-| b[r6+233] = r7
+| r7 = r2 & 0x7F
+| b[r6+1] = r7
 | r5 += -7
-| r3 = r3 >> 7
+| r2 = r2 >> 7
 | r0 += 1
-| if (r5 > 6) goto -20 <ota_send_msg+0x6E : 200297a >
-| if (r1 != 0) goto <ota_send_msg>
-| if (r5 == 0) goto <ota_send_msg>
+| if (r5 > 6) goto <+0x64>
+| if (r1 != 0) goto <+0x56>
+| if (r5 == 0) goto <+0x84>
 | r1 = r0 + r4
-| r2 = r3 & 0x7F
-| b[r1+233] = r2
+| r2 = r2 & 0x7F
+| b[r1+1] = r2
 | r0 += 1
 | r1 = r0 + r4
 | r2 = 247
-| b[r1+233] = r2
-| r6 = [r4+56]
+| b[r1+1] = r2
+| r10 = <addr>
+| r6 = [r10+0]
+| r2 = <addr>
 | r1 = 1
 | r11 = r0 + 2  #
-| b[r4+8] = r1
-| r8 = 0
+| b[r2+0] = r1
 | r0 = 0
-| if (r11 == 0) goto 174 <ota_send_msg+0x15A : 2002a66 >
-| r5 = 0
-| r9 = <usb >
-| r10 = <sx_out_q >
-| r0 = r11 - r5
-| r7 = 3
+| if (r11 == 0) goto <+0x164>
+| r7 = 0
+| r15 = <addr>
+| r12 = <addr>
+| r13 = <addr>
+| r0 = r11 - r7
+| r5 = 3
 | if (r0 <= 2) {
-| r7 = r0
-| r1 = r7 + 4
-| r12 = <build/felucca_size.ll>
-| if (r7 != 3) {
-| r12 = r1
-| r2 = r5 + 3
+| r5 = r0
+| r1 = r5 + 4
+| r8 = 4
+| if (r5 != 3) {
+| r8 = r1
+| r2 = r7 + 3
 | if (r2 >= r11) {
-| r12 = r1
-| r1 = r5 + r4
-| r15 = b[r1+232] (u)
-| r13 = 0
-| r14 = 0
-| if (r7 >= 2) {
-| r2 = b[r1+233] (u)
-| r14 = r2 << 16
+| r8 = r1
+| r1 = b[r7+r4] (u)
+| r14 = 0  #
+| [sp] = r1
+| r9 = 0
+| if (r5 >= 2) {
+| r1 = r7 + r4
+| r1 = b[r1+1] (u)
+| r9 = r1 << 16
 | if (r0 >= 3) {
-| r0 = b[r1+234] (u)
-| r13 = r0 << 24
-| r0 = [r4+80]
-| r1 = [r4+84]
+| r0 = r7 + r4
+| r0 = b[r0+2] (u)
+| r14 = r0 << 24
+| r0 = [r15+0]
+| r1 = [r12+0]
 | r0 = r0 - r1
-| if (r< 64) goto 40 <ota_send_msg>
-| r1 = b[r9+1] (u)
+| if (r<addr>
+| r1 = b[r13+1] (u)
 | r0 = -1
-| if (r1 == 0) goto 72 <ota_send_msg+0x15A : 2002a66 >
-| r1 = [r4+56]
+| if (r1 == 0) goto <+0x164>
+| r1 = [r10+0]
 | r1 = r1 - r6
-| if (r1 > 200) goto 64 <ota_send_msg+0x15A : 2002a66 >
+| if (r1 > 200) goto <+0x164>
 | r0 = 1
 | r1 = 128
 | r2 = 64
-| call <fm1__p33_op >
-| r0 = [r4+80]
-| r1 = [r4+84]
+| call <fm1__p33_op>
+| r0 = [r15+0]
+| r1 = [r12+0]
 | r0 = r0 - r1
-| if (r0 > 63) goto -40 <ota_send_msg+0x10A : 2002a16 >
-| r0 = r15 << 8
-| r1 = [r4+80]
-| r0 = r0 | r12
+| if (r0 > 63) goto <+0x10C>
+| r0 = [sp]
+| r0 = r0 << 8
+| r1 = [r15+0]
+| r0 = r0 | r8
+| r0 = r0 | r9
 | r0 = r0 | r14
-| r0 = r0 | r13
 | r1 = r1 & 0x3F
-| [r10+r1<<2] = r0
-| [r4+80] += 1
-| r5 += r7
-| if (r5 < r11) goto -158 <ota_send_msg+0xBA : 20029c6 >
+| r2 = <addr>
+| [r2+r1<<2] = r0
+| [r15+0] += 1
+| r7 += r5
+| if (r<addr>
 | r0 = 0
-| b[r4+8] = r8
+| r1 = <addr>
+| r2 = 0
+| b[r1+0] = r2
+| sp += 4
 | {pc, r15-r4} = [sp++]
 ota_show:
-| [--sp] = {rets, r9-r4}
+| [--sp] = {rets, r10-r4}
 | sp += -40
-| r9 = <fm1__tick_col >
-| r6 = r9
-| r2 = b[++r6=144] (u)
+| r10 = <addr>
+| r2 = b[r10+0] (u)
 | r7 = r1
 | r4 = r0
-| r5 = <build/felucca_size.ll>
-| r0 = r5
-| if (r2 != 0) goto 2 <ota_show+0x1E : 2002ae2 >
-| r0 = r2
-| call <lcd_fill >
-| r0 = b[r6+4] (u)
-| r1 = b[r6+0] (u)
+| r5 = 2113
+| r6 = r5
+| if (r2 != 0) goto <+0x1C>
+| r6 = r2
+| r1_r0 = 0  #
+| [sp] = r6
+| r2 = 240
+| r3 = 240
+| call <lcd_fill>
+| r0 = <addr>
+| r0 = b[r0+0] (u)
+| r1 = b[r10+0] (u)
 | r2 = 1
 | [sp+12] = r2
-| if (r1 != 0) goto 2 <ota_show+0x2E : 2002af2 >
+| if (r1 != 0) goto <+0x3C>
 | r5 = r1
-| r1 = -12711  # <_data_load+0xFFFFFFFFFDFECA40 : ffffffffffffce58 >
+| r1 = -12711
 | [sp+8] = r5
-| if (r0 != 0) goto <ota_show>
+| if (r0 != 0) goto <+0x46>
 | r1 = r0
 | r0 = r1.l (u)
 | [sp+4] = r0
-| r5 = <ota_reply_identity.ID>
-| r3 = <AF_M >
+| r5 = <addr>
+| r3 = <addr>
 | r0 = 0
 | r1 = 92
 | r2 = 240
 | [sp] = r5
-| call <draw_text_line >
-| r8 = <AF_S >
-| if (r4 > 8) goto 66 <ota_show+0xA0 : 2002b64 >
-| r0 = b[r9+152] (u)
-| r1 = b[r9+144] (u)
+| call <draw_text_line>
+| r9 = <addr>
+| r8 = <addr>
+| if (r4 > 8) goto <+0xB4>
+| r0 = b[r9+0] (u)
+| r1 = b[r10+0] (u)
 | r2 = 1
-| r2 = 2113  # <build/felucca_size.ll+0x840 : 840 >
+| r2 = 2113
 | [sp+12] = r2
-| if (r1 != 0) goto <ota_show>
+| if (r1 != 0) goto <+0x86>
 | r2 = r1
-| r1 = -4259  # <_data_load+0xFFFFFFFFFDFEEB44 : ffffffffffffef5c >
+| r1 = -4259
 | [sp+8] = r2
-| if (r0 != 0) goto 2 <ota_show+0x7C : 2002b40 >
+| if (r0 != 0) goto <+0x90>
 | r1 = r0
 | r0 = r1.l (u)
 | [sp+4] = r0
 | if (r4 >= 6) {
 | r4 = 0
-| r0 = <ota_show.STEP >
+| r0 = <addr>
 | r3 = [r0+r4<<2]
 | r0 = 0
 | r1 = 124
 | r2 = 240
 | r3 = r8  #
 | [sp] = r3
-| call <draw_text_line >
-| goto 170 <ota_show+0x14A : 2002c0e >
-| if (r7 != 1) goto 14 <ota_show+0xB2 : 2002b76 >
+| call <draw_text_line>
+| goto <+0x15E>
+| if (r7 != 1) goto <+0xC6>
 | r0 = sp + 16
-| r1 = <ota_reply_identity.ID>
-| call <str_cpy >
-| goto 76 <ota_show+0xFE : 2002bc2 >
+| r1 = <addr>
+| call <str_cpy>
+| goto <+0x112>
 | r0 = sp + 16
-| r1 = 33616793 <ota_reply_identity.ID+0x6A : 200f398 >
-| call <str_cpy >
+| r1 = <addr>
+| call <str_cpy>
 | r0 = -1
 | r1 = sp + 16
 | r1 += r0
 | r1 = b[r1+1] (u)
 | r0 += 1
-| if (r1 != 0) goto -10 <ota_show+0xC0 : 2002b84 >
+| if (r1 != 0) goto <+0xD4>
 | r1 = 0x0 - r7
-| if (r1 < 10) goto 18 <ota_show+0xE4 : 2002ba8 >
+| if (r<addr>
 | r2 = r0 + 1
 | r3 = 10
 | r3 = r1 / r3 (u)
@@ -2877,16 +2922,16 @@ ota_show:
 | b[++r2=r0] = r1
 | r0 = 0
 | b[r2+1] = r0
-| r0 = b[r9+152] (u)
-| r1 = b[r9+144] (u)
+| r0 = b[r9+0] (u)
+| r1 = b[r10+0] (u)
 | r2 = 1
-| r2 = 2113  # <build/felucca_size.ll+0x840 : 840 >
+| r2 = 2113
 | [sp+12] = r2
-| if (r1 != 0) goto <ota_show>
+| if (r1 != 0) goto <+0x126>
 | r2 = r1
-| r1 = -4259  # <_data_load+0xFFFFFFFFFDFEEB44 : ffffffffffffef5c >
+| r1 = -4259
 | [sp+8] = r2
-| if (r0 != 0) goto 2 <ota_show+0x11C : 2002be0 >
+| if (r0 != 0) goto <+0x130>
 | r1 = r0
 | r0 = r1.l (u)
 | [sp+4] = r0
@@ -2896,68 +2941,69 @@ ota_show:
 | r2 = 240
 | r3 = r8  #
 | [sp] = r3
-| call <draw_text_line >
-| r0 = 1500 <build/felucca_size.ll+0x5DC : 5dc >
-| r1 = <build/felucca_size.ll>
+| call <draw_text_line>
+| r0 = 1500
+| r1 = 67588
 | r2 = [r1+0]
 | r3 = [r1+0]
 | r3 = r3 - r2
 | r3 = r3 >> 6
-| if (r3 < 375) goto -10 <ota_show+0x13C : 2002c00 >
-| if (--r0 != 0) goto -16 <ota_show+0x13A : 2002bfe >
+| if (r<addr>
+| if (--r0 != 0) goto <+0x14E>
 | sp += 40
-| {pc, r9-r4} = [sp++]
+| {pc, r10-r4} = [sp++]
 ota_show.STEP:
 ota_stage_head.NAME:
 ota_take:
 | [--sp] = {rets, r7-r4}
-| r3 = <fm1__tick_col >
-| r0 = b[r3+6] (u)
-| if (r0 == 0) goto <ota_take>
-| r0 = [r3+100]
+| r3 = <addr>
+| r0 = b[r3+0] (u)
+| if (r0 == 0) goto <+0x9C>
+| r0 = <addr>
+| r0 = [r0+0]
 | r4 = 0
-| r5 = <sx_frame >
-| r2 = <ota_dec >
+| r5 = <addr>
+| r2 = <addr>
 | r6 = 0
 | r1 = 0
-| goto <ota_take>
+| goto <+0x46>
 | r7 = b[r5++=1] (u)
 | r0 += -1
 | r7 &= 4294967167
 | r7 <<= r6
 | r6 += 7
 | r4 |= r7
-| if (r< 8) goto 14 <ota_take>
+| if (r<addr>
 | if (r1 <= 639) {
 | b[r1+r2] = r4
 | r6 += -8
 | r4 = r4 >> 8
 | r1 += 1
-| if (r0 != 0) goto <ota_take>
+| if (r0 != 0) goto <+0x28>
 | r0 = 0
 | r4 = r1 + -7
-| b[r3+6] = r0
-| if (r4 > 633) goto <ota_take>
+| b[r3+0] = r0
+| if (r4 > 633) goto <+0x9A>
 | r3 = b[r2+0] (u)
-| if (r3 != 0) goto <ota_take>
+| if (r3 != 0) goto <+0x9A>
 | r3 = b[r2+1] (u)
-| if (r3 != 89) goto <ota_take>
+| if (r3 != 89) goto <+0x9A>
 | r3 = b[r2+4] (u)
 | r4 = b[r2+3] (u)
 | r4 <= insert(r3, p:8, l:8)  #
 | r5 = b[r2+5] (u)
 | r4 <= insert(r5, p:16, l:8)
 | r3 = r4 + 7
-| if (r3 != r1) goto <ota_take>
+| if (r3 != r1) goto <+0x9A>
 | r0 = 255
-| if (r1 < 8) goto 22 <ota_take+0x8A : 20028fa >
+| if (r<addr>
 | r0 = 0
 | r3 = 7
 | r4 = r3 + r2
 | r4 = b[r4+-1] (u)
 | r3 += 1
 | r0 += r4
-| if (r1 != r3) goto <ota_take>
+| if (r1 != r3) goto <+0x7C>
 | r3 = 255
 | r0 = r3 & ~r0
 | r2 += r1
@@ -2972,9 +3018,9 @@ ota_unstage:
 | [--sp] = {rets, r4}
 | r4 = 0
 | r0 = r4 + 0xE0000
-| call <ota_erase >
+| call <ota_erase>
 | r4 = r4 + 4096
-| if (r< 20480) goto -18 <ota_unstage>
+| if (r<addr>
 | {pc, r4} = [sp++]
 sie_rd:
 | [--sp] = {rets, r4}
@@ -2982,20 +3028,20 @@ sie_rd:
 | r1 = r0  #
 | r3 = [r2+0]
 | r0 = 0
-| if ((r3 & 4) == 0) goto 62 <sie_rd+0x4E : 20012e2 >
+| if ((r3 & 4) == 0) goto <+0x4E>
 | r1 = r1 << 8
-| r3 = 16760576 <build/felucca_size.ll+0xFFBF00 : ffbf00 >
+| r3 = 16760576
 | r1 &= r3
 | r1 |= 16384
 | [r2+4] = r1
 | csync
-| r3 = -20000 <_data_load+0xFFFFFFFFFDFEADC8 : ffffffffffffb1e0 >
-| r1 = <usb >
+| r3 = -20000
+| r1 = <addr>
 | r4 = [r2+4]
 | r4 = r4.l (s)
-| ifs (r< 0) goto 20 <sie_rd>
+| ifs (r<addr>
 | r3 += 1
-| if (r3 != 0) goto -12 <sie_rd+0x2A : 20012be >
+| if (r3 != 0) goto <+0x2A>
 | r2 = [r1+36]
 | r2 += 1
 | [r1+36] = r2
@@ -3010,21 +3056,21 @@ sie_rd:
 sie_wr:
 | r2 = 0x11800
 | r3 = [r2+0]
-| if ((r3 & 4) == 0) goto <sie_wr>
+| if ((r3 & 4) == 0) goto <+0x40>
 | r0 = r0 << 8
-| r3 = 16776960 <build/felucca_size.ll+0xFFFF00 : ffff00 >
+| r3 = 16776960
 | r0 &= r3
 | r1 = r1.b0 (u)
 | r0 |= r1
 | [r2+4] = r0
 | csync
-| r1 = -20000 <_data_load+0xFFFFFFFFFDFEADC8 : ffffffffffffb1e0 >
-| r0 = <usb >
+| r1 = -20000
+| r0 = <addr>
 | r3 = [r2+4]
 | r3 = r3.l (s)
-| ifs (r< 0) goto 20 <sie_wr>
+| ifs (r<addr>
 | r1 += 1
-| if (r1 != 0) goto <sie_wr>
+| if (r1 != 0) goto <+0x26>
 | r1 = [r0+36]
 | r1 += 1
 | [r0+36] = r1
@@ -3041,8 +3087,8 @@ st_read:
 | r6 = r1
 | r7 = r0
 | r8 = 0
-| if (r5 == 0) goto <st_read>
-| r9 = <fl_read_ram >
+| if (r5 == 0) goto <+0x40>
+| r9 = <addr>
 | cli
 | [sp] = r9
 | r4 = r5
@@ -3055,12 +3101,12 @@ st_read:
 | call r3
 | csync
 | sti
-| if (r0 != 0) goto 10 <st_read+0x3E : 2002656 >
+| if (r0 != 0) goto <+0x3E>
 | r5 = r5 - r4
 | r6 += r4
 | r7 += r4
-| if (r5 != 0) goto <st_read>
-| goto <st_read>
+| if (r5 != 0) goto <+0x14>
+| goto <+0x40>
 | r8 = r0
 | r0 = r8
 | sp += 4
@@ -3069,227 +3115,210 @@ uac_ep4_reset:
 | [--sp] = rets
 | r0 = 14
 | r1 = 4
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 72
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 18
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 18
 | r1 = 64
 | {rets} = [sp++]
-| goto <sie_wr >
+| goto <addr>
 uac_render_start:
-| [--sp] = {rets, r6-r4}
-| r1 = 284 <build/felucca_size.ll+0x11C : 11c >
-| r0 = <fm1__tick_col >
-| r1 = b[r0+r1] (u)
-| if (r1 == 0) goto <uac_render_start>
-| r1 = <usb >
+| [--sp] = {rets, r7-r4}
+| r0 = <addr>
+| r1 = b[r0+0] (u)
+| if (r1 == 0) goto <+0x4C>
+| r1 = <addr>
 | r1 = b[r1+1] (u)
-| if (r1 == 0) goto <uac_render_start>
-| r1 = 286 <build/felucca_size.ll+0x11E : 11e >
-| r1 = b[r0+r1] (u)
+| if (r1 == 0) goto <+0x4C>
+| r1 = b[r0+2] (u)
 | r2 = 1
-| if (r1 != 0) goto 2 <uac_render_start+0x2A : 2000fe4 >
+| if (r1 != 0) goto <+0x1E>
 | r2 = r1
-| r3 = <build/felucca_size.ll>
-| b[r0+r3] = r2
-| if (r1 == 0) goto 58 <uac_render_start+0x6E : 2001028 >
-| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
-| r1 = b[r0+r1] (u)
-| if (r1 == 0) goto 60 <uac_render_start+0x7A : 2001034 >
-| r1 = [r0+64]
-| r2 = [r0+60]
+| b[r0+4] = r2
+| if (r1 == 0) goto <+0x50>
+| r3 = b[r0+1] (u)
+| r2 = <addr>
+| r1 = <addr>
+| if (r3 == 0) goto <+0x56>
+| r1 = [r1+0]
+| r2 = [r2+0]
 | r1 = r1 - r2
-| [r0+292] = r1
-| r2 = [r0+340]
+| [r0+8] = r1
+| r2 = [r0+56]
 | if (r1 < r2) {
-| [r0+340] = r1
-| r2 = [r0+344]
+| [r0+56] = r1
+| r2 = [r0+60]
 | if (r1 > r2) {
-| [r0+344] = r1
-| {pc, r6-r4} = [sp++]
-| r1 = <build/felucca_size.ll>
-| r2 = 0
-| b[r0+r1] = r2
-| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
-| r2 = 0
-| b[r0+r1] = r2
-| {pc, r6-r4} = [sp++]
-| r3 = 511  # <build/felucca_size.ll+0x1FE : 1fe >
-| r1 = [r0+60]
-| r2 = 0
-| r4 = <ua_ring >
-| r5 = 0
-| r6 = r1 + r5
-| r6 &= r3
-| r5 += 1
-| [r4+r6<<2] = r2
-| if (r5 != 104) goto -14 <uac_render_start+0x8A : 2001044 >
-| r1 += 104
-| [r0+64] = r1
-| r1 = 104
-| [r0+292] = r1
-| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
-| r2 = 1
-| b[r0+r1] = r2
-| {pc, r6-r4} = [sp++]
+| [r0+60] = r1
+| {pc, r7-r4} = [sp++]
+| r1 = 0
+| b[r0+4] = r1
+| r1 = 0
+| b[r0+1] = r1
+| {pc, r7-r4} = [sp++]
+| r4 = 511
+| r2 = [r2+0]
+| r3 = 0
+| r5 = <addr>
+| r6 = 0
+| r7 = r2 + r6
+| r7 &= r4
+| r6 += 1
+| [r5+r7<<2] = r3
+| if (r6 != 104) goto <+0x66>
+| r2 += 104
+| [r1+0] = r2
+| [r0+8] = 0x68
+| r1 = 1
+| b[r0+1] = r1
+| {pc, r7-r4} = [sp++]
 uac_service:
 | [--sp] = {rets, r10-r4}
-| r10 = <usb >
+| r0 = <addr>
+| r1 = b[r0+0] (u)
+| if (r1 == 0) goto <+0x16A>
+| r0 = b[r0+1] (u)
+| if (r0 == 0) goto <+0x16A>
+| r10 = <addr>
 | r0 = b[r10+0] (u)
-| if (r0 == 0) goto 380 <uac_service+0x18C : 2001470 >
-| r0 = b[r10+1] (u)
-| if (r0 == 0) goto 372 <uac_service+0x18C : 2001470 >
-| r0 = 284 <build/felucca_size.ll+0x11C : 11c >
-| r9 = <fm1__tick_col >
-| r0 = b[r9+r0] (u)
-| if (r0 == 0) goto 354 <uac_service+0x18C : 2001470 >
+| if (r0 == 0) goto <+0x16A>
 | r0 = 14
 | r1 = 4
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 17
-| call <sie_rd >
-| if ((r0 & 1) != 0) goto <uac_service>
-| r1 = 287 <build/felucca_size.ll+0x11E : 11e >
-| r1 = b[r9+r1] (u)
-| if (r1 == 0) goto 22 <uac_service+0x5C : 2001340 >
+| call <sie_rd>
+| if ((r0 & 1) != 0) goto <+0x88>
+| r1 = b[r10+3] (u)
+| if (r1 == 0) goto <+0x48>
 | if ((r0 & 0x4) != 0) {
-| r0 = r9 + 324
-| [r0+0] += 1
-| r0 = 286 <build/felucca_size.ll+0x11E : 11e >
-| r1 = 1
-| b[r9+r0] = r1
+| [r10+40] += 1
 | r0 = 1
-| r1 = r9 + 284
-| b[r1+3] = r0
+| b[r10+2] = r0
+| r0 = 1
+| b[r10+3] = r0
 | r0 = 0
-| b[r1+5] = r0
-| r0 = [r1+12]
+| b[r10+5] = r0
+| r0 = [r10+12]
 | r1 = r0 + 100
 | if (r1 <= 999) {
 | r0 = 44
 | r1 = r0 + -900
 | r0 = 45
-| [r9+296] = r1
-| r1 = 285 <build/felucca_size.ll+0x11C : 11c >
-| r1 = b[r9+r1] (u)
-| if (r1 == 0) goto 62 <uac_service+0xC6 : 20013aa >
-| r1 = [r9+292]
-| if (r1 <= 128) goto 74 <uac_service+0xDA : 20013be >
-| r1 = r9 + 332
-| r2 = 1
-| goto 80 <uac_service+0xE8 : 20013cc >
-| r0 = <build/felucca_size.ll>
-| r1 = b[r9+r0] (u)
-| if (r1 == 255) goto 232 <uac_service+0x18C : 2001470 >
-| r1 += 1
-| r2 = r1.b0 (u)
-| b[r9+r0] = r1
-| if (r2 != 40) goto 220 <uac_service+0x18C : 2001470 >
-| r0 += -3
-| r0 = b[r9+r0] (u)
-| if (r0 == 0) goto 212 <uac_service+0x18C : 2001470 >
+| [r10+12] = r1
+| r2 = b[r10+1] (u)
+| r1 = <addr>
+| if (r2 == 0) goto <+0xAE>
+| r2 = [r10+8]
+| if (r<addr>
+| r2 = r10 + 48
+| r3 = 1
+| goto <+0xCA>
+| r0 = b[r10+5] (u)
+| if (r0 == 255) goto <+0x16A>
+| r0 += 1
+| r1 = r0.b0 (u)
+| b[r10+5] = r0
+| if (r1 != 40) goto <+0x16A>
+| r0 = b[r10+2] (u)
+| if (r0 == 0) goto <+0x16A>
 | r0 = 0
-| r1 = r9 + 284
-| b[r1+2] = r0
-| [r1+44] += 1
+| b[r10+2] = r0
+| [r10+44] += 1
 | {pc, r10-r4} = [sp++]
-| r1 = 0
-| r2 = 0
-| r3 = r10 + 208
-| [r3+r2<<2] = r1
-| r2 += 1
-| if (r0 != r2) goto -14 <uac_service+0xCA : 20013ae >
-| goto <uac_service>
-| r1 = [r9+292]
-| if (r1 > 79) goto 12 <uac_service+0xEE : 20013d2 >
-| r1 = r9 + 336
-| r2 = -1
-| [r1+0] += 1
-| r0 += r2
-| r1 = [r9+60]
-| r2 = [r9+64]
-| r8 = r2 - r1
-| r3 = 0
-| r2 = umin(r8, r0)
-| if (r2 == 0) goto <uac_service>
-| r7 = 511 <build/felucca_size.ll+0x1FE : 1fe >
-| r6 = <ua_ring >
-| r5 = r1 + r3
-| r5 &= r7
-| r5 = [r6+r5<<2]
-| r4 = r10 + 208
-| [r4+r3<<2] = r5
+| r3_r2 = 0
+| [r1+r3<<2] = r2
 | r3 += 1
-| if (r3 < r2) goto -22 <uac_service+0x10C : 20013f0 >
-| r3 = r2
-| if (r8 >= r0) goto <uac_service>
-| r4 = r2 << 2
-| r4 += r10
-| r8 = r4 + 204
-| r7 = r9 + 300
-| r6 = r7
-| if (r2 == 0) goto 2 <uac_service+0x13A : 200141e >
-| r6 = r8
-| r6 = [r6+0]
-| [r7+16] += 1
-| if (r3 >= r0) goto <uac_service>
-| r7 = r0 - r3
-| r3 = r3 << 2
-| r3 += r10
-| r3 = r3 + 208
-| [r3++=4] = r6
-| if (--r7 != 0) goto -6 <uac_service+0x14E : 2001432 >
-| r3 = r10 + 204
-| r3 = [r3+r0<<2]
-| r4 = r9 + 300
-| r1 += r2  #
-| [r4+0] = r3
-| [r9+60] = r1
-| [r4+8] += 1
-| [r4+12] += r0
+| if (r0 != r3) goto <+0xB0>
+| goto <+0x152>
+| r2 = [r10+8]
+| if (r2 > 79) goto <+0xD0>
+| r2 = r10 + 52
+| r3 = -1
+| [r2+0] += 1
+| r0 += r3
+| r8 = <addr>
+| r3 = [r8+0]
+| r2 = <addr>
+| r2 = [r2+0]
+| r9 = r2 - r3
+| r5 = umin(r9, r0)
+| if (r5 == 0) goto <+0x10E>
+| r2 = 0
+| r6 = 511
+| r7 = <addr>
+| r4 = r3 + r2
+| r4 &= r6
+| r4 = [r7+r4<<2]
+| [r1+r2<<2] = r4
+| r2 += 1
+| if (r<addr>
+| r6 = r5
+| goto <+0x110>
+| r6 = 0
+| if (r9 >= r0) goto <+0x138>
+| r2 = r5 << 2
+| r2 += r1
+| r2 += -4
+| r7 = r10 + 16
+| if (r5 == 0) goto <+0x122>
+| r7 = r2
+| r7 = [r7+0]
+| [r10+32] += 1
+| if (r6 >= r0) goto <+0x138>
+| r2 = r0 - r6
+| r4 = r6 << 2
+| r6 = r4 + r1
+| [r6++=4] = r7
+| if (--r2 != 0) goto <+0x132>
+| r2 = r1 + -4
+| r2 = [r2+r0<<2]
+| [r10+16] = r2
+| r2 = r5 + r3
+| [r8+0] = r2
+| [r10+24] += 1
+| [r10+28] += r0
 | csync
-| r1 = r10 + 208
-| r2 = <build/felucca_size.ll>
+| r2 = 71732
 | [r2+4] = r1
 | r0 = r0 << 2
 | [r2+0] = r0
 | csync
 | r0 = 17
 | r1 = 1
-| call <sie_wr >
+| call <sie_wr>
 | {pc, r10-r4} = [sp++]
 uac_tap:
 | [--sp] = {rets, r12-r4}
-| r8 = <fm1__tick_col >
-| r9 = [r8+64]
-| r1 = <build/felucca_size.ll>
-| r1 = b[r8+r1] (u)
-| if (r1 == 0) goto <uac_tap>
-| r1 = [r8+60]
-| r1 = r1 - r9
-| r1 = r1 & 0xFFFFFFE0
-| if (r1 != -512) goto <uac_tap>
-| r0 = r8 + 320
-| [r0+0] += 1
+| r8 = <addr>
+| r9 = [r8+0]
+| r1 = <addr>
+| r2 = b[r1+4] (u)
+| if (r2 == 0) goto <+0x88>
+| r2 = <addr>
+| r2 = [r2+0]
+| r2 = r2 - r9
+| r2 = r2 & 0xFFFFFFE0
+| if (r2 != -512) goto <+0x30>
+| [r1+36] += 1
 | {pc, r12-r4} = [sp++]
 | r3 = 0
-| r4 = -32768 <_data_load+0xFFFFFFFFFDFE7BE8 : ffffffffffff8000 >
-| r10 = 2147418112 <_data_load+0x7DFDFBE8 : 7fff0000 >
-| r11 = 511 <build/felucca_size.ll+0x1FE : 1fe >
-| r12 = <ua_ring >
+| r4 = -32768
+| r10 = 2147418112
+| r11 = 511
+| r12 = <addr>
 | r2 = r9
 | r5 = r0
 | r7 = [++r5=r3]
 | r1 = smax(r7, r4)
 | r6 = r1.l (u)
-| r1 = 32767 <build/felucca_size.ll+0x7FFE : 7ffe >
+| r1 = 32767
 | ifs (r7 < 32768) {
 | r1 = r6
 | r7 = [r5+4]
@@ -3303,12 +3332,12 @@ uac_tap:
 | [r12+r5<<2] = r1
 | r3 += 8
 | r2 += 1
-| if (r3 != 256) goto <uac_tap>
+| if (r3 != 256) goto <+0x48>
 | r0 = r9 + 32
-| [r8+64] = r0
+| [r8+0] = r0
 | {pc, r12-r4} = [sp++]
 usb_detach:
-| r0 = <usb >
+| r0 = <addr>
 | r1 = 1
 | b[r0+64] = r1
 | r1 = 0
@@ -3320,7 +3349,7 @@ usb_detach:
 | rts
 usb_start:
 | [--sp] = {rets, r6-r4}
-| r4 = <usb >
+| r4 = <addr>
 | r0 = 0
 | r5 = 0x11800  #
 | [r4+36] = r0
@@ -3334,22 +3363,22 @@ usb_start:
 | r6 = [r2+0]
 | r6 = r6 - r3
 | r6 = r6 >> 6
-| if (r< 375) goto -10 <usb_start>
-| if (--r1 != 0) goto <usb_start>
+| if (r<addr>
+| if (--r1 != 0) goto <+0x22>
 | r1 = r2 + -2036
 | [r1+0] &= 0xFFFFFFFC
-| r1 = <ep0buf >
-| r3 = 17928  # <build/felucca_size.ll+0x4608 : 4608 >
+| r1 = <addr>
+| r3 = 17928
 | [r5+24] = r1
 | r2 = 0
 | [r2+r3<<2] = r1
 | r2 += 8
-| if (r2 != 24) goto <usb_start>
+| if (r2 != 24) goto <+0x48>
 | [r5+60] = r1
 | [r0+0] |= 0x600
 | [r0+0] &= 0xFFFFF7FF
 | [r0+0] |= 0x1000
-| r1 = -16438 <_data_load+0xFFFFFFFFFDFEBBB2 : ffffffffffffbfca >
+| r1 = -16438
 | [r5+0] &= r1
 | r1 = 0
 | [r5+4] = r1
@@ -3360,22 +3389,22 @@ usb_start:
 | r0 = 1
 | r1 = 96
 | r6 = 1
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 11
 | r1 = 7
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 7
 | r1 = 1
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 8
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 9
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | r0 = 10
 | r1 = 0
-| call <sie_wr >
+| call <sie_wr>
 | [r5+0] &= 0xFF07FFFF
 | r0 = [r4+36]
 | if (r0 >= 3) {

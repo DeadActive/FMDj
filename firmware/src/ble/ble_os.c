@@ -32,7 +32,7 @@ typedef struct {
     uint32_t stack[STACK_WORDS];
 } task_t;
 
-typedef struct { uint32_t used, periodic, period, due; void (*fn)(void *); void *priv; } tmr_t;
+typedef struct { uint32_t used, periodic, period, due; void (*fn)(void *); void *priv; const char *task; } tmr_t;
 typedef struct { int16_t count; uint8_t magic, owner; } sem_t;   /* lives inside the SDK's OS_SEM buffer */
 #define SEM_MAGIC 0x5Eu
 
@@ -241,8 +241,21 @@ int os_taskq_post_type(const char *name, int type, int argc, int *argv)
 #ifdef BLE_OS_HOST
 void *ble_os_host_ptr(uint32_t w);                 /* host test: a 32-bit word -> pointer (pointers are 64-bit there) */
 #define PTR_OF(w) ble_os_host_ptr(w)
+static void *host_words[64];                       /* our own posts of function pointers: handles 0x1000 + i */
+static uint32_t host_nwords;
+static uint32_t WORD_OF(void *p)
+{
+    uint32_t i;
+    for (i = 0; i < host_nwords; i++)
+        if (host_words[i] == p)
+            return 0x1000u + i;
+    host_words[host_nwords] = p;
+    return 0x1000u + host_nwords++;
+}
+void *ble_os_host_word_ptr(uint32_t w) { return w >= 0x1000u && w < 0x1000u + host_nwords ? host_words[w - 0x1000u] : 0; }
 #else
 #define PTR_OF(w) ((void *)(uintptr_t)(w))         /* pi32v2: pointers are the 32-bit words the libraries post */
+#define WORD_OF(p) ((uint32_t)(uintptr_t)(p))
 #endif
 static void run_callback(const uint32_t *w, uint32_t n)
 {
@@ -349,6 +362,7 @@ static unsigned short tmr_add(void *priv, void (*fn)(void *), unsigned int ms, u
     for (i = 0; i < NTIMER; i++)
         if (!timers[i].used) {
             timers[i].used = 1;
+            timers[i].task = 0;
             timers[i].periodic = periodic;
             timers[i].period = ms;
             timers[i].due = ble_os_now_ms() + ms;
@@ -362,6 +376,36 @@ unsigned short sys_timer_add(void *priv, void (*func)(void *priv), unsigned int 
 unsigned short sys_timeout_add(void *priv, void (*func)(void *priv), unsigned int msec) { return tmr_add(priv, func, msec, 0); }
 void sys_timer_del(unsigned short id) { if (id && id <= NTIMER) timers[id - 1u].used = 0; }
 void sys_timeout_del(unsigned short id) { sys_timer_del(id); }
+/* bound to a task: the callback runs inside that task, as a Q_CALLBACK message (the SDK's sys_timer_add_to_task) */
+unsigned short sys_timer_add_to_task(const char *task_name, void *priv, void (*func)(void *priv), unsigned int msec)
+{
+    unsigned short id = tmr_add(priv, func, msec, 1);
+    if (id)
+        timers[id - 1u].task = task_name;
+    return id;
+}
+unsigned short sys_timeout_add_to_task(const char *task_name, void *priv, void (*func)(void *priv), unsigned int msec)
+{
+    unsigned short id = tmr_add(priv, func, msec, 0);
+    if (id)
+        timers[id - 1u].task = task_name;
+    return id;
+}
+void *sys_timer_get_user_data(unsigned short id) { return id && id <= NTIMER ? timers[id - 1u].priv : 0; }
+void sys_timer_set_user_data(unsigned short id, void *priv) { if (id && id <= NTIMER) timers[id - 1u].priv = priv; }
+void sys_timer_re_run(unsigned short id)
+{
+    if (id && id <= NTIMER && timers[id - 1u].used)
+        timers[id - 1u].due = ble_os_now_ms() + timers[id - 1u].period;
+}
+unsigned short usr_timeout_add(void *priv, void (*func)(void *priv), unsigned int msec, uint8_t priority)
+{
+    (void)priority;
+    return tmr_add(priv, func, msec, 0);
+}
+void usr_timeout_del(unsigned short id) { sys_timer_del(id); }
+void usr_timer_del(unsigned short id) { sys_timer_del(id); }
+
 int sys_timer_modify(unsigned short id, unsigned int msec)
 {
     if (!id || id > NTIMER || !timers[id - 1u].used)
@@ -379,11 +423,21 @@ static uint32_t run_timers(void)
         if (t->used && (int32_t)(now - t->due) >= 0) {
             void (*fn)(void *) = t->fn;
             void *priv = t->priv;
+            const char *task = t->task;
             if (t->periodic)
                 t->due += t->period ? t->period : 1u;
             else
                 t->used = 0;
-            fn(priv);
+            if (task) {                            /* run in its task: Q_CALLBACK {fn, 1 argument, priv} */
+                int w[3];
+                w[0] = (int)WORD_OF((void *)fn);
+                w[1] = 1;
+                w[2] = (int)(uint32_t)(uintptr_t)priv;
+                if (os_taskq_post_type(task, BLE_SDK_Q_CALLBACK, 3, w) == 14)
+                    fn(priv);                      /* (no such task: run here) */
+            } else {
+                fn(priv);
+            }
             n++;
         }
     }

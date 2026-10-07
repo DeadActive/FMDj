@@ -16,17 +16,102 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent.parent
 SDK = Path(os.environ.get("AC79_BT_SDK", "~/Downloads/fw-AC79_AIoT_SDK-release-AC79NN_SDK_V1.2.0")).expanduser()
 LIBS = ["cpu/wl82/liba/btctrler.a", "cpu/wl82/liba/btstack.a", "cpu/wl82/liba/wl_rf_common.a",
-        "cpu/wl82/liba/crypto_toolbox_Osize.a"]
+        "cpu/wl82/liba/crypto_toolbox_Osize.a",
+        "cpu/wl82/liba/lib_ccm_aes.a", "include_lib/newlib/pi32v2-lib/libcompiler_rt.a"]   # AES-CCM, soft float
+# single members of archives that are too entangled to link whole (system.a brings the SDK's own OS, cpu.a its
+# start-up): extracted after the archive's hash is checked
+MEMBERS = {"cpu/wl82/liba/system.a": ["lbuf.c.o", "circular_buf.c.o"],
+           "cpu/wl82/liba/cpu.a": ["wlc.c.o", "encryption.c.o"]}
+# The SDK's BT config sources (Apache-2.0), compiled from the SDK (mounted at /sdk) against our
+# firmware/src/ble/sdkcfg/app_config.h (BLE central only): the libraries' config_* / CONFIG_* / log_tag_const_*
+# constants with the SDK's own types and values.
+SDK_CONFIG_SOURCES = ["apps/common/config/log_config/lib_btctrler_config.c", "apps/common/config/bt_profile_config.c"]
+SDK_CFLAGS = ["-mcpu=r3", "-Os", "-DSUPPORT_MS_EXTENSIONS", "-DCONFIG_CPU_WL82", "-DCONFIG_FREE_RTOS_ENABLE",
+              "-DCONFIG_THREAD_ENABLE", "-D__GCC_PI32V2__", "-DCONFIG_NO_SDRAM_ENABLE", "-DCONFIG_BT_ENABLE=1",
+              "-Ifirmware/src/ble/sdkcfg",
+              # demo_ble's include list (apps/demo/demo_ble/board/wl82/Makefile INCLUDES), minus its app_config.h dir
+              "-I/sdk/include_lib/c++",
+              "-I/sdk/include_lib/c++/include",
+              "-I/sdk/include_lib/newlib/include",
+              "-I/sdk/include_lib/c++/simple_pthread",
+              "-I/sdk/include_lib",
+              "-I/sdk/include_lib/driver",
+              "-I/sdk/include_lib/driver/device",
+              "-I/sdk/include_lib/driver/cpu/wl82",
+              "-I/sdk/include_lib/system",
+              "-I/sdk/include_lib/system/generic",
+              "-I/sdk/include_lib/btctrler",
+              "-I/sdk/include_lib/btctrler/port/wl82",
+              "-I/sdk/include_lib/update",
+              "-I/sdk/include_lib/btstack/third_party/common",
+              "-I/sdk/include_lib/btstack/third_party/rcsp",
+              "-I/sdk/include_lib/utils",
+              "-I/sdk/include_lib/utils/syscfg",
+              "-I/sdk/include_lib/utils/event",
+              "-I/sdk/include_lib/media",
+              "-I/sdk/include_lib/media/cpu/wl82",
+              "-I/sdk/apps",
+              "-I/sdk/apps/common",
+              "-I/sdk/apps/common/include",
+              "-I/sdk/apps/common/config/include",
+              "-I/sdk/include_lib/btstack",
+              "-I/sdk/include_lib/net",
+              "-I/sdk/include_lib/net/lwip_2_2_0/lwip/src/include",
+              "-I/sdk/include_lib/net/lwip_2_2_0/lwip/src/include/lwip",
+              "-I/sdk/include_lib/net/lwip_2_2_0/lwip/port",
+              "-I/sdk/include_lib/net/lwip_2_2_0/lwip/app",
+              "-I/sdk/apps/common/ble/include",
+              "-I/sdk/include_lib/utils/btmesh",
+              "-I/sdk/include_lib/utils/btmesh/adaptation"]
+
 PINS = {           # AC79NN_SDK_V1.2.0 (`ble_libs.py pin`); a different library fails the build
     "cpu/wl82/liba/btctrler.a": "885cd53747753488b380f761318bf30d691f75541dd28adc72457690aa51506a",
     "cpu/wl82/liba/btstack.a": "d4c02f42e1be97a5288ecbcb5d42e6d0727e2ca4ffa2e0e2e6bb2ae61fede4bc",
     "cpu/wl82/liba/wl_rf_common.a": "1e6f7cdf0f0956282d251cdf23dffc2dae39c4ca498cb314801dde35b00e1769",
     "cpu/wl82/liba/crypto_toolbox_Osize.a": "373251c39f8de0851204b623601b348254023e98b3d0b062ecab743b0c3aa35e",
+    "cpu/wl82/liba/system.a": "a71bdc75e5afbcffaf7d79bc2b27f2b65fec63d94d2261b584744d3e9b9098ea",
+    "cpu/wl82/liba/cpu.a": "fe18129bfee7758074c486b2d33b2ed59a8c365600362d982992677c47821b2a",
+    "cpu/wl82/liba/lib_ccm_aes.a": "bd3dd110197ae0084826538bfb5e432a6fadb3a001acadfdbd5f3a409fb5da2c",
+    "include_lib/newlib/pi32v2-lib/libcompiler_rt.a": "141997ab6977c0c4abfb857bc32a897eb345f8d593e27e74c33bdebcf3fd5009",
 }
 
 
 def sha(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def ar_members(path):
+    """GNU ar: {name: bytes} (the "//" long-name table resolved)"""
+    data, out, longnames, i = path.read_bytes(), {}, b"", 8
+    if data[:8] != b"!<arch>\n":
+        sys.exit(f"ble_libs: {path} is not an ar archive")
+    while i + 60 <= len(data):
+        name, size = data[i:i + 16].decode().strip(), int(data[i + 48:i + 58].decode().strip())
+        body = data[i + 60:i + 60 + size]
+        if name == "//":
+            longnames = body
+        elif name.startswith("/") and name[1:].isdigit():
+            off = int(name[1:])
+            out[longnames[off:longnames.index(b"/\n", off)].decode()] = body
+        elif name not in ("/", "/SYM64/"):
+            out[name.rstrip("/")] = body
+        i += 60 + size + (size & 1)
+    return out
+
+
+def members(outdir):
+    """extract MEMBERS (archive hashes checked) into outdir; their paths"""
+    paths = []
+    for rel, names in MEMBERS.items():
+        p = SDK / rel
+        if rel not in PINS or sha(p) != PINS[rel]:
+            sys.exit(f"ble_libs: {rel} missing or not the pinned archive")
+        found = ar_members(p)
+        for n in names:
+            q = Path(outdir) / n
+            q.write_bytes(found[n])
+            paths.append(q)
+    return paths
 
 
 def libs():

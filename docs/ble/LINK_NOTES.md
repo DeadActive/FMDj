@@ -70,8 +70,67 @@ ignored.
 on the chip key. If the BT libraries reference any of them, the undefined-symbol list shows it. The FM-1's chip key
 is 0x980F, a real JieLi key.
 
-## Still to record (Task 7, at the first `FELUCCA_BLE=1` link)
+## Link facts (Task 7, first `FELUCCA_BLE=1` link, step 1)
 
-- `undefined-step0.txt`: the symbols the BT libraries need from outside, against the core.
-- The `request_irq` handlers for IRQ 29 / 45: whether they are interrupt functions (ending in `rti`) or plain C
-  functions (they then need the `fm1_isr.S` wrapper).
+- **How the libraries are linked:** they are bitcode and go through `ld --plugin LLVMgold.so` (`lto-wrapper` is
+  only a Python wrapper for that) with `mcpu=r3` and `-pi32v2-large-program=true`. They sit inside
+  `--start-group … --end-group`.
+- **What else is linked:**
+  - Whole archives: `btctrler`, `btstack`, `wl_rf_common`, `crypto_toolbox_Osize`, `lib_ccm_aes`, and newlib's
+    `libcompiler_rt` (for soft float).
+  - Single members only: `system.a` `lbuf.c.o`, `circular_buf.c.o` and `cpu.a` `wlc.c.o`, `encryption.c.o`.
+    The whole of `system.a` would bring the SDK's own OS, and the whole of `cpu.a` its start-up code (multiple
+    definitions).
+- **Constants:** the SDK's `lib_btctrler_config.c` and `bt_profile_config.c`, compiled against
+  `firmware/src/ble/sdkcfg/app_config.h` (BLE central only).
+- **`app_ble.ld`:** `--orphan-handling=error`. The libraries' `.*_code` / `.*_const` go in XIP, `.*_data` in .data,
+  `.*_bss` / `.bd_base` / `.*_bulk` in .bss. The `lp_target` / `sys_event` tables and `.LOG_TAG_CONST` are placed
+  explicitly.
+- **RAM-code sections linked into XIP,** both checked by hand and allowed by name in `build.py` (any other one fails
+  the build):
+  - `.volatile_ram_code` is `wl_rf_common`'s `wf_rf_trim`. It calls XIP tuning code itself, and its
+    `enter` / `exit_wifi_rf_trim_region` hooks are the weak no-ops.
+  - `.bt_updata_ram_code` is `bredr_frame`'s BT-over-the-air-update helpers, never run here.
+- **IRQ handlers passed to `request_irq`.** All end in `rti`, i.e. they are interrupt functions, so `request_irq`
+  puts them straight into the vector table:
+
+  | Handler | IRQ | Priority |
+  | --- | --- | --- |
+  | `ble_event_irq_handler` | 45 | 2 |
+  | `ble_rx_irq_handler` | 29 | 2 |
+  | `slot_timer_irq_handler` | 41 | 2 |
+  | `bredr_rx_irq_handler` | 40 (classic, not reached in BLE mode) | — |
+
+- **Step-1 image: 486,440 B** (slot 581,564 B), RAM .data+.bss 28.8 KB, pool 127 KB. Of that:
+  - about 103 KB is classic BR/EDR and TWS code that is never run;
+  - about 77 KB is the libraries' log strings (their printf stubs print nothing).
+
+  Trimming both is deferred.
+
+## The update-path gates in BLE builds (why gate 2 has two parts)
+
+The BLE module is its own compilation unit (`firmware/src/ble/ble.c`), reaching the core only through
+`ble_core.h` / `core_ble_api.c`. Even so, the core's machine code cannot stay byte-identical to the stripped core.
+In the stripped core nothing ever writes the USB-MIDI-out ring, so the compiler deletes `usb_poll`'s MIDI-out path
+as dead code. In a BLE build the forwarding brings it back, as in every Felucca release, where the keys send MIDI.
+The new wrappers also shift clang's global-merge layout and inlining in the core's unit.
+
+**Gate 2a (`check_update_path.py --sources main`)** checks that the update path's sources are Felucca 1.0.5.2's:
+- the loader;
+- `usb.c`, `ota.c`, `ota_hw.c`, `libc.c`, `storage*.c`;
+- the shared HAL headers.
+
+**Gate 2b** checks that the BLE build's core unit equals the reference core. The reference (`FELUCCA_CORE_REF=1`)
+is the same core unit (wrappers and main-loop calls, `-enable-global-merge=false`) linked with
+`ble/ble_stub.c` instead of the BLE unit and the libraries. Gate 2b compares instructions:
+- calls by callee;
+- branches inside the function by offset;
+- data addresses by role;
+- every constant and memory offset exactly.
+
+So it proves that the BLE libraries and the module change nothing in the core's code.
+
+What remains for the device:
+- **The default (non-BLE) build** stays byte-identical to the stripped core installed as probe 1.
+- **The BLE builds' update entry** (`usb_poll` with MIDI out alive) is proven on the device by the A→B install chain.
+- **The loader** is pinned by hash.

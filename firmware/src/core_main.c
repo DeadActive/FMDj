@@ -176,6 +176,9 @@ static __attribute__((noinline)) void fm1_main(void)    /* (gate 2 compares fm1_
 #if FELUCCA_CDC
         cdc_task();
 #endif
+#if FELUCCA_BLE
+        ble_service();
+#endif
         felucca_dbg.ui_frames++;
         felucca_dbg.stage = 1;
         while (fm1_ms - m < 15u)

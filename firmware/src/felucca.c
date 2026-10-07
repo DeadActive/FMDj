@@ -25,6 +25,9 @@
 #ifndef FELUCCA_UAC_TONE
 #define FELUCCA_UAC_TONE 0       /* bench: the USB input sends test triangles instead of the music */
 #endif
+#ifndef FELUCCA_BLE
+#define FELUCCA_BLE 0            /* BLE MIDI test (firmware/src/ble/, FELUCCA_BLE_STEP): JieLi BT libraries */
+#endif
 #ifndef FELUCCA_UART
 #define FELUCCA_UART 1           /* TRS MIDI IN on UART1 / PH8 */
 #endif
@@ -83,5 +86,8 @@ static uint8_t fx_lowcut;                /* (panel.c's settings_init; no filter 
 #endif
 #if FELUCCA_CDC
 #include "console.c"
+#endif
+#if FELUCCA_BLE
+#include "core_ble_api.c"             /* the BLE unit (firmware/src/ble/ble.c) calls these */
 #endif
 #include "core_main.c"

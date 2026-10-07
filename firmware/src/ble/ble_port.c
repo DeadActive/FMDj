@@ -1,0 +1,208 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * BLE MIDI test: 2026 DEADACTIVE */
+/* What the JieLi BT libraries (AC79 SDK V1.2.0, pinned in tools/ble_libs.py) call besides the OS (ble_os.c) and
+ * the SDK members linked from their archives (system.a lbuf / circular_buf, cpu.a wlc / encryption, lib_ccm_aes,
+ * newlib libcompiler_rt). Each group says why its definitions are safe; signatures are the SDK's (its headers, or
+ * the libraries' own IR declarations where no header has them: docs/ble/LINK_NOTES.md, docs/ble/undefined-step0.txt).
+ * Rules: no flash writes anywhere (config writes are refused); no register access here (hal/fm1_ble_hal.h). */
+
+/* ---- libc pieces the libraries call (ours: libc.c has memset / memcpy / memcmp only) ---- */
+void *memmove(void *d, const void *s, unsigned n)
+{
+    uint8_t *dp = d;
+    const uint8_t *sp = s;
+    if (dp < sp)
+        while (n--)
+            *dp++ = *sp++;
+    else
+        while (n--)
+            dp[n] = sp[n];
+    return d;
+}
+unsigned strlen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
+char *strcpy(char *d, const char *s)
+{
+    char *r = d;
+    do
+        *d++ = *s;
+    while (*s++);
+    return r;
+}
+int strcmp(const char *a, const char *b)
+{
+    while (*a && *a == *b) {
+        a++;
+        b++;
+    }
+    return (int)(uint8_t)*a - (int)(uint8_t)*b;
+}
+/* logging: off (the libraries' log tags are 0 too: sdkcfg/app_config.h LIB_DEBUG) */
+int printf(const char *fmt, ...) { (void)fmt; return 0; }
+int puts(const char *s) { (void)s; return 0; }
+int putchar(int c) { return c; }
+void put_buf(const unsigned char *buf, int len) { (void)buf; (void)len; }
+void printf_buf(uint8_t *buf, uint32_t len) { (void)buf; (void)len; }
+void log_print(int level, const char *tag, const char *fmt, ...) { (void)level; (void)tag; (void)fmt; }
+const char log_tag_const_d_TWS = 0, log_tag_const_i_TWS = 0, log_tag_const_e_LBUF = 0, log_tag_const_i_LBUF = 0,
+           log_tag_const_i_WLC = 0;
+
+/* ---- interrupts: the libraries' critical sections nest; their radio IRQs go into our vector table ---- */
+void local_irq_disable(void) { fm1_ble_irq_off(); }
+void local_irq_enable(void) { fm1_ble_irq_on(); }
+void __local_irq_disable(void) { fm1_ble_irq_off(); }
+void __local_irq_enable(void) { fm1_ble_irq_on(); }
+void sys_local_irq_disable(void) { fm1_ble_irq_off(); }
+void sys_local_irq_enable(void) { fm1_ble_irq_on(); }
+int cpu_irq_disabled(void) { return fm1_ble_irq_depth != 0; }
+int cpu_in_irq(void) { return 0; }                       /* (only CRC16's hardware path and asserts ask) */
+static uint32_t ble_irqs_requested;                      /* bit per index < 64, for the console */
+void request_irq(unsigned char index, unsigned char priority, void (*handler)(void), unsigned char cpu_id)
+{
+    (void)cpu_id;                                        /* one core runs everything here */
+    core_irq_attach(index, handler, priority);           /* the SDK's handlers are interrupt functions (rti):
+                                                          * checked in the link (docs/ble/LINK_NOTES.md) */
+    if (index < 32u)
+        ble_irqs_requested |= 1u << index;
+}
+void unrequest_irq(uint8_t index, uint8_t cpu_id) { (void)cpu_id; core_irq_mask(index); }
+void bit_set_ie(unsigned char index, uint8_t cpuid) { (void)cpuid; core_irq_unmask(index); }
+void bit_clr_ie(unsigned char index, uint8_t cpuid) { (void)cpuid; core_irq_mask(index); }
+uint8_t irq_read(uint32_t index) { return (uint8_t)!core_irq_is_masked(index); }
+
+/* ---- delays and clocks (clock values read from the hardware, read-only) ---- */
+void hw_udelay(unsigned int us)
+{
+    uint32_t t0 = fm1_ticks();
+    while (fm1_ticks() - t0 < us * FM1_TICKS_PER_US)
+        ;
+}
+void delay_us(unsigned int us) { hw_udelay(us); }
+void delay(unsigned int n) { volatile unsigned int i = n; while (i--) ; }   /* (a spin count, as the SDK's) */
+int clk_get(const char *name)
+{
+    if (!strcmp(name, "sys")) return (int)fm1_clk_hz(FM1_CLK_SYS);
+    if (!strcmp(name, "hsb")) return (int)fm1_clk_hz(FM1_CLK_HSB);
+    if (!strcmp(name, "lsb") || !strcmp(name, "spi")) return (int)fm1_clk_hz(FM1_CLK_LSB);
+    if (!strcmp(name, "sfc")) return (int)fm1_clk_hz(FM1_CLK_SFC);
+    if (!strcmp(name, "uart")) return 48000000;          /* UART is on PLL48M */
+    if (!strcmp(name, "osc") || !strcmp(name, "timer")) return 24000000;
+    return 0;                                            /* sdram, sd: none here */
+}
+int clk_get_osc_cap(void) { return 0; }                  /* the SDK's returns 0 too (cpu.a clock.c) */
+
+/* ---- low power: never sleeps here; registrations are accepted and ignored ---- */
+static uint32_t lp_dummy;
+void *low_power_get(void *priv, const void *ops) { (void)priv; (void)ops; return &lp_dummy; }
+void low_power_put(void *priv) { (void)priv; }
+void low_power_request(char *name) { (void)name; }
+void low_power_exit_request(void) {}
+int low_power_on(void) { return 0; }
+uint8_t low_power_get_default_osc_type(void) { return 0; }
+uint8_t low_power_get_osc_type(void) { return 0; }
+void low_power_reset_osc_type(uint8_t type) { (void)type; }
+void low_power_hw_unsleep_lock(void) {}
+void low_power_hw_unsleep_unlock(void) {}
+int32_t low_power_trace_drift(uint32_t usec) { (void)usec; return 0; }
+int power_is_poweroff_post(void) { return 0; }
+
+/* ---- faults: a library assert or reset request shows on screen, then a clean reboot ---- */
+static void ble_fatal(const char *what)
+{
+    uint32_t t0;
+    core_audio_stop();
+    core_fill(0, 0, 240, 240, CORE_CRASH_BG);
+    core_text(0, 8, 240, CORE_FONT_M, "BLE FATAL", CORE_CRASH_INK, CORE_CRASH_BG, 1);
+    core_text(10, 40, 220, CORE_FONT_S, what, CORE_CRASH_INK, CORE_CRASH_BG, 0);
+    t0 = fm1_ticks();
+    while ((uint32_t)(fm1_ticks() - t0) < 3000u * 1000u * FM1_TICKS_PER_US)
+        core_wdt_feed();
+    core_reboot();                                        /* (uptime > 30 s: not counted by the boot guard) */
+}
+void cpu_assert_debug(void) { ble_fatal("library assert"); }
+void P33_SYSTEM_RESET(void) { ble_fatal("library reset request"); }
+const int config_asser = 1;                              /* the libraries' asserts on: a fault shows, not corrupts */
+
+/* ---- CRC and chip id (software; the same results as the SDK's cpu.a crc16.c: CRC-16/XMODEM, init 0) ---- */
+uint16_t crc16_sw(const void *ptr, uint32_t len)
+{
+    const uint8_t *p = ptr;
+    uint32_t crc = 0, k;
+    while (len--) {
+        crc ^= (uint32_t)*p++ << 8;
+        for (k = 0; k < 8u; k++)
+            crc = crc & 0x8000u ? ((crc << 1) ^ 0x1021u) & 0xFFFFu : (crc << 1) & 0xFFFFu;
+    }
+    return (uint16_t)crc;
+}
+uint16_t CRC16(const void *ptr, uint32_t len) { return crc16_sw(ptr, len); }
+uint16_t chip_crc16(const void *ptr, uint32_t len) { return crc16_sw(ptr, len); }
+uint16_t crc_get_16bit(const void *src, uint32_t len) { return crc16_sw(src, len); }
+uint32_t crc_get_32bit(const char *src) { return src ? crc16_sw(src, strlen(src)) : 0u; }
+static uint8_t ble_mac[6];                               /* random static address, made at ble_start */
+uint16_t get_chip_id(void) { return (uint16_t)(ble_mac[0] | ble_mac[1] << 8); }
+
+/* ---- config store: READ ONLY. The BT MAC (id 102) is ours; everything else "not stored" -> library defaults ---- */
+#define CFG_BT_MAC_ADDR 102u
+int syscfg_read(uint16_t item_id, void *buf, uint16_t len)
+{
+    if (item_id == CFG_BT_MAC_ADDR && len >= 6u) {
+        memcpy(buf, ble_mac, 6);
+        return 6;
+    }
+    return 0;
+}
+int syscfg_write(uint16_t item_id, void *buf, uint16_t len) { (void)item_id; (void)buf; (void)len; return 0; }
+int norflash_ioctl(void *device, uint32_t cmd, uint32_t arg) { (void)device; (void)cmd; (void)arg; return -1; }
+void *bt_vm_interface(void) { return 0; }                /* no VM: bonding off (TCFG_BLE_SECURITY_EN 0) */
+uint32_t sdfile_get_disk_capacity(void) { return 0x100000u; }
+
+/* ---- the radio's Wi-Fi-side calibration (SDK apps/common/net/wifi_conf.c, user_cfg.c; board demo_ble defaults).
+ * The SDK versions read stored trims and write what they used back to VM; these never write: no stored trim, so
+ * the radio calibrates fresh at each start. ---- */
+#include "ble_rf_tables.c"
+const uint8_t WIFI_PA_ENABLE = 0, wifi_temperature_drift_trim_on = 0, RFIinitUseTrimValue = 0;
+uint8_t RTDebugLevel = 0;
+int wifi_get_rf_trim_data(void *info, int size) { (void)info; (void)size; return -1; }
+int wifi_set_rf_trim_data(void *info, int size) { (void)info; (void)size; return -1; }
+void wifi_get_xosc(uint8_t *xosc) { xosc[0] = 0x0B; xosc[1] = 0x0B; }   /* board.c demo default: crystal caps */
+int wifi_get_pa_trim_data(uint8_t *pa)
+{
+    static const uint8_t PA[7] = {1, 7, 4, 7, 11, 1, 7};                 /* board.c demo default */
+    memcpy(pa, PA, 7);
+    return 1;                                                            /* (as the SDK: no auto tune) */
+}
+void wifi_get_mcs_dgain(uint8_t *g) { memset(g, 0, 20); }
+uint32_t adc_add_sample_ch(uint32_t ch) { (void)ch; return 0; }         /* (temperature drift trim is off) */
+uint32_t adc_get_value(uint32_t ch) { (void)ch; return 0; }
+unsigned int gpio_set_uart1(unsigned int ch) { (void)ch; return 0; }    /* no HCI UART */
+unsigned int gpio_close_uart1(void) { return 0; }
+void aes_hw_lock(void) {}                                               /* one user: the stack's own task */
+void aes_hw_unlock(void) {}
+
+/* ---- features compiled out (classic BT, TWS, A2DP, SBC, BT-over-air update): never reached in BLE-only ---- */
+void bredr_esco_standard_tws_link_open(void *a, void *b, int c, uint8_t d) { (void)a; (void)b; (void)c; (void)d; }
+void bredr_esco_standard_tws_link_close(void *a) { (void)a; }
+void channel_packet_clear(void) {}
+int sbc_cal_energy(void *p, int n) { (void)p; (void)n; return 0; }
+void *lmp_ch_update_resume_hdl;
+uint8_t tws_auto_pair_enable;
+const int sniff_long_interval = 0, CONFIG_BTSTACK_SUPPORT_AAC = 0, CONFIG_TWS_POWER_BALANCE_ENABLE = 0,
+          config_update_mode = 0;
+int CONFIG_TWS_SUPER_TIMEOUT;
+int task_kill(const char *name) { (void)name; return 0; }
+
+/* ---- heap names the libraries use ---- */
+void *ram_malloc(unsigned long size) { return ble_malloc((unsigned)size); }
+void ram_free(void *p) { ble_free(p); }
+
+/* ---- stack events: kept for ble_central.c (Task 8); step 1 records the last one ---- */
+struct bt_event { uint8_t event; uint8_t args[7]; uint32_t value; };
+static volatile uint32_t ble_last_event, ble_events;
+__attribute__((weak)) void ble_on_event(int from, struct bt_event *e) { (void)from; (void)e; }
+int bt_event_notify(int from, struct bt_event *event)
+{
+    ble_events++;
+    ble_last_event = (uint32_t)from << 8 | event->event;
+    ble_on_event(from, event);
+    return 0;
+}

@@ -40,6 +40,7 @@ LOADER_LOAD = 0x01C0A800
 LOADER_NAME = b"usb_hid_ota.bin"    # the file name the SPL looks for
 LOADER_SHA256 = "e671adf0ce6e4f69ac8514087c8833b1969fa4c470645786f19968e90b9a630f"   # Felucca 1.0.5.2's loader: the way back
 DOCKER_IMAGE = os.environ.get("JIELI_DOCKER_IMAGE", "debian:bookworm-slim")
+SDK_MOUNT = None                    # BLE builds: the JieLi SDK copy (tools/ble_libs.py), mounted read-only at /sdk
 CFLAGS = ["-Os", "-ffunction-sections", "-fno-builtin", "-Wall", "-Wno-unused-function"]
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
 
@@ -73,7 +74,8 @@ def tc(tool, *args):
     if tool == "cc":                # the toolchain's cc wrapper needs python3; call clang directly
         tool, rel = "pi32v2/bin/clang", ["-target", "pi32v2", *rel]
     if use_docker():
-        cmd = ["docker", "run", "--rm", "--platform", "linux/amd64", "-v", f"{SRC}:/work",
+        sdk = ["-v", f"{SDK_MOUNT}:/sdk:ro"] if SDK_MOUNT else []
+        cmd = ["docker", "run", "--rm", "--platform", "linux/amd64", "-v", f"{SRC}:/work", *sdk,
                "-v", f"{toolchain()}:/opt/jieli:ro", "-w", "/work", DOCKER_IMAGE, f"/opt/jieli/{tool}", *rel]
     else:
         cmd = [str(toolchain() / tool), *rel]
@@ -182,6 +184,13 @@ def build_loader():
 
 def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
+    # BLE builds (and the gate-2 reference core, FELUCCA_CORE_REF=1): no global merging in the core's unit, so the
+    # update path's variable offsets do not move with the BLE wrappers (tools/check_update_path.py compares them)
+    core_ref = os.environ.get("FELUCCA_CORE_REF") == "1"     # gate 2's reference: the BLE build's core unit, no BLE
+    if os.environ.get("FELUCCA_BLE") == "1" or core_ref:
+        flags += ["-mllvm", "-enable-global-merge=false"]
+    if core_ref and "-DFELUCCA_BLE=1" not in flags:
+        flags.append("-DFELUCCA_BLE=1")
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
                  "FELUCCA_CDC_DEFAULT", "FELUCCA_BLE"):
@@ -207,8 +216,19 @@ def build_app():
     asm = [("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
            ("cc", "-c", FW / "hal" / "fm1_vec.S", "-o", OUT / "fm1_vec.o"),
            ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o")]
+    cfg_objs = []
     if ble:
+        global SDK_MOUNT
+        import ble_libs
+        if not use_docker():
+            raise SystemExit("build: FELUCCA_BLE builds run the toolchain in Docker (the SDK is mounted at /sdk)")
+        SDK_MOUNT = str(ble_libs.SDK)
         asm.append(("cc", "-c", FW / "hal" / "fm1_ctx.S", "-o", OUT / "fm1_ctx.o"))
+        (OUT / "blecfg").mkdir(exist_ok=True)
+        for src in ble_libs.SDK_CONFIG_SOURCES:
+            obj = OUT / "blecfg" / (Path(src).stem + ".o")
+            asm.append(("cc", *ble_libs.SDK_CFLAGS, "-c", f"/sdk/{src}", "-o", obj))
+            cfg_objs.append(obj)
     tc_all(*asm, cmain)
     if size:
         subprocess.run([sys.executable, SRC / "tools" / "size_fns.py", OUT / "felucca.ll", OUT / "felucca_size.ll"],
@@ -217,16 +237,43 @@ def build_app():
            OUT / "felucca_size.ll", "-o", OUT / "felucca.o")
     elf = OUT / "felucca.elf"
     extra = []
+    if core_ref and not ble:        # the reference: empty BLE entry points instead of the BLE unit and the libraries
+        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-c", FW / "src" / "ble" / "ble_stub.c", "-o",
+           OUT / "ble_stub.o")
+        extra = [OUT / "ble_stub.o"]
     if ble:                         # (only then: the default link stays byte-identical to the core's)
+        import ble_libs
         libdir = OUT / "blelibs"
         libdir.mkdir(exist_ok=True)
         libs = subprocess.run([sys.executable, SRC / "tools" / "ble_libs.py", "libs"], capture_output=True,
                               text=True, check=True).stdout.split()
         for p in libs:              # inside SRC, so the Docker mount sees them
             shutil.copy(p, libdir / Path(p).name)
-        extra = [OUT / "fm1_ctx.o", *[libdir / Path(p).name for p in libs]]
-    tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
+        objs = ble_libs.members(libdir)     # single SDK members (lbuf, circular_buf, wlc, encryption)
+        # the BLE module, its own unit: no static data shared with the core's unit (gate 2)
+        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-c", FW / "src" / "ble" / "ble.c", "-o", OUT / "ble.o")
+        objs.append(OUT / "ble.o")
+        extra = [OUT / "fm1_ctx.o", *cfg_objs, *objs, "--start-group", *[libdir / Path(p).name for p in libs],
+                 "--end-group"]
+    # the BT libraries are LLVM bitcode: link them as the SDK does, through lto-wrapper with its codegen options
+    # (apps/demo/demo_ble/board/wl82/Makefile LFLAGS); our objects stay native, so only the libraries go through LTO
+    # (lto-wrapper is a python script for `ld --plugin LLVMgold.so ...`; the container has no python3: call ld)
+    gold = "/opt/jieli/pi32v2/bin/LLVMgold.so" if use_docker() else str(toolchain() / "pi32v2/bin/LLVMgold.so")
+    ld = ("pi32v2/bin/ld", "--plugin", gold, "--plugin-opt=mcpu=r3", "--plugin-opt=-pi32v2-large-program=true",
+          "--plugin-opt=-pi32v2-always-use-itblock=false") if ble else ("pi32v2/bin/ld",)
+    script = FW / ("app_ble.ld" if ble else "app.ld")    # (app_ble.ld: app.ld + the BT libraries' sections)
+    if ble:
+        ld = (*ld, "--orphan-handling=error", "-Map", "build/felucca.map")   # every library section placed on purpose
+    tc(*ld, "-T", script, OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
        OUT / "felucca.o", *extra, "-o", elf)
+    if ble:                         # library code meant for RAM would have landed in XIP via *(.*_code): refuse
+        # allowed in XIP, checked by hand (docs/ble/LINK_NOTES.md): .volatile_ram_code = wl_rf_common's wf_rf_trim, which
+        # calls XIP code itself (its enter/exit region hooks are the weak no-ops); .bt_updata_ram_code = bredr_frame's
+        # BT-over-the-air-update helpers, never run here
+        ok = {".volatile_ram_code", ".bt_updata_ram_code"}
+        ram_code = sorted(set(re.findall(r"^\s*(\.\S*ram_code\S*)", (OUT / "felucca.map").read_text(), re.M)) - ok)
+        if ram_code:
+            raise SystemExit(f"build: BT library RAM code sections linked (not placed in RAM): {ram_code}")
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
@@ -322,7 +369,8 @@ def mmio_check():
             break
         regs |= more
     errors = []
-    for f in sorted([*(FW / "src").glob("*.[ch]"), *(FW / "loader").glob("*.c")]):
+    ble_src = [f for f in (FW / "src" / "ble").glob("*.[ch]") if f.name != "ble_rf_tables.c"]   # (SDK data table)
+    for f in sorted([*(FW / "src").glob("*.[ch]"), *ble_src, *(FW / "loader").glob("*.c")]):
         for no, ln in enumerate(strip(f.read_text()).splitlines(), 1):
             where = f"{f.relative_to(FW)}:{no}"
             for rx, what in ((MMIO_LIT, "register/window address"), (MMIO_CAST, "volatile pointer cast"),

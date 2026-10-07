@@ -81,6 +81,8 @@ static void fm1_irq_attach(uint32_t n, void (*h)(void), uint32_t prio)   /* IRQs
     FM1_ICFG(n) = (FM1_ICFG(n) & ~(0xFu << sh)) | ((((prio & 7u) << 1) | 1u) << sh);
 }
 static void fm1_irq_mask(uint32_t n) { FM1_ICFG(n) &= ~(1u << ((n & 7u) * 4u)); }
+static inline void fm1_irq_unmask(uint32_t n) { FM1_ICFG(n) |= 1u << ((n & 7u) * 4u); }       /* (prio kept) */
+static inline uint32_t fm1_irq_is_masked(uint32_t n) { return !(FM1_ICFG(n) & (1u << ((n & 7u) * 4u))); }
 
 static void fm1_irq_enable_all(void)
 {
