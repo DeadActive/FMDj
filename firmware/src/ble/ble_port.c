@@ -195,10 +195,9 @@ int task_kill(const char *name) { (void)name; return 0; }
 void *ram_malloc(unsigned long size) { return ble_malloc((unsigned)size); }
 void ram_free(void *p) { ble_free(p); }
 
-/* ---- stack events: kept for ble_central.c (Task 8); step 1 records the last one ---- */
-struct bt_event { uint8_t event; uint8_t args[7]; uint32_t value; };
+/* ---- stack events (struct bt_event: ble_sdk.h) to ble_central.c; the last one is kept for the console ---- */
 static volatile uint32_t ble_last_event, ble_events;
-__attribute__((weak)) void ble_on_event(int from, struct bt_event *e) { (void)from; (void)e; }
+static void ble_on_event(int from, struct bt_event *e);
 int bt_event_notify(int from, struct bt_event *event)
 {
     ble_events++;

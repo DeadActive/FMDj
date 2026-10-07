@@ -84,6 +84,9 @@ static uint8_t fx_lowcut;                /* (panel.c's settings_init; no filter 
 #include "ota.c"
 #include "ota_hw.c"
 #endif
+#if FELUCCA_BLE
+#include "ble/ble_core.h"             /* the BLE unit's entry points (the console's `ble`, the main loop) */
+#endif
 #if FELUCCA_CDC
 #include "console.c"
 #endif

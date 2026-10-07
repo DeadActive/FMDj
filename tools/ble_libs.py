@@ -128,19 +128,60 @@ def libs():
     return out
 
 
+# the BLE central's SDK values (ble_central.c, ble_sdk.h), read from the SDK headers by compiling them: command
+# codes, event codes, enum values, and the layout of every struct the central shares with the libraries
+BLE_HEADERS = ["btstack/bluetooth.h", "btstack/btstack_typedef.h", "btstack/le/le_common_define.h",
+               "btstack/le/ble_api.h", "btstack/le/att.h", "btstack/le/le_user.h", "btstack/le/sm.h",
+               "btstack/avctp_user.h", "event/bt_event.h"]
+BLE_VALUES = {
+    "CMD_DISCONNECT": "BLE_CMD_DISCONNECT", "CMD_ATT_SEND_INIT": "BLE_CMD_ATT_SEND_INIT",
+    "CMD_ATT_SEND_DATA": "BLE_CMD_ATT_SEND_DATA", "CMD_SCAN_PARAM": "BLE_CMD_SCAN_PARAM",
+    "CMD_CREATE_CONN": "BLE_CMD_CREATE_CONN", "CMD_CREATE_CONN_CANCEL": "BLE_CMD_CREATE_CONN_CANCEL",
+    "CMD_SCAN_ENABLE2": "BLE_CMD_SCAN_ENABLE2", "CMD_SEARCH_PROFILE": "BLE_CMD_SEARCH_PROFILE",
+    "PFL_SERVER_ALL": "PFL_SERVER_ALL", "SCAN_ACTIVE": "SCAN_ACTIVE", "ATT_OP_WRITE": "ATT_OP_WRITE",
+    "ATT_CTRL_BLOCK_SIZE": "ATT_CTRL_BLOCK_SIZE", "HCI_EVENT_PACKET": "HCI_EVENT_PACKET",
+    "HCI_EVENT_LE_META": "HCI_EVENT_LE_META", "HCI_SUBEVENT_LE_CONNECTION_COMPLETE": "HCI_SUBEVENT_LE_CONNECTION_COMPLETE",
+    "HCI_SUBEVENT_LE_ENHANCED_CONNECTION_COMPLETE": "HCI_SUBEVENT_LE_ENHANCED_CONNECTION_COMPLETE",
+    "HCI_EVENT_DISCONNECTION_COMPLETE": "HCI_EVENT_DISCONNECTION_COMPLETE",
+    "GAP_EVENT_ADVERTISING_REPORT": "GAP_EVENT_ADVERTISING_REPORT", "GATT_EVENT_NOTIFICATION": "GATT_EVENT_NOTIFICATION",
+    "IO_CAPABILITY_NO_INPUT_NO_OUTPUT": "IO_CAPABILITY_NO_INPUT_NO_OUTPUT", "BT_STATUS_INIT_OK": "BT_STATUS_INIT_OK",
+    "BT_EVENT_FROM_CON": "BT_EVENT_FROM_CON",
+    "SZ_BT_EVENT": "sizeof(struct bt_event)", "SZ_ADV_REPORT": "sizeof(adv_report_t)",
+    "OFF_ADV_ADDR_TYPE": "offsetof(adv_report_t, address_type)", "OFF_ADV_ADDR": "offsetof(adv_report_t, address)",
+    "OFF_ADV_RSSI": "offsetof(adv_report_t, rssi)", "OFF_ADV_LEN": "offsetof(adv_report_t, length)",
+    "OFF_ADV_DATA": "offsetof(adv_report_t, data)",
+    "SZ_CONN_PARAM": "sizeof(struct create_conn_param_t)",
+    "OFF_CONN_TIMEOUT": "offsetof(struct create_conn_param_t, supervision_timeout)",
+    "OFF_CONN_ADDR_TYPE": "offsetof(struct create_conn_param_t, peer_address_type)",
+    "OFF_CONN_ADDR": "offsetof(struct create_conn_param_t, peer_address)",
+    "SZ_DATA_REPORT": "sizeof(att_data_report_t)", "OFF_DATA_HANDLE": "offsetof(att_data_report_t, value_handle)",
+    "OFF_DATA_LEN": "offsetof(att_data_report_t, blob_length)", "OFF_DATA_BLOB": "offsetof(att_data_report_t, blob)",
+    "OFF_DATA_CONN": "offsetof(att_data_report_t, conn_handle)",
+    "SZ_SEARCH_RESULT": "sizeof(search_result_t)", "OFF_SR_CHAR": "offsetof(search_result_t, characteristic)",
+    "OFF_SR_SVC_INDEX": "offsetof(search_result_t, service_index)",
+    "OFF_CH_VALUE_HANDLE": "offsetof(charact_report_t, value_handle)",
+    "OFF_CH_PROPERTIES": "offsetof(charact_report_t, properties)",
+    "OFF_CH_UUID16": "offsetof(charact_report_t, uuid16)", "OFF_CH_UUID128": "offsetof(charact_report_t, uuid128)",
+    "SZ_CHARACT": "sizeof(charact_report_t)", "SZ_SERVICE": "sizeof(service_report_t)",
+}
+
+
 def abi():
     probe = SRC / "build" / "ble_abi_probe.c"
     probe.parent.mkdir(exist_ok=True)
     probe.write_text('#include "generic/typedef.h"\n#include "os/os_api.h"\n'
                      "char sz_sem[sizeof(OS_SEM)]; char sz_mutex[sizeof(OS_MUTEX)]; char sz_queue[sizeof(OS_QUEUE)];\n"
-                     "char v_taskq[OS_TASKQ]; char v_timeout[OS_TIMEOUT]; char v_qfull[OS_Q_FULL];\n")
+                     "char v_taskq[OS_TASKQ]; char v_timeout[OS_TIMEOUT]; char v_qfull[OS_Q_FULL];\n"
+                     + "".join(f'#include "{h}"\n' for h in BLE_HEADERS) + "#include <stddef.h>\n"
+                     + "".join(f"char b_{n}[({e}) + 1];\n" for n, e in BLE_VALUES.items()))
     tc = Path(os.environ.get("JIELI_TOOLCHAIN", "~/.jieli/toolchain")).expanduser()
     # the flags the SDK's own demo_ble Makefile compiles with (apps/demo/demo_ble/board/wl82/Makefile)
     inc = ["-mcpu=r3", "-DSUPPORT_MS_EXTENSIONS", "-DCONFIG_CPU_WL82", "-DCONFIG_FREE_RTOS_ENABLE",
            "-DCONFIG_THREAD_ENABLE", "-D__GCC_PI32V2__", "-DCONFIG_NO_SDRAM_ENABLE", "-DCONFIG_BT_ENABLE=1"]
     inc += [f"-I/sdk/{d}" for d in ("include_lib/newlib/include", "include_lib", "include_lib/driver",
                                      "include_lib/driver/cpu/wl82", "include_lib/system", "include_lib/system/os",
-                                     "include_lib/system/os/FreeRTOS", "include_lib/system/os/FreeRTOS/pi32v2")]
+                                     "include_lib/system/os/FreeRTOS", "include_lib/system/os/FreeRTOS/pi32v2",
+                                     "include_lib/utils", "include_lib/btstack", "include_lib/system/generic")]
     cmd = ["docker", "run", "--rm", "--platform", "linux/amd64", "-v", f"{SRC}:/work", "-v", f"{SDK}:/sdk:ro",
            "-v", f"{tc}:/opt/jieli:ro", "-w", "/work", "debian:bookworm-slim", "/opt/jieli/pi32v2/bin/clang",
            "-target", "pi32v2", "-c", *inc, "build/ble_abi_probe.c", "-o", "build/ble_abi_probe.o"]
@@ -163,7 +204,7 @@ def abi():
 #define BLE_SDK_Q_USER 0x400000
 #define BLE_SDK_IRQ_BLE_RX 29
 #define BLE_SDK_IRQ_BLE_EVENT 45
-""")
+""" + "".join(f"#define BLE_SDK_{n} {size['b_' + n] - 1}\n" for n in BLE_VALUES))
     print("wrote firmware/src/ble/ble_sdk_abi.h", size)
 
 

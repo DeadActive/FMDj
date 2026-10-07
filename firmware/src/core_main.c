@@ -177,7 +177,14 @@ static __attribute__((noinline)) void fm1_main(void)    /* (gate 2 compares fm1_
         cdc_task();
 #endif
 #if FELUCCA_BLE
+        {   /* the BLE test: PLAY / REC / SELECT go to it (ble_key, the only way it starts) */
+            static uint32_t prev = ~0u;             /* a key held while booting is not a press */
+            uint32_t now = fm1_in.buttons, down = now & ~prev;
+            prev = now;
+            ble_key(down, panel_enc(EN_SELECT));
+        }
         ble_service();
+        ble_draw();
 #endif
         felucca_dbg.ui_frames++;
         felucca_dbg.stage = 1;

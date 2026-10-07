@@ -318,9 +318,17 @@ static void con_crash(void)
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("status  dbg  inp  crash  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
+        con_puts("status  dbg  inp  crash  memr ADDR [LEN]  flr OFF [LEN]  uboot yes"
+#if FELUCCA_BLE
+                 "  ble"
+#endif
+                 "\r\n");
     else if (con_word(&p, "status"))
         con_status();
+#if FELUCCA_BLE
+    else if (con_word(&p, "ble"))
+        ble_status();
+#endif
     else if (con_word(&p, "dbg"))
         con_dbg();
     else if (con_word(&p, "crash"))
