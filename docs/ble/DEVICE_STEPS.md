@@ -44,3 +44,13 @@ use the UBOOT recovery (Hortator `docs/RECOVERY.md`).
 All of these show in the console's `ble`.
 
 ### Round 2 (packages of the fix)
+
+- **B (9d31c205…): ok.**
+  - PLAY: STARTING → IDLE, no crash.
+  - Console `ble`:
+    - `stage 7`: BT_STATUS_INIT_OK reached.
+    - IRQs 29 and 45 requested. The slot timer, 41, is not used in BLE-only mode.
+    - Stack high-water: btctrler 784 B and btstack 1356 B of 4096.
+  - One 10 s scan: 605 reports and 16 devices (the table's limit), RSSI -53 to -91 dBm. Mostly random addresses
+    (t1), with no name in the advertisement. None tagged MIDI: the SMC-Mixer was not recognised in this scan
+    (still to check: was it on and not connected to another host?).
