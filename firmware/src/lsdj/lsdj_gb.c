@@ -126,6 +126,24 @@ static void lsdj_scale(uint16_t *out, const uint8_t *fb, uint32_t x0, uint32_t x
     }
 }
 
+/* the MASTER pot -> gain Q12 (4096 = 1.0), as Felucca's main loop: an IIR on the 10-bit reading (knob: 16x, state),
+ * then squared (an audio taper). adc < 0 (an ADC timeout) keeps the last gain */
+static uint32_t lsdj_master(int32_t *knob, int32_t adc)
+{
+    uint32_t k10;
+    if (adc >= 0)
+        *knob += (adc * 16 - *knob) / 8;
+    k10 = (uint32_t)(*knob / 16);
+    return (k10 * k10) >> 8;                  /* 0 .. 4088 */
+}
+
+static void lsdj_gain(int32_t *out, uint32_t n, uint32_t q12)    /* stereo Q15 frames, in place */
+{
+    uint32_t i;
+    for (i = 0; i < 2u * n; i++)
+        out[i] = (out[i] * (int32_t)q12) >> 12;
+}
+
 /* stereo int16 frames, one writer (main loop) and one reader (audio ISR); size a power of two, one slot spare */
 #ifndef RING_PUBLISH
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")

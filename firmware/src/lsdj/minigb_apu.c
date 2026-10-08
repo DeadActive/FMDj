@@ -396,6 +396,7 @@ void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 {
 	/* Find sound channel corresponding to register address. */
 	uint_fast8_t i;
+	uint8_t old;
 
 	if(addr == 0xFF26)
 	{
@@ -419,6 +420,7 @@ void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 	if(ctx->audio_mem[0xFF26 - AUDIO_ADDR_COMPENSATION] == 0x00)
 		return;
 
+	old = ctx->audio_mem[addr - AUDIO_ADDR_COMPENSATION];
 	ctx->audio_mem[addr - AUDIO_ADDR_COMPENSATION] = val;
 	i = (addr - AUDIO_ADDR_COMPENSATION) / 5;
 
@@ -429,21 +431,23 @@ void minigb_apu_audio_write(struct minigb_apu_ctx *ctx,
 		ctx->chans[i].volume_init = val >> 4;
 		ctx->chans[i].powered     = (val >> 3) != 0;
 
-		// "zombie mode" stuff, needed for Prehistorik Man and probably
-		// others
+		/* "zombie mode": a write while the channel plays changes its
+		 * volume. (LSDj fork, DEADACTIVE: the rules of Pan Docs, Audio
+		 * details; LSDj 9's envelopes are made of these writes. The
+		 * envelope keeps what it latched at the trigger.)
+		 *  1. old period 0 and the envelope still running: + 1;
+		 *     else old mode subtract: + 2
+		 *  2. mode changed: 16 - volume
+		 *  3. the low 4 bits */
 		if (ctx->chans[i].powered && ctx->chans[i].enabled) {
-			if ((ctx->chans[i].env.step == 0 && ctx->chans[i].env.inc != 0)) {
-				if (val & 0x08) {
-					ctx->chans[i].volume++;
-				} else {
-					ctx->chans[i].volume += 2;
-				}
-			} else {
-				ctx->chans[i].volume = 16 - ctx->chans[i].volume;
-			}
-
-			ctx->chans[i].volume &= 0x0F;
-			ctx->chans[i].env.step = val & 0x07;
+			int v = ctx->chans[i].volume;
+			if ((old & 0x07) == 0 && ctx->chans[i].env.inc != 0)
+				v += 1;
+			else if (!(old & 0x08))
+				v += 2;
+			if ((old ^ val) & 0x08)
+				v = 16 - v;
+			ctx->chans[i].volume = v & 0x0F;
 		}
 	} break;
 

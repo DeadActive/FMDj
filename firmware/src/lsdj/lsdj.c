@@ -52,6 +52,8 @@ static struct {
     uint32_t frames, waits, frame_max_us, frame_us_sum, pushes, start_ms;
     uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under, sec_us, last_load;
     uint32_t buttons, notes;                  /* as read for the last frame (console `ble`) */
+    int32_t pot, knob;                        /* the MASTER pot: last reading, its filter state */
+    volatile uint32_t master_q12;             /* its gain, applied by the audio ISR */
     uint8_t pad, pad_shown;                   /* the Game Boy keys of the last frame; those on the status line */
     int error;
 } st;
@@ -66,6 +68,7 @@ void lsdj_audio(int32_t *out, uint32_t n)
         return;
     }
     lsdj_ring_pull(&ring, out, n);
+    lsdj_gain(out, n, st.master_q12);         /* the MASTER pot */
 }
 
 /* ---- text ---- */
@@ -149,6 +152,8 @@ static void lsdj_step(void)
         st.waits++;
         return;
     }
+    st.pot = core_master_pot();
+    st.master_q12 = lsdj_master(&st.knob, st.pot);
     t0 = core_ticks();
     st.buttons = core_buttons();
     st.notes = core_notes();
@@ -286,6 +291,12 @@ void ble_status(void)                          /* the console's `ble` */
     p = put_hex(p, core_rec_bit());
     p = put_s(p, " pad 0x");
     p = put_hex(p, st.pad);
+    put_s(p, "\r\n");
+    core_con_puts(b);
+    p = put_s(b, "master pot ");
+    p = put_u(p, st.pot < 0 ? 9999u : (uint32_t)st.pot);
+    p = put_s(p, " gain_q12 ");
+    p = put_u(p, st.master_q12);
     put_s(p, "\r\n");
     core_con_puts(b);
     p = put_s(b, "mode ");

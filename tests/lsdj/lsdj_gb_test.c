@@ -126,6 +126,37 @@ static void test_ring(void)
     CHECK(out[0] == 600 && out[1] == 700 && out[4] == 600 && out[5] == 700);
 }
 
+static void test_master(void)
+{
+    /* the MASTER pot (10-bit ADC) -> gain Q12, as Felucca: an IIR on the reading, then squared (an audio taper) */
+    int32_t knob = 0, out[4];
+    uint32_t i, q = 0, prev = 0, mono = 1;
+    for (i = 0; i < 100; i++)
+        q = lsdj_master(&knob, 1023);
+    CHECK(q > 4000 && q <= 4096);                             /* full: ~1.0 */
+    for (i = 0; i < 100; i++)
+        q = lsdj_master(&knob, 0);
+    CHECK(q == 0);                                            /* off: silence */
+    for (i = 0; i < 100; i++)
+        q = lsdj_master(&knob, 512);
+    CHECK(q > 900 && q < 1100);                               /* half way: ~1/4 (squared) */
+    knob = 0;
+    for (i = 0; i < 40; i++) {                                /* a turn up is smooth: rises, never jumps */
+        q = lsdj_master(&knob, 1023);
+        mono &= q >= prev && q - prev < 1200u;
+        prev = q;
+    }
+    CHECK(mono);
+    CHECK(lsdj_master(&knob, -1) == q);                       /* an ADC timeout keeps the last gain */
+    out[0] = 32767; out[1] = -32768; out[2] = 1000; out[3] = -1000;
+    lsdj_gain(out, 2, 4096);
+    CHECK(out[0] == 32767 && out[1] == -32768 && out[2] == 1000);
+    lsdj_gain(out, 2, 2048);
+    CHECK(out[0] == 16383 && out[1] == -16384 && out[2] == 500 && out[3] == -500);
+    lsdj_gain(out, 2, 0);
+    CHECK(out[0] == 0 && out[1] == 0 && out[2] == 0 && out[3] == 0);
+}
+
 static void test_unpack(void)
 {
     /* PackBits: n < 128 -> n + 1 literal bytes; n >= 128 -> (n & 127) + 1 copies of the next byte */
@@ -149,6 +180,7 @@ int main(void)
     test_scale();
     test_ring();
     test_unpack();
+    test_master();
     printf(fails ? "lsdj_gb_test: %d FAILED\n" : "lsdj_gb_test: all passed\n", fails);
     return fails != 0;
 }

@@ -30,6 +30,8 @@ void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int
 void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px);   /* RGB565 byte-swapped, px in RAM (DMA,
                                                                      * still running on return: keep px until the
                                                                      * next LCD call) */
+/* the MASTER pot: its 10-bit reading (0..1023), -1 on an ADC timeout (hal/fm1_adc.h) */
+int32_t core_master_pot(void);
 /* time: TIMER4 ticks */
 #define CORE_TICKS_PER_US 24u
 uint32_t core_ticks(void);

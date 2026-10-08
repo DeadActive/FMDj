@@ -53,6 +53,8 @@ void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int
     texts++;
     (void)s;
 }
+static int32_t pot = 1023;
+int32_t core_master_pot(void) { return pot; }
 uint32_t core_buttons(void) { return buttons; }
 uint32_t core_notes(void) { return notes; }
 uint32_t core_button_bit(int label) { return 1u << label; }   /* (the stub: matrix id = label) */
@@ -95,6 +97,25 @@ int main(void)
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
     CHECK(st.frames > 250 && emu.errors == 0);
+    {   /* the MASTER pot: full -> the sound as made; down -> silence */
+        int32_t a[64], k;
+        int nz = 0;
+        CHECK(st.master_q12 > 4000);
+        lsdj_audio(a, 32);
+        for (k = 0; k < 64; k++)
+            nz |= a[k] != 0;
+        pot = 0;
+        for (k = 0; k < 60; k++)
+            pass();
+        CHECK(st.master_q12 == 0);
+        lsdj_audio(a, 32);
+        for (k = 0; k < 64; k++)
+            CHECK(a[k] == 0);
+        pot = 1023;
+        for (k = 0; k < 60; k++)
+            pass();
+        (void)nz;
+    }
     {   /* PLAY and REC held: SELECT and START reach the Game Boy, and the keys part of the status line is redrawn */
         uint32_t t = texts;
         buttons = core_play_bit() | core_rec_bit();
