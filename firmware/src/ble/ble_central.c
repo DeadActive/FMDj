@@ -191,6 +191,7 @@ static void cbk_packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, 
  * central only, no pairing required (a peripheral that asks still gets Just Works) */
 void ble_profile_init(void)
 {
+    ble_stage(6);
     le_device_db_init();
     ble_stack_gatt_role(1);
     sm_init();
@@ -207,8 +208,10 @@ void ble_profile_init(void)
 
 static void ble_on_event(int from, struct bt_event *e)  /* bt_event_notify (ble_port.c) */
 {
-    if (from == BLE_SDK_BT_EVENT_FROM_CON && e->event == BLE_SDK_BT_STATUS_INIT_OK && st == BLE_STARTING)
+    if (from == BLE_SDK_BT_EVENT_FROM_CON && e->event == BLE_SDK_BT_STATUS_INIT_OK && st == BLE_STARTING) {
+        ble_stage(7);
         st = ble_next(st, EV_INIT_OK);
+    }
 }
 
 /* the stack's GATT client reports (client_user.c weak defaults): le_net_central.c 386-415 and 453-480 */
@@ -255,11 +258,18 @@ void ble_start(void)
     ble_mac[0] |= 0xC0u;                           /* random static: the top two bits set, at whichever end */
     ble_mac[5] |= 0xC0u;                           /* the stack keeps the most significant byte */
     ble_os_init(ble_heap, sizeof ble_heap);
+    ble_os_trace = &ble_diag.task;
+    ble_stage(1);
+    core_ble_stack_window();                       /* the task stacks are in .pool: inside the stack-limit window */
+    ble_stage(2);
     ble_on = 1;
     st = BLE_STARTING;
     set_deadline(5000);
     le_controller_set_mac(ble_mac);
+    ble_stage(3);
+    ble_stage(4);
     btstack_init();
+    ble_stage(5);
 }
 
 void ble_scan(void)

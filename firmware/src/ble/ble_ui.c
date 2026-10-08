@@ -173,6 +173,27 @@ void ble_status(void)                              /* console `ble` */
     o = put_s(o, "\r\n");
     *o = 0;
     core_con_puts(b);
+    if (ble_diag.magic == BLE_DIAG_MAGIC) {     /* kept over a reboot: where the last start got to */
+        o = put_u(put_s(b, "  starts "), ble_diag.starts);
+        o = put_u(put_s(o, " stage "), ble_diag.stage);
+        o = put_u(put_s(o, " task "), ble_diag.task);
+        o = put_x(put_x(put_x(put_x(put_s(o, " irqs 0x"), ble_irqs_requested[1] >> 8), ble_irqs_requested[1]),
+                        ble_irqs_requested[0] >> 24), ble_irqs_requested[0] >> 16);
+        o = put_x(put_x(o, ble_irqs_requested[0] >> 8), ble_irqs_requested[0]);
+        o = put_s(o, "\r\n");
+        *o = 0;
+        core_con_puts(b);
+    }
+    for (i = 0; i < 4u; i++) {                     /* the task stacks' unused bytes (4096 each) */
+        const char *name;
+        uint32_t f = ble_os_stack_free(i, &name);
+        if (!name)
+            continue;
+        o = put_u(put_s(put_s(put_s(b, "  task "), name), " stack free "), f);
+        o = put_s(o, "\r\n");
+        *o = 0;
+        core_con_puts(b);
+    }
     n = ble_scan_sorted(&scan, idx);
     for (i = 0; i < n; i++) {
         const ble_dev_t *d = &scan.dev[idx[i]];

@@ -146,9 +146,11 @@ static void trampoline(void *arg)
 static void host_entry(void) { trampoline(&tasks[cur]); }
 #endif
 
+#define STACK_PAINT 0xA5A5A5A5u
 int task_create(void (*task)(void *p), void *p, const char *name)
 {
     int i;
+    uint32_t k;
     for (i = 0; i < NTASK; i++)
         if (!tasks[i].name) {
             task_t *t = &tasks[i];
@@ -159,11 +161,25 @@ int task_create(void (*task)(void *p), void *p, const char *name)
             t->wait_obj = 0;
             t->waiting_q = t->sleeping = t->started = 0;
             t->ready = 1;
+            for (k = 0; k < STACK_WORDS; k++)       /* painted: ble_os_stack_free reads the high-water mark */
+                t->stack[k] = STACK_PAINT;
             return 0;
         }
     return -1;
 }
 
+uint32_t ble_os_stack_free(uint32_t i, const char **name)   /* bytes of task i's stack never touched */
+{
+    uint32_t k = 0;
+    if (i >= NTASK || !tasks[i].name) {
+        *name = 0;
+        return 0;
+    }
+    *name = tasks[i].name;
+    while (k < STACK_WORDS && tasks[i].stack[k] == STACK_PAINT)
+        k++;
+    return k * 4u;
+}
 const char *os_current_task(void) { return cur >= 0 ? tasks[cur].name : "app_core"; }
 const char *os_current_task_rom(void) { return os_current_task(); }
 
@@ -177,10 +193,13 @@ static void yield(void)                            /* from a task back to the sc
 #endif
 }
 
+volatile uint32_t *ble_os_trace;                   /* if set: the running task + 1, 0 in the core (diagnostics) */
 static void run(int i)                             /* from the scheduler into task i */
 {
     task_t *t = &tasks[i];
     cur = i;
+    if (ble_os_trace)
+        *ble_os_trace = (uint32_t)i + 1u;
     t->ready = 0;
 #ifdef BLE_OS_HOST
     if (!t->started) {
@@ -201,6 +220,8 @@ static void run(int i)                             /* from the scheduler into ta
     }
 #endif
     cur = -1;
+    if (ble_os_trace)
+        *ble_os_trace = 0;
 }
 
 void os_time_dly(int ticks)

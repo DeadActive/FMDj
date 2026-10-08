@@ -3,11 +3,21 @@
 /* FELUCCA_BLE: the core functions the BLE unit calls (firmware/src/ble/ble_core.h). Thin wrappers over the core's
  * static functions and data; no static data of their own, so the core's other functions compile as without BLE. */
 #include "ble/ble_core.h"
+extern uint32_t _pool_start[];
 uint32_t core_ms(void) { return fm1_ms; }
 void core_wdt_feed(void) { fm1_wdt_feed(); }
 void core_reboot(void) { fm1_reboot(); }
 void core_audio_stop(void) { fm1_audio_stop(); }
-void core_irq_attach(uint32_t n, void (*h)(void), uint32_t prio) { fm1_irq_attach(n, h, prio); }
+void core_irq_attach(uint32_t n, void (*h)(void), uint32_t prio)   /* IRQs off (the caller) */
+{
+    fm1_guard_unlock_top();                     /* the vector table is write-protected after boot */
+    fm1_irq_attach(n, h, prio);
+    fm1_guard_lock_top();
+}
+void core_ble_stack_window(void)                /* the BLE tasks' stacks are in .pool, below the main stacks */
+{
+    fm1_guard_stack_window((uint32_t)(uintptr_t)_pool_start, (uint32_t)(uintptr_t)_sstack_top);
+}
 void core_irq_mask(uint32_t n) { fm1_irq_mask(n); }
 void core_irq_unmask(uint32_t n) { fm1_irq_unmask(n); }
 uint32_t core_irq_is_masked(uint32_t n) { return fm1_irq_is_masked(n); }

@@ -142,6 +142,21 @@ int main(void)
         test_ms += 20; ble_os_service(1000);
         CHECK(tmr_runs == 11, "usr_timeout_del cancels");
     }
+    {   /* stack high-water: a new task's stack is painted, and the count stops at the deepest touched word (on the
+         * host, Darwin's makecontext touches the whole stack, so the device measures; here the counting) */
+        const char *name = 0;
+        uint32_t i, slot = 99;
+        ble_os_init(heap, sizeof heap);
+        task_create(consumer, 0, "painted");
+        for (i = 0; i < 4u; i++)
+            if (ble_os_stack_free(i, &name) && name && !strcmp(name, "painted"))
+                slot = i;
+        CHECK(slot < 4u && ble_os_stack_free(slot, &name) == 4096u, "stack high-water: a new task's stack is all free");
+        if (slot < 4u)
+            tasks[slot].stack[100] = 0;            /* the deepest word the task touched */
+        CHECK(slot < 4u && ble_os_stack_free(slot, &name) == 400u, "stack high-water: counts up to the deepest use");
+        CHECK(ble_os_stack_free(99, &name) == 0 && name == 0, "stack high-water: no such task");
+    }
     printf(fails ? "ble_os: %d FAILED\n" : "ble_os: all checks passed\n", fails);
     return fails != 0;
 }

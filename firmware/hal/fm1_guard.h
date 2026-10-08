@@ -85,6 +85,20 @@ static void fm1_guard_enable(uint32_t which)
     fm1__dbg_lock();
 }
 
+/* move the EMU stack-limit window (both SSP and USP, as fm1_guard_enable) to [lo, hi]: the BLE test widens it to
+ * cover its task stacks in .pool (FELUCCA_BLE only; nothing else calls it) */
+static inline void fm1_guard_stack_window(uint32_t lo, uint32_t hi)
+{
+    fm1__dbg_unlock();
+    FM1_EMU_CON &= ~(1u << 3);
+    FM1_EMU_SSP_L = lo;
+    FM1_EMU_SSP_H = hi;
+    FM1_EMU_USP_L = lo;
+    FM1_EMU_USP_H = hi;
+    FM1_EMU_CON |= 1u << 3;
+    fm1__dbg_lock();
+}
+
 /* write-protect 0x01C7FD50..0x01C7FFFF (boot info, mailbox, vectors):
  * call after the last fm1_irq_attach */
 static void fm1_guard_lock_top(void)

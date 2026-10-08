@@ -41,5 +41,7 @@ void *ble_zalloc(unsigned int n);
 void ble_free(void *p);
 void ble_os_init(uint8_t *heap, uint32_t heap_len);
 uint32_t ble_os_service(uint32_t budget_us);
+extern volatile uint32_t *ble_os_trace;          /* diagnostics: the running task + 1 is written here */
+uint32_t ble_os_stack_free(uint32_t i, const char **name);   /* console: a task's unused stack, bytes */
 uint32_t ble_os_now_ms(void);
 #endif

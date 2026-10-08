@@ -16,6 +16,8 @@ void core_irq_attach(uint32_t n, void (*h)(void), uint32_t prio);
 void core_irq_mask(uint32_t n);
 void core_irq_unmask(uint32_t n);
 uint32_t core_irq_is_masked(uint32_t n);
+/* guards (fm1_guard.h): widen the stack-limit window to the BLE task stacks (before the first task runs) */
+void core_ble_stack_window(void);
 /* USB MIDI out (usb.c midi_out_event: one USB-MIDI event packet, cable 0) */
 void core_midi_out(uint32_t pkt);
 /* screen: colours and fonts by name */

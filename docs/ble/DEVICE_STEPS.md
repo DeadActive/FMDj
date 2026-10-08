@@ -12,10 +12,35 @@ use the UBOOT recovery (Hortator `docs/RECOVERY.md`).
 
 | Step | Build | Package sha256 (first 16) | What to check | Result |
 | --- | --- | --- | --- | --- |
-| A | `FELUCCA_BLE_STEP=1` (linked, never started) | f4fc6aabded6b3bb | home screen; then install B from it | pending |
-| B | `FELUCCA_BLE_STEP=2` (start, scan) | eddb600b263ec96b | PLAY: `STARTING` → `IDLE`; PLAY again: `REPORTS` counts up; console `ble` | pending |
-| C | `FELUCCA_BLE_STEP=3` (list) | 103f82b4ad38d610 | the SMC-Mixer in the list with `MIDI` | pending |
-| D | `FELUCCA_BLE_STEP=4` (connect) | f2950bb00622a6ae | SELECT it, REC: the state reaches `SUBSCRIBED` | pending |
-| E | `FELUCCA_BLE_STEP=5` (monitor, USB) | 43a2ece3c5fa3bf0 | move a fader: `CC` lines on screen and in a Mac MIDI monitor | pending |
+| A | `FELUCCA_BLE_STEP=1` (linked, never started) | a403bb5818f4c8fe | home screen; then install B from it | ok: installed, B installed from it (first round) |
+| B | `FELUCCA_BLE_STEP=2` (start, scan) | 9d31c2057b5b41e7 | PLAY: `STARTING` → `IDLE`; PLAY again: `REPORTS` counts up; console `ble` | pending |
+| C | `FELUCCA_BLE_STEP=3` (list) | a3d7c6cfcc07b3ab | the SMC-Mixer in the list with `MIDI` | pending |
+| D | `FELUCCA_BLE_STEP=4` (connect) | e5b178bfb30c310f | SELECT it, REC: the state reaches `SUBSCRIBED` | pending |
+| E | `FELUCCA_BLE_STEP=5` (monitor, USB) | 99c90e3a58259045 | move a fader: `CC` lines on screen and in a Mac MIDI monitor | pending |
 
 ## Results
+
+### Round 1 (packages of a4781e3)
+
+- A: installed; the update entry worked (B, C, D installed through the installer).
+- B, C, D: **the app crashed on PLAY.** The crash record was lost to a power cycle (`crash`: no record; `boots 1`).
+
+**Cause, from the code.** Two of the core's hardware guards, which the host tests cannot see:
+1. **The EMU stack limit** allows `sp` only in `[_ustack_lo, _sstack_top]` (0x1C74100..0x1C7C000). The BT tasks'
+   stacks are in `.pool` (0x1C20000..). The first switch into a BT task raises the CPU exception, which shows CRASH
+   and reboots after 4 s.
+2. **The top-of-RAM write lock** (`fm1_guard_lock_top`, 0x1C7FD50..0x1C7FFFF) covers the vector table (0x1C7FE00).
+   The stack's `request_irq` writes vectors after boot, which is a write-limit fault.
+
+**Fix (round 2).**
+- `ble_start` widens the stack window to `[_pool_start, _sstack_top]` (`fm1_guard_stack_window`, `core_ble_stack_window`).
+- `core_irq_attach` reopens the top lock around the vector write; `request_irq` makes the attach with IRQs off.
+
+**Diagnostics added.**
+- A `.noinit` breadcrumb: how far `ble_start` got, and the BT task running, both kept over a crash reboot.
+- The stack high-water mark of each task.
+- The IRQs the stack requested.
+
+All of these show in the console's `ble`.
+
+### Round 2 (packages of the fix)
