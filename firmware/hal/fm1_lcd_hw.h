@@ -56,6 +56,8 @@ static void fm1_lcd_wait(void)
     FM1_LCD_SPI_CON |= 0x4000u;
 }
 
+FM1_INLINE int fm1_lcd_done(void) { return (FM1_LCD_SPI_CON & 0x8000u) != 0; }   /* the transfer finished (no wait) */
+
 FM1_INLINE void fm1_lcd_deselect(void) { FM1_LCD_PC_OUT |= FM1_LCD_CS; }
 
 FM1_INLINE void fm1_lcd_send_cmd(uint8_t c)

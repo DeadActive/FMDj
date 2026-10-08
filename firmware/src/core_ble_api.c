@@ -60,6 +60,7 @@ void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px)
         lcd_blit((uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h, px);
 }
 uint32_t core_ticks(void) { return fm1_ticks(); }
+int core_lcd_idle(void) { return !lcd_busy || fm1_lcd_done(); }
 int32_t core_master_pot(void) { return fm1_adc_read(FM1_ADC_MASTER); }
 uint32_t core_notes(void) { return fm1_in.notes; }
 uint32_t core_buttons(void) { return fm1_in.buttons; }

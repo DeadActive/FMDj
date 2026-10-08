@@ -24,14 +24,13 @@
 #define RING_N 4096u                          /* stereo frames: 93 ms, 5.5 Game Boy frames */
 #define Y0 4u                                 /* the picture: rows 4 .. 219; the status line below */
 #define GROUPS (LSDJ_H / 2u)                  /* line pairs: 3 screen rows each */
-#define PUSH_AHEAD 8u                         /* line pairs sent per pass while the audio is ahead ... */
-#define PUSH_BEHIND 2u                        /* ... and while it is not */
+#define PUSH_MAX 8u                           /* line pairs merged into one transfer (24 rows, <= 11.5 KB) */
 #define STATUS_Y 223u
 
 static uint8_t sram[LSDJ_SRAM] LSDJ_POOL;
 static uint8_t fb[LSDJ_H][LSDJ_W] LSDJ_POOL, shown[LSDJ_H][LSDJ_W] LSDJ_POOL;
 static int16_t ring_buf[2u * RING_N] LSDJ_POOL;
-static uint16_t pushbuf[2][3u * 240u];        /* DMA sources: one is filled while the other goes out */
+static uint16_t pushbuf[2][PUSH_MAX * 3u * 240u] LSDJ_POOL;   /* DMA sources: one filled while the other goes out */
 static lsdj_ring_t ring;
 static void (*volatile run)(void);            /* lsdj_step once started */
 static void (*volatile draw)(void);           /* lsdj_push once started */
@@ -168,22 +167,34 @@ static void lsdj_step(void)
         st.frame_max_us = us;
 }
 
-static void lsdj_push(void)                    /* changed line pairs to the screen, round robin */
+/* changed line pairs to the screen, round robin, never waiting: while the last transfer runs, nothing; else one
+ * transfer of the next changed line pair and up to PUSH_MAX - 1 changed ones right below it (their spans' union),
+ * which goes out over SPI while the next Game Boy frame runs */
+static void lsdj_push(void)
 {
-    uint32_t budget = lsdj_ring_fill(&ring) >= 2u * LSDJ_FRAME_SAMPLES ? PUSH_AHEAD : PUSH_BEHIND, k, x0, x1, r;
-    for (k = 0; k < GROUPS && budget; k++) {
-        uint32_t g = group;
+    uint32_t k, g0, n, x0, x1, a, b, r;
+    if (!core_lcd_idle())
+        return;
+    for (k = 0; k < GROUPS; k++) {
+        g0 = group;
         group = group + 1u == GROUPS ? 0 : group + 1u;
-        if (!lsdj_span(fb[2u * g], shown[2u * g], &x0, &x1))
-            continue;
-        lsdj_scale(pushbuf[buf_i], fb[2u * g], x0, x1, PAL);
-        core_lcd_blit((int)LSDJ_SX(x0), (int)(Y0 + 3u * g), (int)LSDJ_SX(x1 - x0), 3, pushbuf[buf_i]);
-        buf_i ^= 1u;
-        for (r = 0; r < 2u; r++)
-            memcpy(&shown[2u * g + r][x0], &fb[2u * g + r][x0], x1 - x0);
-        st.pushes++;
-        budget--;
+        if (lsdj_span(fb[2u * g0], shown[2u * g0], &x0, &x1))
+            break;
     }
+    if (k == GROUPS)
+        return;                               /* the screen shows the frame */
+    for (n = 1; n < PUSH_MAX && g0 + n < GROUPS && lsdj_span(fb[2u * (g0 + n)], shown[2u * (g0 + n)], &a, &b); n++) {
+        x0 = a < x0 ? a : x0;
+        x1 = b > x1 ? b : x1;
+    }
+    for (k = 0; k < n; k++)
+        lsdj_scale(pushbuf[buf_i] + k * 3u * LSDJ_SX(x1 - x0), fb[2u * (g0 + k)], x0, x1, PAL);
+    core_lcd_blit((int)LSDJ_SX(x0), (int)(Y0 + 3u * g0), (int)LSDJ_SX(x1 - x0), (int)(3u * n), pushbuf[buf_i]);
+    buf_i ^= 1u;
+    for (r = 2u * g0; r < 2u * (g0 + n); r++)
+        memcpy(&shown[r][x0], &fb[r][x0], x1 - x0);
+    group = g0 + n == GROUPS ? 0 : g0 + n;
+    st.pushes++;
 }
 
 static __attribute__((noinline)) void lsdj_start(void)

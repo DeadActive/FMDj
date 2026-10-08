@@ -16,8 +16,9 @@ static uint16_t screen[240][240];
 static uint32_t ms, ticks, buttons, notes, blits, bad_blits, texts;
 static const uint16_t *last_px;
 static int last_px_busy;                      /* the stub's "DMA": px must not change until the next LCD call */
-static uint16_t last_copy[3 * 240];
-static uint32_t last_n;
+static uint16_t last_copy[240 * 240];
+static uint32_t last_n, last_h;
+static int lcd_idle = 1;
 
 #include "ble/ble_core.h"
 uint32_t core_ms(void) { return ms; }
@@ -41,6 +42,7 @@ void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px)
             screen[y + j][x + i] = px[j * w + i];
     last_px = px;
     last_n = (uint32_t)(w * h);
+    last_h = (uint32_t)h;
     memcpy(last_copy, px, last_n * 2u);
     last_px_busy = 1;
     blits++;
@@ -54,6 +56,7 @@ void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int
     (void)s;
 }
 static int32_t pot = 1023;
+int core_lcd_idle(void) { return lcd_idle; }
 int32_t core_master_pot(void) { return pot; }
 uint32_t core_buttons(void) { return buttons; }
 uint32_t core_notes(void) { return notes; }
@@ -142,6 +145,18 @@ int main(void)
         pass();
         pass();
         CHECK(st.pad == 0xFF);
+    }
+    {   /* the push never waits: nothing while the panel is busy; else one transfer of up to 8 line pairs */
+        uint32_t b = blits;
+        memset(shown, 0xFF, sizeof shown);    /* everything changed */
+        lcd_idle = 0;
+        ble_draw();
+        CHECK(blits == b);
+        lcd_idle = 1;
+        ble_draw();
+        CHECK(blits == b + 1 && last_h == 24);
+        ble_draw();
+        CHECK(blits == b + 2);
     }
     for (i = 0; i < 200; i++) {               /* draw passes only: the screen catches up */
         ble_draw();
