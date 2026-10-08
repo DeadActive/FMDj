@@ -67,6 +67,28 @@ static uint8_t lsdj_pad(uint32_t buttons, uint32_t notes, uint32_t play_bit, uin
     return (uint8_t)~down;
 }
 
+/* the Game Boy keys held in pad (active low) as text, e.g. "START SEL R"; "-" if none (b: >= 22 bytes) */
+static void lsdj_pad_text(char *b, uint8_t pad)
+{
+    static const struct { uint8_t bit; char name[6]; } K[8] = {
+        {JOYPAD_START, "START"}, {JOYPAD_SELECT, "SEL"}, {JOYPAD_A, "A"}, {JOYPAD_B, "B"},
+        {JOYPAD_LEFT, "L"}, {JOYPAD_RIGHT, "R"}, {JOYPAD_UP, "U"}, {JOYPAD_DOWN, "D"}};
+    uint32_t i;
+    const char *s;
+    char *o = b;
+    for (i = 0; i < 8u; i++) {
+        if (pad & K[i].bit)
+            continue;
+        if (o != b)
+            *o++ = ' ';
+        for (s = K[i].name; *s; s++)
+            *o++ = *s;
+    }
+    if (o == b)
+        *o++ = '-';
+    *o = 0;
+}
+
 static void lsdj_line(uint8_t *row, const uint8_t *px)     /* Peanut-GB's line: shade in bits 0..1 */
 {
     uint32_t x;

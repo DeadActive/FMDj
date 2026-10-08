@@ -43,6 +43,19 @@ static void test_pad(void)
     CHECK(lsdj_pad(1u << 0 | 1u << 1, 0, PLAY, REC) == 0xFF);           /* OCT- / OCT+ are not Game Boy keys */
 }
 
+static void test_pad_text(void)
+{
+    char b[32];
+    lsdj_pad_text(b, 0xFF);
+    CHECK(strcmp(b, "-") == 0);                               /* nothing held */
+    lsdj_pad_text(b, (uint8_t)~JOYPAD_START);
+    CHECK(strcmp(b, "START") == 0);
+    lsdj_pad_text(b, (uint8_t)~(JOYPAD_SELECT | JOYPAD_RIGHT));
+    CHECK(strcmp(b, "SEL R") == 0);
+    lsdj_pad_text(b, 0x00);                                   /* all: the longest text */
+    CHECK(strcmp(b, "START SEL A B L R U D") == 0);
+}
+
 static uint8_t fb[LSDJ_H][LSDJ_W], shown[LSDJ_H][LSDJ_W];
 
 static void test_line_and_span(void)
@@ -136,6 +149,7 @@ int main(void)
 {
     test_rom();
     test_pad();
+    test_pad_text();
     test_line_and_span();
     test_scale();
     test_ring();

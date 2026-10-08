@@ -45,6 +45,8 @@ static const uint16_t PAL[4] = {RGB(232, 232, 224), RGB(160, 160, 152), RGB(88, 
 static struct {
     uint32_t frames, waits, frame_max_us, frame_us_sum, pushes, start_ms;
     uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under;
+    uint32_t buttons, notes;                  /* as read for the last frame (console `ble`) */
+    uint8_t pad, pad_shown;                   /* the Game Boy keys of the last frame; those on the status line */
     int error;
 } st;
 
@@ -81,17 +83,38 @@ static char *put_u(char *b, uint32_t v)
     return b;
 }
 
-static void status_line(void)
+static char *put_hex(char *b, uint32_t v)
+{
+    uint32_t i = 28u;
+    while (i && !(v >> i))
+        i -= 4u;
+    for (;; i -= 4u) {
+        *b++ = "0123456789ABCDEF"[(v >> i) & 15u];
+        if (!i)
+            break;
+    }
+    *b = 0;
+    return b;
+}
+
+static void status_line(void)                  /* left: speed, frames per second, audio gaps */
 {
     char b[48], *p = b;
-    p = put_s(p, "SPEED ");
     p = put_u(p, st.last_fps * 100u / 60u);
-    p = put_s(p, "%  ");
+    p = put_s(p, "% ");
     p = put_u(p, st.last_fps);
-    p = put_s(p, " FPS  GAPS ");
+    p = put_s(p, "FPS GAP");
     p = put_u(p, st.last_under * 100u / 44100u);
     put_s(p, "%");
-    core_text(0, (int)STATUS_Y, 240, CORE_FONT_S, b, CORE_MID, CORE_BG, 1);
+    core_text(0, (int)STATUS_Y, 112, CORE_FONT_S, b, CORE_MID, CORE_BG, 0);
+}
+
+static void keys_line(void)                    /* right: the Game Boy keys held (redrawn when they change) */
+{
+    char b[24];
+    lsdj_pad_text(b, st.pad);
+    core_text(112, (int)STATUS_Y, 128, CORE_FONT_S, b, CORE_THEME, CORE_BG, 0);
+    st.pad_shown = st.pad;
 }
 
 /* ---- running ---- */
@@ -106,12 +129,17 @@ static void lsdj_step(void)
         st.sec_under = ring.under;
         status_line();
     }
+    if (st.pad != st.pad_shown)
+        keys_line();
     if (lsdj_ring_free(&ring) < LSDJ_FRAME_SAMPLES) {     /* ahead of the audio: wait for it */
         st.waits++;
         return;
     }
     t0 = core_ticks();
-    emu_frame(lsdj_pad(core_buttons(), core_notes(), core_play_bit(), core_rec_bit()));
+    st.buttons = core_buttons();
+    st.notes = core_notes();
+    st.pad = lsdj_pad(st.buttons, st.notes, core_play_bit(), core_rec_bit());
+    emu_frame(st.pad);
     lsdj_ring_push(&ring, emu.snd, LSDJ_FRAME_SAMPLES);
     us = (core_ticks() - t0) / CORE_TICKS_PER_US;
     st.frames++;
@@ -157,6 +185,8 @@ static __attribute__((noinline)) void lsdj_start(void)
         return;
     }
     st.start_ms = st.sec_ms = core_ms();
+    st.pad = 0xFF;
+    st.pad_shown = 0;                         /* draw the keys part once */
     draw = lsdj_push;
     run = lsdj_step;
 }
@@ -216,6 +246,18 @@ void ble_status(void)                          /* the console's `ble` */
     p = put_u(p, st.last_fps);
     p = put_s(p, " waits ");
     p = put_u(p, st.waits);
+    put_s(p, "\r\n");
+    core_con_puts(b);
+    p = put_s(b, "keys buttons 0x");
+    p = put_hex(p, st.buttons);
+    p = put_s(p, " notes 0x");
+    p = put_hex(p, st.notes);
+    p = put_s(p, " play 0x");
+    p = put_hex(p, core_play_bit());
+    p = put_s(p, " rec 0x");
+    p = put_hex(p, core_rec_bit());
+    p = put_s(p, " pad 0x");
+    p = put_hex(p, st.pad);
     put_s(p, "\r\n");
     core_con_puts(b);
     p = put_s(b, "audio gaps ");

@@ -94,6 +94,17 @@ int main(void)
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
     CHECK(st.frames > 250 && emu.errors == 0);
+    {   /* PLAY and REC held: START and SELECT reach the Game Boy, and the keys part of the status line is redrawn */
+        uint32_t t = texts;
+        buttons = core_play_bit() | core_rec_bit();
+        pass();
+        pass();
+        CHECK(st.pad == (uint8_t)~(JOYPAD_START | JOYPAD_SELECT) && st.pad_shown == st.pad && texts > t);
+        buttons = 0;
+        pass();
+        pass();
+        CHECK(st.pad == 0xFF);
+    }
     for (i = 0; i < 200; i++) {               /* draw passes only: the screen catches up */
         ble_draw();
     }
