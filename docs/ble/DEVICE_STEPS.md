@@ -132,3 +132,8 @@ What it took on the device, beyond the plan:
 2. The radio calibration (`wf_rf_trim`) cannot run on this core's clock and flash setup: it crashed when run from
    XIP and hung when run from RAM with interrupts off. The stock firmware's stored calibration (config store item
    187) is used instead, as the SDK provides for (`RFIinitUseTrimValue`).
+
+### After the final review (2f9eec9, E package b717a2f8…)
+
+**ok, everything works on the device.** BT starts (btstack_init now in its own task), the scan finds the mixer, it
+connects, and MIDI shows on screen and reaches USB.
