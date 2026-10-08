@@ -151,7 +151,7 @@ void ble_draw(void)
 
 void ble_status(void)                              /* console `ble` */
 {
-    char b[96], *o;
+    char b[160], *o;
     uint32_t code, i, n;
     uint8_t idx[BLE_SCAN_MAX];
     const char *err = ble_err(&code);
@@ -178,6 +178,10 @@ void ble_status(void)                              /* console `ble` */
         o = put_u(put_s(o, " stage "), ble_diag.stage);
         o = put_u(put_s(o, " task "), ble_diag.task);
         o = put_u(put_s(o, " trim "), ble_diag.trim);
+        o = put_u(put_s(o, " delays "), ble_diag.delays);
+        o = put_u(put_s(o, " last_us "), ble_diag.last_us);
+        o = put_u(put_s(o, " t4_stalls "), ble_diag.t4_stalls);
+        o = put_u(put_s(o, " loops/us "), ble_loops_per_us);
         o = put_x(put_x(put_x(put_x(put_s(o, " irqs 0x"), ble_irqs_requested[1] >> 8), ble_irqs_requested[1]),
                         ble_irqs_requested[0] >> 24), ble_irqs_requested[0] >> 16);
         o = put_x(put_x(o, ble_irqs_requested[0] >> 8), ble_irqs_requested[0]);

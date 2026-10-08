@@ -258,6 +258,7 @@ void ble_start(void)
     ble_mac[0] |= 0xC0u;                           /* random static: the top two bits set, at whichever end */
     ble_mac[5] |= 0xC0u;                           /* the stack keeps the most significant byte */
     ble_os_init(ble_heap, sizeof ble_heap);
+    ble_delay_calibrate();                         /* (counted-loop delays for the radio calibration) */
     ble_os_trace = &ble_diag.task;
     ble_stage(1);
     core_ble_stack_window();                       /* the task stacks are in .pool: inside the stack-limit window */

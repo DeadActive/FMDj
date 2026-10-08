@@ -74,18 +74,36 @@ uint8_t irq_read(uint32_t index) { return (uint8_t)!core_irq_is_masked(index); }
 /* ---- delays and clocks (clock values read from the hardware, read-only) ---- */
 /* in RAM (.ram_text): the radio calibration calls delay_us while the flash must not be read (app_ble.ld) */
 #define BLE_RAM __attribute__((section(".ram_text.ble"), noinline))
-BLE_RAM void hw_udelay(unsigned int us)
+/* As the SDK's (cpu.a delay.c): a counted loop, no timer. The radio calibration calls delay_us while it trims the
+ * crystal and the clocks, so a delay must not depend on a timer still counting. Calibrated against TIMER4 once at
+ * start-up (ble_delay_calibrate), rounded up: a delay is never shorter than asked. */
+static uint32_t ble_loops_per_us = 64;
+BLE_RAM static void ble_spin(uint32_t n)
 {
-    uint32_t t0 = fm1_ble_ticks();
-    while (fm1_ble_ticks() - t0 < us * FM1_TICKS_PER_US)
-        ;
+    while (n--)
+        fm1_ble_nop();
+}
+void ble_delay_calibrate(void)                           /* (interrupts off: they would only lengthen the run) */
+{
+    uint32_t t0, dt;
+    fm1_ble_irq_off();
+    t0 = fm1_ble_ticks();
+    ble_spin(100000);
+    dt = fm1_ble_ticks() - t0;                           /* 24 ticks per us */
+    fm1_ble_irq_on();
+    if (dt)
+        ble_loops_per_us = (100000u * FM1_TICKS_PER_US + dt - 1u) / dt;
 }
 BLE_RAM void delay_us(unsigned int us)
 {
     uint32_t t0 = fm1_ble_ticks();
-    while (fm1_ble_ticks() - t0 < us * FM1_TICKS_PER_US)
-        ;
+    ble_spin(us * ble_loops_per_us);
+    ble_diag.delays++;
+    ble_diag.last_us = us;
+    if (us && fm1_ble_ticks() == t0)
+        ble_diag.t4_stalls++;
 }
+BLE_RAM void hw_udelay(unsigned int us) { delay_us(us); }
 BLE_RAM void *__wrap_memcpy(void *d, const void *s, unsigned n)   /* (build.py --wrap=memcpy) */
 {
     uint8_t *o = d;

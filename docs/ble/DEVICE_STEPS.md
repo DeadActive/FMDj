@@ -72,3 +72,20 @@ All of these show in the console's `ble`.
   **Next D (ff66d9a6…) adds diagnostics only:**
   - `ble` prints the whole crash record (dbg, icfg and the four-entry branch trace too);
   - a `trim` breadcrumb: 1 inside the radio calibration, 2 after it.
+- **D (ff66d9a6…, diagnostics): PLAY reset the device.**
+  - `crash`: no record. `prev_rst 0x04`: a **watchdog** reset.
+  - Breadcrumb: stage 5, task btctrler, **trim 1**. The CPU stopped inside the radio calibration, with
+    interrupts off, until the 8 s watchdog fired.
+
+  **Two candidates:**
+  1. Our `delay_us` waited on TIMER4 (crystal-clocked) while the calibration retunes the crystal and the clocks.
+     The SDK's `delay_us` is a counted loop with no timer (cpu.a `delay.c`). The round-2 crash was also inside
+     `delay_us`.
+  2. The SDK also quiets the flash for the trim (`norflash_enter_spi_code`: SFC off, flash out of continuous-read
+     mode).
+
+  **Next D (42f6b48c…):**
+  - `delay_us` / `hw_udelay` are counted RAM loops, as in the SDK, calibrated against TIMER4 at start-up
+    (rounded up).
+  - Diagnostics: the delay count, the last delay's length, and `t4_stalls` (delays during which TIMER4 did not
+    move).

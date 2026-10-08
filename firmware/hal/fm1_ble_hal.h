@@ -20,6 +20,9 @@
  * must not call into XIP */
 static inline __attribute__((always_inline)) uint32_t fm1_ble_ticks(void) { return *(volatile uint32_t *)0x10804u; }
 
+/* one nop, for the counted delay loops (the compiler must not drop or merge them) */
+static inline __attribute__((always_inline)) void fm1_ble_nop(void) { __asm__ volatile("nop"); }
+
 enum { FM1_CLK_SYS, FM1_CLK_HSB, FM1_CLK_LSB, FM1_CLK_SFC };
 
 static uint32_t fm1_clk_hz(uint32_t which)
