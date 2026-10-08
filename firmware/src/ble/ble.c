@@ -30,6 +30,7 @@ static __attribute__((unused)) void ble_stage(uint32_t s)
 #include "ble/ble_os.c"
 #include "ble/ble_midi.c"
 #include "ble/ble_scan.c"
+#include "ble/ble_vm.c"
 #include "ble/ble_port.c"
 static uint8_t ble_heap[48 * 1024] __attribute__((section(".pool")));
 static uint8_t ble_on;

@@ -250,6 +250,11 @@ void ble_start(void)
     uint32_t i, x;
     if (st != BLE_OFF)
         return;
+    if (!ble_rf_trim_load()) {                     /* no stored radio calibration: do not start (the trim hangs) */
+        set_err("NO RF TRIM IN FLASH", 0);
+        st = BLE_FAILED;
+        return;
+    }
     x = fm1_ticks() ^ core_ms() * 2654435761u;    /* the time of the key press */
     for (i = 0; i < 6u; i++) {
         x = x * 1103515245u + 12345u;

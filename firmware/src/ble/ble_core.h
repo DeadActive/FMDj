@@ -20,6 +20,8 @@ uint32_t core_irq_is_masked(uint32_t n);
 void core_ble_stack_window(void);
 /* USB MIDI out (usb.c midi_out_event: one USB-MIDI event packet, cable 0) */
 void core_midi_out(uint32_t pkt);
+/* flash: read the plain area (0x93000..0xFFFFF) through the core's driver; 0 = ok (never writes) */
+int core_flash_read(uint32_t off, void *buf, uint32_t n);
 /* screen: colours and fonts by name */
 enum { CORE_BG, CORE_TEXT, CORE_THEME, CORE_MID, CORE_SEL, CORE_INK, CORE_CRASH_BG, CORE_CRASH_INK };
 enum { CORE_FONT_S, CORE_FONT_M };

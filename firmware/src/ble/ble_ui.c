@@ -165,6 +165,12 @@ void ble_status(void)                              /* console `ble` */
     o = put_s(o, "\r\n");
     *o = 0;
     core_con_puts(b);
+    o = put_s(b, "  rf trim ");
+    o = ble_rf_trim_at ? put_x(put_x(put_x(put_s(o, "stored, in the block at 0x"), ble_rf_trim_at >> 16), ble_rf_trim_at >> 8),
+                               ble_rf_trim_at) : put_s(o, "not loaded");
+    o = put_s(o, "\r\n");
+    *o = 0;
+    core_con_puts(b);
     o = put_s(b, "  mac ");
     for (i = 6; i--;)
         o = put_x(o, ble_mac[i]);

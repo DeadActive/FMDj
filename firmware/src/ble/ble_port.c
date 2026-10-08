@@ -213,9 +213,42 @@ BLE_RAM void exit_wifi_rf_trim_region(uint32_t **start_of_region, uint8_t *rf_tr
     ble_diag.trim = 2;
     fm1_ble_irq_on();
 }
-const uint8_t WIFI_PA_ENABLE = 0, wifi_temperature_drift_trim_on = 0, RFIinitUseTrimValue = 0;
+const uint8_t WIFI_PA_ENABLE = 0, wifi_temperature_drift_trim_on = 0;
+/* the radio calibration the stock firmware stored (ble_vm.c) is used instead of running the trim, which hangs or
+ * crashes here (docs/ble/DEVICE_STEPS.md, round 4): with a valid record, wf_rf_common_init skips wf_rf_trim */
+const uint8_t RFIinitUseTrimValue = 1;
+static uint8_t ble_rf_trim[BLE_VM_RF_TRIM_LEN];
+static uint32_t ble_rf_trim_at;                          /* flash offset of the record used, 0 = none */
+#define BLE_VM_FROM 0xE5000u                             /* the plain area the stock config store lives in */
+#define BLE_VM_TO 0xFC000u
+static __attribute__((unused)) int ble_rf_trim_load(void)  /* scan the config store; 1 = a valid record found */
+{
+    static uint8_t buf[512];
+    uint32_t off;
+    ble_rf_trim_at = 0;
+    for (off = BLE_VM_FROM; off < BLE_VM_TO; off += sizeof buf - (4u + BLE_VM_RF_TRIM_LEN)) {
+        uint32_t n = BLE_VM_TO - off < sizeof buf ? BLE_VM_TO - off : sizeof buf;
+        uint8_t rec[BLE_VM_RF_TRIM_LEN];
+        core_wdt_feed();
+        if (core_flash_read(off, buf, n))
+            return 0;
+        if (ble_vm_rf_trim(buf, n, rec)) {
+            memcpy(ble_rf_trim, rec, sizeof rec);
+            ble_rf_trim_at = off;
+        }
+        if (n < sizeof buf)
+            break;
+    }
+    return ble_rf_trim_at != 0;
+}
 uint8_t RTDebugLevel = 0;
-int wifi_get_rf_trim_data(void *info, int size) { (void)info; (void)size; return -1; }
+int wifi_get_rf_trim_data(void *info, int size)
+{
+    if (!ble_rf_trim_at || size != (int)BLE_VM_RF_TRIM_LEN)
+        return -1;
+    memcpy(info, ble_rf_trim, BLE_VM_RF_TRIM_LEN);
+    return 0;
+}
 int wifi_set_rf_trim_data(void *info, int size) { (void)info; (void)size; return -1; }
 void wifi_get_xosc(uint8_t *xosc) { xosc[0] = 0x0B; xosc[1] = 0x0B; }   /* board.c demo default: crystal caps */
 int wifi_get_pa_trim_data(uint8_t *pa)

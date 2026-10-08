@@ -89,3 +89,20 @@ All of these show in the console's `ble`.
     (rounded up).
   - Diagnostics: the delay count, the last delay's length, and `t4_stalls` (delays during which TIMER4 did not
     move).
+- **D (42f6b48c…, counted delays): a loud tone that changed pitch, then a watchdog reset.**
+  - The tone: with interrupts off, the audio DMA repeats its buffer, and the trim retunes the clocks under it.
+  - `t4_stalls 0`: TIMER4 did not stop, so candidate 1 is ruled out.
+  - The last delay was 80 µs: wf_rf_common_init's `set_pll_rn_en(); delay_us(80)` just before `wf_rf_trim`.
+  - The trim hung before `rd_adc_peak` (its only delay_us), in `wf_rx_tune_test`'s poll of an RF "done" bit.
+
+  **The way round it, as the stock firmware does.** The library skips the trim when `RFIinitUseTrimValue` is set
+  and `wifi_get_rf_trim_data` returns a valid stored record (`wifi_trim_is_already` / `quick_start_wifi_trim`).
+  The stock firmware stored one on this FM-1:
+  - **Where:** flash 0xE8019, in its config store (sector 0xE8000, `55 AA AA 55`).
+  - **Item format:** `[CRC16 low byte][id low byte][len << 4 | id >> 8][data]`.
+  - **The neighbouring items:** id 106 crystal trim `0B 0B`, id 107 PA trim `01 07 04 07 0B 01 07` (both what the
+    port already used), and id 187 = VM_WIFI_RF_INIT_INFO, 68 bytes with its own CRC16.
+
+  **Next D (0b04b0a6…):** at BLE start, scans 0xE5000..0xFC000 (read only, through the core's `st_read`) for the
+  last valid record and hands it to the library, so the trim does not run. With no record, BT does not start:
+  FAILED with `NO RF TRIM IN FLASH`.

@@ -22,6 +22,19 @@ void core_irq_mask(uint32_t n) { fm1_irq_mask(n); }
 void core_irq_unmask(uint32_t n) { fm1_irq_unmask(n); }
 uint32_t core_irq_is_masked(uint32_t n) { return fm1_irq_is_masked(n); }
 void core_midi_out(uint32_t pkt) { midi_out_event(pkt); }
+int core_flash_read(uint32_t off, void *buf, uint32_t n)    /* plain flash only (0x93000..), read only */
+{
+#if FELUCCA_FLASH
+    if (!flash_ok || off < 0x93000u || off > 0x100000u || n > 0x100000u - off)
+        return -1;
+    return st_read(off, buf, n);
+#else
+    (void)off;
+    (void)buf;
+    (void)n;
+    return -1;
+#endif
+}
 static uint16_t core_colour(int c)
 {
     switch (c) {

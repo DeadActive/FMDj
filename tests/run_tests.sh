@@ -270,6 +270,7 @@ mkdir -p build/tests
 run "BLE-MIDI parser" sh -c 'cc -Wall -O1 -o build/tests/ble_midi_test tests/ble/ble_midi_test.c && build/tests/ble_midi_test'
 run "BLE scan table" sh -c 'cc -Wall -O1 -o build/tests/ble_scan_test tests/ble/ble_scan_test.c && build/tests/ble_scan_test'
 run "BLE central state machine, UUID match, monitor text" sh -c 'cc -Wall -O1 -o build/tests/ble_central_test tests/ble/ble_central_test.c && build/tests/ble_central_test'
+run "BLE stored RF calibration (config store)" sh -c 'cc -Wall -O1 -o build/tests/ble_vm_test tests/ble/ble_vm_test.c && build/tests/ble_vm_test'
 run "BLE OS layer (host back end)" sh -c 'cc -Wall -O1 -Wno-deprecated-declarations -Ifirmware/src/ble -o build/tests/ble_os_test tests/ble/ble_os_test.c && build/tests/ble_os_test'
 
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
