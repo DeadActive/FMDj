@@ -107,6 +107,16 @@ int main(void)
         buttons = core_button_bit(CORE_BTN_OCTDN) | core_button_bit(CORE_BTN_OCTUP); /* the UBOOT pair: no key */
         pass();
         CHECK(st.pad == 0xFF);
+        CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP));                          /* both options on at start */
+        ble_key(core_button_bit(CORE_BTN_FX), 0);                                    /* FX: frame skip off */
+        CHECK(emu_mode == EMU_FAST_ROM);
+        ble_key(core_button_bit(CORE_BTN_LFO), 0);                                   /* LFO: fast ROM read off */
+        CHECK(emu_mode == 0);
+        t = texts;
+        pass();
+        CHECK(texts > t);                                                            /* the options redrawn */
+        ble_key(core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO), 0);
+        CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP));
         buttons = 0;
         pass();
         pass();

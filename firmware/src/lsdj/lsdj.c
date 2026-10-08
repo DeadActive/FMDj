@@ -50,7 +50,7 @@ static const uint16_t PAL[4] = {RGB(232, 232, 224), RGB(160, 160, 152), RGB(88, 
 
 static struct {
     uint32_t frames, waits, frame_max_us, frame_us_sum, pushes, start_ms;
-    uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under;
+    uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under, sec_us, last_load;
     uint32_t buttons, notes;                  /* as read for the last frame (console `ble`) */
     uint8_t pad, pad_shown;                   /* the Game Boy keys of the last frame; those on the status line */
     int error;
@@ -103,22 +103,28 @@ static char *put_hex(char *b, uint32_t v)
     return b;
 }
 
-static void status_line(void)                  /* left: speed, frames per second, audio gaps */
+/* left: SPD = Game Boy frames per second against 60; LOAD = the emulator's time per frame against a Game Boy frame
+ * (16.74 ms): over 100 % it cannot keep up, under 100 % it waits for the audio */
+static void status_line(void)
 {
     char b[48], *p = b;
+    p = put_s(p, "SPD ");
     p = put_u(p, st.last_fps * 100u / 60u);
-    p = put_s(p, "% ");
-    p = put_u(p, st.last_fps);
-    p = put_s(p, "FPS GAP");
-    p = put_u(p, st.last_under * 100u / 44100u);
+    p = put_s(p, "% LOAD ");
+    p = put_u(p, st.last_load);
     put_s(p, "%");
     core_text(0, (int)STATUS_Y, 112, CORE_FONT_S, b, CORE_MID, CORE_BG, 0);
 }
 
-static void keys_line(void)                    /* right: the Game Boy keys held (redrawn when they change) */
+/* right: the Game Boy keys held, or with none the speed options (FAST / SLOW ROM read, SKIP / FULL drawing) */
+static void keys_line(void)
 {
     char b[24];
-    lsdj_pad_text(b, st.pad);
+    if (st.pad == 0xFFu) {
+        put_s(put_s(b, emu_mode & EMU_FAST_ROM ? "FAST " : "SLOW "), emu_mode & EMU_FRAME_SKIP ? "SKIP" : "FULL");
+    } else {
+        lsdj_pad_text(b, st.pad);
+    }
     core_text(112, (int)STATUS_Y, 128, CORE_FONT_S, b, CORE_THEME, CORE_BG, 0);
     st.pad_shown = st.pad;
 }
@@ -133,6 +139,8 @@ static void lsdj_step(void)
         st.sec_frames = st.frames;
         st.last_under = ring.under - st.sec_under;
         st.sec_under = ring.under;
+        st.last_load = st.last_fps ? st.sec_us / st.last_fps * 100u / 16742u : 0;
+        st.sec_us = 0;
         status_line();
     }
     if (st.pad != st.pad_shown)
@@ -150,6 +158,7 @@ static void lsdj_step(void)
     us = (core_ticks() - t0) / CORE_TICKS_PER_US;
     st.frames++;
     st.frame_us_sum += us;
+    st.sec_us += us;
     if (us > st.frame_max_us)
         st.frame_max_us = us;
 }
@@ -203,8 +212,17 @@ static __attribute__((noinline)) void lsdj_start(void)
 void ble_key(uint32_t pressed_buttons, int32_t select_steps)
 {
     (void)select_steps;
-    if (!run && !st.error && (pressed_buttons & core_play_bit()))
-        lsdj_start();
+    if (!run) {
+        if (!st.error && (pressed_buttons & core_play_bit()))
+            lsdj_start();
+        return;
+    }
+    if (pressed_buttons & core_button_bit(CORE_BTN_FX))           /* the speed options, switched while running */
+        emu_mode ^= EMU_FRAME_SKIP;
+    if (pressed_buttons & core_button_bit(CORE_BTN_LFO))
+        emu_mode ^= EMU_FAST_ROM;
+    if (pressed_buttons & (core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO)))
+        st.pad_shown = (uint8_t)~st.pad;     /* redraw the options */
 }
 
 void ble_service(void)
@@ -224,7 +242,7 @@ void ble_draw(void)
     if (splash_done || st.error)
         return;
     splash_done = 1;
-    core_text(0, 160, 240, CORE_FONT_S, "PLAY: START LSDJ", CORE_THEME, CORE_BG, 1);
+    core_text(0, 160, 240, CORE_FONT_S, "PLAY: START, THEN REC: DEMO", CORE_THEME, CORE_BG, 1);
     core_text(0, 176, 240, CORE_FONT_S, "UP SCL    DOWN SAVE", CORE_MID, CORE_BG, 1);
     core_text(0, 192, 240, CORE_FONT_S, "LEFT HOME    RIGHT ARP", CORE_MID, CORE_BG, 1);
     core_text(0, 208, 240, CORE_FONT_S, "A GLO    B EDIT", CORE_MID, CORE_BG, 1);
@@ -268,6 +286,12 @@ void ble_status(void)                          /* the console's `ble` */
     p = put_hex(p, core_rec_bit());
     p = put_s(p, " pad 0x");
     p = put_hex(p, st.pad);
+    put_s(p, "\r\n");
+    core_con_puts(b);
+    p = put_s(b, "mode ");
+    p = put_u(p, emu_mode);
+    p = put_s(p, " (1 fast rom, 2 frame skip) load% ");
+    p = put_u(p, st.last_load);
     put_s(p, "\r\n");
     core_con_puts(b);
     p = put_s(b, "audio gaps ");

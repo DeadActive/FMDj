@@ -21,6 +21,15 @@ struct tm { int tm_sec, tm_min, tm_hour, tm_mday, tm_mon, tm_year, tm_wday, tm_y
 static struct minigb_apu_ctx emu_apu;
 uint8_t audio_read(const uint16_t a) { return minigb_apu_audio_read(&emu_apu, a); }
 void audio_write(const uint16_t a, const uint8_t v) { minigb_apu_audio_write(&emu_apu, a, v); }
+/* speed options, switchable while running (lsdj.c: FX / LFO): the inline ROM read (peanut_gb.h PGB_FAST_ROM) and
+ * drawing every 2nd frame only (Peanut-GB's frame skip) */
+#define EMU_FAST_ROM 1u
+#define EMU_FRAME_SKIP 2u
+static uint32_t emu_mode = EMU_FAST_ROM | EMU_FRAME_SKIP;   /* both on at start */
+static const lsdj_bank_t *emu_rom_t;
+static uint32_t emu_rom_n;
+#define PGB_FAST_ROM_ON (emu_mode & EMU_FAST_ROM)
+#define PGB_FAST_ROM(off) lsdj_rom_byte(emu_rom_t, emu_rom_n, (uint32_t)(off))
 #define ENABLE_SOUND 1
 #define ENABLE_LCD 1
 #define PEANUT_GB_USE_INTRINSICS 0
@@ -45,7 +54,7 @@ static struct {
 static uint8_t emu_rom_read(struct gb_s *gb, const uint_fast32_t a)
 {
     (void)gb;
-    return lsdj_rom_byte(emu.rom, emu.nbanks, (uint32_t)a);
+    return lsdj_rom_byte(emu_rom_t, emu_rom_n, (uint32_t)a);
 }
 static uint8_t emu_ram_read(struct gb_s *gb, const uint_fast32_t a)
 {
@@ -77,8 +86,8 @@ static void emu_line(struct gb_s *gb, const uint8_t *px, const uint_fast8_t y)
 static int emu_init(const lsdj_bank_t *rom, uint32_t nbanks, uint8_t *sram, uint8_t (*fb)[LSDJ_W])
 {
     enum gb_init_error_e r;
-    emu.rom = rom;
-    emu.nbanks = nbanks;
+    emu.rom = emu_rom_t = rom;
+    emu.nbanks = emu_rom_n = nbanks;
     emu.sram = sram;
     emu.fb = fb;
     emu.errors = 0;
@@ -95,6 +104,7 @@ static int emu_init(const lsdj_bank_t *rom, uint32_t nbanks, uint8_t *sram, uint
 static void emu_frame(uint8_t joypad)          /* one Game Boy frame: the lines into fb, the audio into emu.snd */
 {
     emu.gb.direct.joypad = joypad;
+    emu.gb.direct.frame_skip = (emu_mode & EMU_FRAME_SKIP) != 0;
     gb_run_frame(&emu.gb);
     minigb_apu_audio_callback(&emu_apu, emu.snd);
 }

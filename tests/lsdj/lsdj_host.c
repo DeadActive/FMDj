@@ -2,7 +2,9 @@
  * LSDj fork: 2026 DEADACTIVE */
 /* Host harness of the LSDj unit's emulator (firmware/src/lsdj/lsdj_emu.c): runs the owner's own ROM, never stored
  * in this repo, for some frames with the keys held as given, and writes the save RAM, a screenshot and the sound.
- *   lsdj_host ROM FRAMES [-s SAVE_IN] [-o SAVE_OUT] [-p SHOT.pgm] [-w SOUND.wav] [-k FROM:TO:KEYS]...
+ *   lsdj_host ROM FRAMES [-s SAVE_IN] [-o SAVE_OUT] [-p SHOT.pgm] [-w SOUND.wav] [-m MODE] [-k FROM:TO:KEYS]...
+ * MODE: lsdj_emu.c's emu_mode bits (1 inline ROM read, the default; 2 frame skip). Prints a hash of every frame's
+ * sound and the final save RAM: the speed options must not change it.
  * KEYS: letters of l r u d a b s(elect) t(start). Exit 0 = the ROM ran, no emulator errors, the screen not blank.
  * tools/lsdj_rom.py runs it to make the start-up save (LSDj past its first-start check). */
 #include <stdio.h>
@@ -48,7 +50,8 @@ int main(int argc, char **argv)
 {
     FILE *f, *wav = 0;
     long n;
-    uint32_t i, frames, nb, ink = 0, peak = 0, nsamp = 0;
+    uint32_t i, frames, nb, ink = 0, peak = 0, nsamp = 0, hash = 2166136261u;
+    clock_t t0;
     int r;
     const char *p;
     if (argc < 3) {
@@ -75,6 +78,8 @@ int main(int argc, char **argv)
         fread(sram, 1, sizeof sram, f);
         fclose(f);
     }
+    if ((p = opt(argc, argv, "-m")))
+        emu_mode = (uint32_t)atoi(p);
     r = emu_init(banks, nb, sram, fb);
     if (r) {
         fprintf(stderr, "emu_init: %d\n", r);
@@ -83,9 +88,12 @@ int main(int argc, char **argv)
     if ((p = opt(argc, argv, "-w")) && (wav = fopen(p, "wb")))
         fseek(wav, 44, SEEK_SET);
     frames = (uint32_t)atoi(argv[2]);
+    t0 = clock();
     for (i = 0; i < frames; i++) {
         uint32_t s;
         emu_frame(keys_at(i, argc, argv));
+        for (s = 0; s < AUDIO_SAMPLES_TOTAL; s++)
+            hash = (hash ^ (uint16_t)emu.snd[s]) * 16777619u;
         for (s = 0; s < AUDIO_SAMPLES_TOTAL; s++) {
             uint32_t a = (uint32_t)(emu.snd[s] < 0 ? -emu.snd[s] : emu.snd[s]);
             peak = a > peak ? a : peak;
@@ -113,6 +121,12 @@ int main(int argc, char **argv)
         fwrite(sram, 1, sizeof sram, f);
         fclose(f);
     }
-    printf("frames %u, emulator errors %u, ink %u px, audio peak %u, %u banks\n", frames, emu.errors, ink, peak, nb);
+    {
+        double us = (double)(clock() - t0) * 1e6 / CLOCKS_PER_SEC / (frames ? frames : 1);
+        for (i = 0; i < LSDJ_SRAM; i++)
+            hash = (hash ^ sram[i]) * 16777619u;
+        printf("frames %u, emulator errors %u, ink %u px, audio peak %u, %u banks, mode %u, hash %08x, %.1f us/frame\n",
+               frames, emu.errors, ink, peak, nb, emu_mode, hash, us);
+    }
     return emu.errors || !ink;
 }

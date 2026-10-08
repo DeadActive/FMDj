@@ -14,8 +14,10 @@ bytes (LSDj 9.4.2: 34 of 64 banks hold data, ~464 KB).
 
 The start-up save: LSDj checks a blank save on its first start (~40 s at full speed). The host harness
 (tests/lsdj/lsdj_host.c, the firmware's own emulator code) runs the ROM past it from a blank save; that save,
-PackBits-packed, is what the firmware starts from (all in RAM: nothing is saved to flash)."""
+PackBits-packed, is what the firmware starts from (all in RAM: nothing is saved to flash). With a demo song in it
+(tools/lsdj_demo.py, typed into LSDj by the same harness; LSDJ_DEMO=0: an empty song): START plays it."""
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -89,7 +91,24 @@ def boot_save(rom_path, out_dir):
     print("lsdj_rom: host run:", r.stdout.strip() or r.stderr.strip())
     if r.returncode:
         raise SystemExit("lsdj_rom: the ROM did not run on the host emulator")
-    return sav.read_bytes()
+    if os.environ.get("LSDJ_DEMO") == "0":
+        return sav.read_bytes()
+    sys.path.insert(0, str(SRC / "tools"))
+    import lsdj_demo
+    args, end = lsdj_demo.key_args(60)
+    demo = out_dir / "demo.sav"
+    r = subprocess.run([host, rom_path, str(end + 60), "-s", sav, "-o", demo, "-p", out_dir / "demo.pgm", *args],
+                       capture_output=True, text=True)
+    print("lsdj_rom: demo typed:", r.stdout.strip() or r.stderr.strip())
+    if r.returncode:
+        raise SystemExit("lsdj_rom: typing the demo song failed")
+    r = subprocess.run([host, rom_path, "600", "-s", demo, "-k", "60:64:t", "-w", out_dir / "demo.wav"],
+                       capture_output=True, text=True)        # START: the demo must play
+    peak = re.search(r"audio peak (\d+)", r.stdout)
+    print("lsdj_rom: demo played:", r.stdout.strip() or r.stderr.strip())
+    if r.returncode or not peak or int(peak.group(1)) < 2000:
+        raise SystemExit("lsdj_rom: the demo song does not play")
+    return demo.read_bytes()
 
 
 def c_bytes(name, data):
