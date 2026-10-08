@@ -431,6 +431,15 @@ def main():
     errors, notes = check(img, syms, dis, rt)
     hal_err = mmio_check()
     errors += hal_err
+    if os.environ.get("FELUCCA_BLE") == "1":    # gates 2b and 4 stop a BLE build before its package is written
+        for gate in (["tools/check_update_path.py", str(OUT / "felucca.dis"), "tests/ble/update_path.ref"],
+                     ["tools/check_ble_boot.py", str(OUT / "felucca.dis")]):
+            r = subprocess.run([sys.executable, *gate], cwd=SRC, capture_output=True, text=True)
+            lines = (r.stdout + r.stderr).strip().splitlines() or [f"{gate[0]}: no output"]
+            if r.returncode:
+                errors += [f"gate {gate[0]}: {ln}" for ln in lines]
+            else:
+                notes.append(lines[-1])
     if not hal_err:
         notes.append("register access: hal/ only (src/, loader/ clean)")
     for n in notes:

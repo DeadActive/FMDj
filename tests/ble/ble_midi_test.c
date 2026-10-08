@@ -76,6 +76,30 @@ int main(void)
         ble_midi_reset(&m); ngot = 0; run(&m, p1, sizeof p1); run(&m, p2, sizeof p2);
         CHECK(ngot == 1 && got[0] == PKT(0x09, 0x90, 0x3D, 0x10) && m.errors == 1, "truncated message dropped");
     }
+    {   /* review #6a: inside SysEx every status byte follows a timestamp; FF here is the timestamp before F7 */
+        static const uint8_t p[] = {0x80, 0x80, 0xF0, 0x01, 0x02, 0xFF, 0xF7};
+        ble_midi_reset(&m); ngot = 0; run(&m, p, sizeof p);
+        CHECK(ngot == 2 && got[0] == PKT(0x04, 0xF0, 0x01, 0x02) && got[1] == PKT(0x05, 0xF7, 0, 0),
+              "SysEx: a timestamp >= F8 before F7 is not a System Reset");
+    }
+    {   /* #6b: a timestamped real-time byte inside SysEx */
+        static const uint8_t p[] = {0x80, 0x80, 0xF0, 0x01, 0x81, 0xF8, 0x02, 0x82, 0xF7};
+        ble_midi_reset(&m); ngot = 0; run(&m, p, sizeof p);
+        CHECK(ngot == 3 && got[0] == PKT(0x0F, 0xF8, 0, 0) && got[1] == PKT(0x04, 0xF0, 0x01, 0x02) &&
+              got[2] == PKT(0x05, 0xF7, 0, 0), "SysEx: timestamp + real-time inside it");
+    }
+    {   /* #6c: a timestamped real-time byte inside a running message */
+        static const uint8_t p[] = {0x80, 0x80, 0x90, 0x3C, 0x81, 0xF8, 0x64};
+        ble_midi_reset(&m); ngot = 0; run(&m, p, sizeof p);
+        CHECK(ngot == 2 && got[0] == PKT(0x0F, 0xF8, 0, 0) && got[1] == PKT(0x09, 0x90, 0x3C, 0x64) && !m.errors,
+              "real-time with its timestamp inside a note on");
+    }
+    {   /* #6d: a SysEx with no F7, then a timestamp and a new status: the SysEx ends (error), the note gets through */
+        static const uint8_t p[] = {0x80, 0x80, 0xF0, 0x01, 0x81, 0x90, 0x3C, 0x64};
+        ble_midi_reset(&m); ngot = 0; run(&m, p, sizeof p);
+        CHECK(!m.in_sysex && m.errors == 1 && ngot >= 1 && got[ngot - 1] == PKT(0x09, 0x90, 0x3C, 0x64),
+              "an unterminated SysEx ends at the next status");
+    }
     printf(fails ? "ble_midi: %d FAILED\n" : "ble_midi: all checks passed\n", fails);
     return fails != 0;
 }

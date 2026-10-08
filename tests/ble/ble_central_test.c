@@ -65,6 +65,20 @@ int main(void)
         ble_midi_text(0xAu | 0xA1u << 8 | 2u << 16 | 3u << 24, &sx, t);
         CHECK(!strcmp(t, "MIDI A1 02 03"), "anything else as hex");
     }
+    {   /* review #7: a named device's text ends after the name, not in what the buffer held before */
+        char b[64];
+        ble_dev_t d;
+        memset(&d, 0, sizeof d);
+        strcpy(d.name, "SMC-Mixer");
+        memset(b, 'X', sizeof b);
+        put_dev(b, &d);
+        CHECK(!strcmp(b, "SMC-Mixer"), "a device name is a whole string");
+        memset(&d, 0, sizeof d);
+        d.addr[5] = 0x5E; d.addr[0] = 0x10;
+        memset(b, 'X', sizeof b);
+        put_dev(b, &d);
+        CHECK(!strcmp(b, "5E:00:00:00:00:10"), "no name: the address, most significant byte first");
+    }
     printf(fails ? "ble_central: %d FAILED\n" : "ble_central: all checks passed\n", fails);
     return fails != 0;
 }

@@ -2,6 +2,7 @@
  * BLE MIDI test: 2026 DEADACTIVE */
 /* BLE-MIDI central on the JieLi SDK's ble_op_* API (reference: SDK apps/common/ble/le_net_central.c). The state
  * machine at the top is pure and host-tested (tests/ble/ble_central_test.c); the SDK glue below it. */
+#include "ble_scan.h"
 enum { BLE_OFF, BLE_STARTING, BLE_IDLE, BLE_SCANNING, BLE_CONNECTING, BLE_DISCOVERING, BLE_SUBSCRIBED,
        BLE_RECEIVING, BLE_FAILED };
 typedef enum { EV_INIT_OK, EV_INIT_FAIL, EV_SCAN_DONE, EV_CONNECTED, EV_CONN_FAIL, EV_FOUND_MIDI, EV_NO_MIDI,
@@ -59,6 +60,22 @@ static char *put_x(char *o, uint32_t v)
     static const char H[] = "0123456789ABCDEF";
     *o++ = H[v >> 4 & 15u];
     *o++ = H[v & 15u];
+    return o;
+}
+static char *put_dev(char *o, const ble_dev_t *d)  /* the name, or the address most significant byte first */
+{
+    uint32_t i;
+    if (d->name[0]) {
+        o = put_s(o, d->name);
+        *o = 0;
+        return o;
+    }
+    for (i = 6; i--;) {
+        o = put_x(o, d->addr[i]);
+        if (i)
+            *o++ = ':';
+    }
+    *o = 0;
     return o;
 }
 int ble_midi_text(uint32_t pkt, uint32_t *sx, char out[32])
@@ -273,9 +290,8 @@ void ble_start(void)
     set_deadline(5000);
     le_controller_set_mac(ble_mac);
     ble_stage(3);
-    ble_stage(4);
-    btstack_init();
-    ble_stage(5);
+    ble_os_after_run = ble_irq_check;
+    task_create(ble_app_core, 0, "app_core");      /* stages 4-5 there: btstack_init in a task */
 }
 
 void ble_scan(void)

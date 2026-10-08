@@ -64,7 +64,7 @@ static void sx_byte(ble_midi_t *m, ble_midi_out_fn out, void *ctx, uint8_t b)
 
 void ble_midi_parse(ble_midi_t *m, const uint8_t *p, uint32_t n, ble_midi_out_fn out, void *ctx)
 {
-    uint32_t i, want_ts;
+    uint32_t i, want_ts, sx_ts = 0;               /* sx_ts: the last SysEx byte was a timestamp */
     if (n < 2u || (p[0] & 0xC0u) != 0x80u) {
         m->errors++;
         return;
@@ -77,22 +77,38 @@ void ble_midi_parse(ble_midi_t *m, const uint8_t *p, uint32_t n, ble_midi_out_fn
     }
     for (i = 1; i < n; i++) {
         uint8_t b = p[i];
-        if (m->in_sysex) {
+        if (m->in_sysex) {                        /* inside SysEx every status byte follows a timestamp */
             if (!(b & 0x80u)) {
                 sx_byte(m, out, ctx, b);
-            } else if (b == 0xF7u) {
+                sx_ts = 0;
+                continue;
+            }
+            if (!sx_ts && !(b == 0xF7u && (i + 1u == n || !(p[i + 1u] & 0x80u)))) {
+                sx_ts = 1;                        /* the timestamp (a bare F7 at the end or before data: the end) */
+                continue;
+            }
+            sx_ts = 0;
+            if (b == 0xF7u) {
                 sx_byte(m, out, ctx, b);
                 want_ts = 1;
-            } else if (b >= 0xF8u) {
+                continue;
+            }
+            if (b >= 0xF8u) {
                 emit(m, out, ctx, b, 0, 0);       /* real-time inside SysEx */
-            }                                      /* else: a timestamp inside SysEx */
-            continue;
+                continue;
+            }
+            m->in_sysex = 0;                      /* a new status: the SysEx never ended */
+            m->sx_n = 0;
+            m->errors++;
+            want_ts = 0;                          /* (its timestamp was the byte before) */
         }
         if (b & 0x80u) {
             if (want_ts) {                        /* timestamp byte */
                 want_ts = 0;
                 continue;
             }
+            if (b < 0xF8u && m->need && i + 1u < n && p[i + 1u] >= 0xF8u)
+                continue;                         /* the timestamp of a real-time byte inside a message */
             if (b >= 0xF8u) {                     /* real-time: one byte, keeps running status */
                 emit(m, out, ctx, b, 0, 0);
                 want_ts = 1;

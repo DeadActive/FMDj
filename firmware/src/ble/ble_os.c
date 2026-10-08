@@ -194,6 +194,7 @@ static void yield(void)                            /* from a task back to the sc
 }
 
 volatile uint32_t *ble_os_trace;                   /* if set: the running task + 1, 0 in the core (diagnostics) */
+void (*ble_os_after_run)(int task);                /* if set: called each time task hands back to the core */
 static void run(int i)                             /* from the scheduler into task i */
 {
     task_t *t = &tasks[i];
@@ -222,6 +223,8 @@ static void run(int i)                             /* from the scheduler into ta
     cur = -1;
     if (ble_os_trace)
         *ble_os_trace = 0;
+    if (ble_os_after_run)
+        ble_os_after_run(i);
 }
 
 void os_time_dly(int ticks)
@@ -366,7 +369,8 @@ int os_sem_pend(void *s, int timeout)
         tasks[cur].wake_ms = until;
         yield();
     }
-    tasks[cur >= 0 ? cur : 0].wait_obj = 0;
+    if (cur >= 0)
+        tasks[cur].wait_obj = 0;
     x->count--;
     return BLE_SDK_OS_NO_ERR;
 }

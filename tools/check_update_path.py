@@ -14,7 +14,9 @@ import re
 import sys
 
 PATTERNS = [r"^usb_", r"^ep[0-4]_", r"^e0_", r"^sie_", r"^sysex_byte$", r"^midi_in_event$", r"^midi_enqueue$",
-            r"^ota_", r"^fm1_timer5_irq$", r"^fm1_cstart$", r"^fl_", r"^st_", r"^uac_"]
+            r"^ota_", r"^fm1_timer5_irq$", r"^fm1_cstart$", r"^fl_", r"^st_", r"^uac_",
+            # the main loop: the update session, the UBOOT key and the SysEx UBOOT request are inlined into it
+            r"^fm1_main$", r"^enter_uboot$", r"^fm1_enter_uboot$", r"^fm1_wdt_feed$"]
 # (not cdc_task: the console's commands inline into it and change with them; the CDC transport is in usb_poll)
 LABEL = re.compile(r"^([A-Za-z_.$][\w.$]*):\s*$")
 INSN = re.compile(r"^\s*[0-9a-f]+:\s+(?:[0-9a-f]{2} )+\s*\t(.*)$")
@@ -115,6 +117,12 @@ def selftest():
     assert compare(e1.replace("  2000004:    00 00    \tnop\n", ""), ref5) == [], "trailing padding flagged"
     e2 = e1.replace("\tr0 = 1\n", "\tr0 = 1\n  2000001:    00 00    \tnop\n")
     assert compare(e2, ref5), "a nop inside the function not caught"
+    # the main loop holds the inlined update session, the UBOOT key and the SysEx UBOOT request (review #1)
+    f1 = ("fm1_main:\n  2000000:    00 49    \tcall -40 <ota_prog : 2001fae >\n  2000002:    80 00    \trts\n")
+    ref6 = render(selected(functions(f1)))
+    assert compare(f1.replace("<ota_prog", "<ota_show"), ref6), "a changed call in fm1_main not caught"
+    for fn in ("enter_uboot", "fm1_enter_uboot", "fm1_wdt_feed"):
+        assert selected({fn: ["rts"]}), f"{fn} not compared"
     print("check_update_path: selftest ok")
 
 

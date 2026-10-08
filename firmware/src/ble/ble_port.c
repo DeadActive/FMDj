@@ -277,6 +277,31 @@ const int sniff_long_interval = 0, CONFIG_BTSTACK_SUPPORT_AAC = 0, CONFIG_TWS_PO
 int CONFIG_TWS_SUPER_TIMEOUT;
 int task_kill(const char *name) { (void)name; return 0; }
 
+/* after each BT task run (ble_os_after_run): a task that blocked inside local_irq_disable would hand the core its
+ * interrupts off (TIMER5, USB, the UBOOT key all dead until the watchdog). Count it and turn interrupts back on. */
+static void ble_irq_check(int task)
+{
+    (void)task;
+    if (fm1_ble_irq_depth) {
+        ble_diag.irq_leaks++;
+        fm1_ble_irq_depth = 1;
+        fm1_ble_irq_on();
+    }
+}
+
+/* the SDK's application task: btstack_init runs here, not in the core's main loop, so the SDK calls that block
+ * (os_sem_pend on a semaphore its tasks post later) really wait; then it serves its queue (callbacks posted to it) */
+static void ble_app_core(void *arg)
+{
+    int msg[8];
+    (void)arg;
+    ble_stage(4);
+    btstack_init();
+    ble_stage(5);
+    for (;;)
+        os_taskq_pend("taskq", msg, 8);
+}
+
 /* ---- heap names the libraries use ---- */
 void *ram_malloc(unsigned long size) { return ble_malloc((unsigned)size); }
 void ram_free(void *p) { ble_free(p); }

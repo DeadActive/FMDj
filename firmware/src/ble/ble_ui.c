@@ -64,19 +64,6 @@ static void ui_midi(void)                          /* BLE-MIDI to the monitor an
     }
 }
 
-static char *put_dev(char *o, const ble_dev_t *d)  /* the name, or the address most significant byte first */
-{
-    uint32_t i;
-    if (d->name[0])
-        return put_s(o, d->name);
-    for (i = 6; i--;) {
-        o = put_x(o, d->addr[i]);
-        if (i)
-            *o++ = ':';
-    }
-    *o = 0;
-    return o;
-}
 static char *put_i(char *o, int32_t v) { if (v < 0) { *o++ = '-'; v = -v; } return put_u(o, (uint32_t)v); }
 
 static void row(uint32_t r, const char *s, int fg)
@@ -151,7 +138,7 @@ void ble_draw(void)
 
 void ble_status(void)                              /* console `ble` */
 {
-    char b[160], *o;
+    char b[224], *o;
     uint32_t code, i, n;
     uint8_t idx[BLE_SCAN_MAX];
     const char *err = ble_err(&code);
@@ -187,6 +174,7 @@ void ble_status(void)                              /* console `ble` */
         o = put_u(put_s(o, " delays "), ble_diag.delays);
         o = put_u(put_s(o, " last_us "), ble_diag.last_us);
         o = put_u(put_s(o, " t4_stalls "), ble_diag.t4_stalls);
+        o = put_u(put_s(o, " irq_leaks "), ble_diag.irq_leaks);
         o = put_u(put_s(o, " loops/us "), ble_loops_per_us);
         o = put_x(put_x(put_x(put_x(put_s(o, " irqs 0x"), ble_irqs_requested[1] >> 8), ble_irqs_requested[1]),
                         ble_irqs_requested[0] >> 24), ble_irqs_requested[0] >> 16);

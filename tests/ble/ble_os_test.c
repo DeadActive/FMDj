@@ -37,6 +37,11 @@ static void waiter(void *p)                     /* waits on the semaphore with a
 static int fired;
 static void tick(void *p) { (void)p; fired++; }
 static void hog(void *p) { (void)p; for (;;) os_time_dly(0); }   /* yields without sleeping */
+static uint8_t mtx[BLE_SDK_OS_SEM_SIZE], core_sem[BLE_SDK_OS_SEM_SIZE];
+static int mtx_got;
+static void mtx_user(void *p) { (void)p; for (;;) { if (os_mutex_pend(mtx, 0) == BLE_SDK_OS_NO_ERR) mtx_got++; os_time_dly(1000); } }
+static int after_runs, after_last = -1;
+static void after_run(int i) { after_runs++; after_last = i; }
 
 
 static int cb_sum;
@@ -156,6 +161,28 @@ int main(void)
             tasks[slot].stack[100] = 0;            /* the deepest word the task touched */
         CHECK(slot < 4u && ble_os_stack_free(slot, &name) == 400u, "stack high-water: counts up to the deepest use");
         CHECK(ble_os_stack_free(99, &name) == 0 && name == 0, "stack high-water: no such task");
+    }
+    {   /* the core pending successfully must not clear a blocked task's wait (review #4) */
+        int slot;
+        ble_os_init(heap, sizeof heap);
+        os_mutex_create(mtx);
+        os_mutex_pend(mtx, 0);                  /* the core holds it */
+        os_sem_create(core_sem, 1);
+        task_create(mtx_user, 0, "btctrler");
+        ble_os_service(1000);                   /* the task blocks on the mutex */
+        CHECK(os_sem_pend(core_sem, 0) == BLE_SDK_OS_NO_ERR, "the core takes a free semaphore");
+        os_mutex_post(mtx);
+        ble_os_service(1000);
+        CHECK(mtx_got == 1, "a task blocked on a mutex still wakes when the core took another semaphore");
+        (void)slot;
+    }
+    {   /* the scheduler reports each return from a task (the target checks the interrupt state there: #5) */
+        ble_os_init(heap, sizeof heap);
+        task_create(consumer, 0, "btstack");
+        ble_os_after_run = after_run;
+        ble_os_service(1000);
+        CHECK(after_runs == 1 && after_last == 0, "the after-run hook runs when a task hands back");
+        ble_os_after_run = 0;
     }
     printf(fails ? "ble_os: %d FAILED\n" : "ble_os: all checks passed\n", fails);
     return fails != 0;
