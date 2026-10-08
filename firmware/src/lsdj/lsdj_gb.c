@@ -2,7 +2,7 @@
  * LSDj fork: 2026 DEADACTIVE */
 /* The LSDj unit's pure parts (no core, no hardware; host-tested by tests/lsdj/lsdj_gb_test.c):
  *   the ROM as a bank table (each 16 KiB bank stored without its trailing 0xFF bytes),
- *   the FM-1 keys -> the Game Boy joypad, the frame buffer (2-bit shades) and the dirty span of a line pair,
+ *   the FM-1 buttons -> the Game Boy joypad, the frame buffer (2-bit shades) and the dirty span of a line pair,
  *   the 1.5x scaler (2 x 2 Game Boy pixels -> 3 x 3 screen pixels), the audio ring (main loop -> audio ISR),
  *   the PackBits unpacker (the start-up save). */
 #include <stdint.h>
@@ -36,34 +36,14 @@ static inline uint8_t lsdj_rom_byte(const lsdj_bank_t *t, uint32_t nbanks, uint3
     return t[b].p[i];
 }
 
-/* note keys (fm1_in.notes, bit 0 = F3 .. 26 = G5): the D-pad on the lowest keys as an inverted T,
- * B and A on the two highest white keys; START = PLAY, SELECT = REC. OCT- / OCT+ stay the core's (UBOOT). */
-#define LSDJ_KEY_LEFT 0u      /* F3 */
-#define LSDJ_KEY_DOWN 2u      /* G3 */
-#define LSDJ_KEY_UP 3u        /* G#3 */
-#define LSDJ_KEY_RIGHT 4u     /* A3 */
-#define LSDJ_KEY_B 24u        /* F5 */
-#define LSDJ_KEY_A 26u        /* G5 */
-
-static uint8_t lsdj_pad(uint32_t buttons, uint32_t notes, uint32_t play_bit, uint32_t rec_bit)
+/* buttons held (fm1_in.buttons) -> the joypad (active low). map: the button bit of each Game Boy key in JOYPAD bit
+ * order (A, B, SELECT, START, RIGHT, LEFT, UP, DOWN); lsdj.c fills it from the panel labels */
+static uint8_t lsdj_pad(uint32_t buttons, const uint32_t map[8])
 {
-    uint32_t down = 0;
-    if (buttons & play_bit)
-        down |= JOYPAD_START;
-    if (buttons & rec_bit)
-        down |= JOYPAD_SELECT;
-    if (notes & (1u << LSDJ_KEY_LEFT))
-        down |= JOYPAD_LEFT;
-    if (notes & (1u << LSDJ_KEY_DOWN))
-        down |= JOYPAD_DOWN;
-    if (notes & (1u << LSDJ_KEY_UP))
-        down |= JOYPAD_UP;
-    if (notes & (1u << LSDJ_KEY_RIGHT))
-        down |= JOYPAD_RIGHT;
-    if (notes & (1u << LSDJ_KEY_B))
-        down |= JOYPAD_B;
-    if (notes & (1u << LSDJ_KEY_A))
-        down |= JOYPAD_A;
+    uint32_t down = 0, i;
+    for (i = 0; i < 8u; i++)
+        if (buttons & map[i])
+            down |= 1u << i;
     return (uint8_t)~down;
 }
 

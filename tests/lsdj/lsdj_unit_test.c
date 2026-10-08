@@ -55,6 +55,7 @@ void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int
 }
 uint32_t core_buttons(void) { return buttons; }
 uint32_t core_notes(void) { return notes; }
+uint32_t core_button_bit(int label) { return 1u << label; }   /* (the stub: matrix id = label) */
 uint32_t core_play_bit(void) { return 1u << 10; }
 uint32_t core_rec_bit(void) { return 1u << 11; }
 void core_con_puts(const char *s) { fputs(s, stdout); }
@@ -81,7 +82,7 @@ int main(void)
     uint32_t i, x, y, diff = 0;
     int32_t out[64];
     ble_draw();                               /* the splash, before PLAY */
-    CHECK(texts == 3 && !ble_started());
+    CHECK(texts == 5 && !ble_started());
     for (i = 0; i < 50; i++)
         pass();
     CHECK(!ble_started() && st.frames == 0);  /* nothing runs before PLAY */
@@ -94,12 +95,18 @@ int main(void)
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
     CHECK(st.frames > 250 && emu.errors == 0);
-    {   /* PLAY and REC held: START and SELECT reach the Game Boy, and the keys part of the status line is redrawn */
+    {   /* PLAY and REC held: SELECT and START reach the Game Boy, and the keys part of the status line is redrawn */
         uint32_t t = texts;
         buttons = core_play_bit() | core_rec_bit();
         pass();
         pass();
         CHECK(st.pad == (uint8_t)~(JOYPAD_START | JOYPAD_SELECT) && st.pad_shown == st.pad && texts > t);
+        buttons = core_button_bit(CORE_BTN_SCL) | core_button_bit(CORE_BTN_GLO);   /* UP + A */
+        pass();
+        CHECK(st.pad == (uint8_t)~(JOYPAD_UP | JOYPAD_A));
+        buttons = core_button_bit(CORE_BTN_OCTDN) | core_button_bit(CORE_BTN_OCTUP); /* the UBOOT pair: no key */
+        pass();
+        CHECK(st.pad == 0xFF);
         buttons = 0;
         pass();
         pass();

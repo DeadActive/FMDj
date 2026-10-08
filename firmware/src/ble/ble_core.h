@@ -36,6 +36,11 @@ uint32_t core_ticks(void);
 /* keys */
 uint32_t core_notes(void);                    /* note keys held: bit 0 = F3 .. 26 = G5 */
 uint32_t core_buttons(void);
+/* the panel's button labels (panel.c's B_*, same order: checked in core_ble_api.c) and the bit of each in
+ * core_buttons() */
+enum { CORE_BTN_FX, CORE_BTN_SCL, CORE_BTN_ENV, CORE_BTN_LFO, CORE_BTN_EDIT, CORE_BTN_GLO, CORE_BTN_HOME, CORE_BTN_SAVE,
+       CORE_BTN_ARP, CORE_BTN_SEQ, CORE_BTN_PLAY, CORE_BTN_REC, CORE_BTN_OCTDN, CORE_BTN_OCTUP, CORE_NBTN };
+uint32_t core_button_bit(int label);
 uint32_t core_play_bit(void);
 uint32_t core_rec_bit(void);
 int32_t core_select_steps(void);

@@ -27,20 +27,15 @@ static void test_rom(void)
 
 static void test_pad(void)
 {
-    const uint32_t PLAY = 1u << 10, REC = 1u << 11;
-    CHECK(lsdj_pad(0, 0, PLAY, REC) == 0xFF);                       /* active low: nothing held */
-    CHECK(lsdj_pad(PLAY, 0, PLAY, REC) == (uint8_t)~JOYPAD_START);
-    CHECK(lsdj_pad(REC, 0, PLAY, REC) == (uint8_t)~JOYPAD_SELECT);
-    CHECK(lsdj_pad(0, 1u << 0, PLAY, REC) == (uint8_t)~JOYPAD_LEFT);    /* F3 */
-    CHECK(lsdj_pad(0, 1u << 2, PLAY, REC) == (uint8_t)~JOYPAD_DOWN);    /* G3 */
-    CHECK(lsdj_pad(0, 1u << 3, PLAY, REC) == (uint8_t)~JOYPAD_UP);      /* G#3 */
-    CHECK(lsdj_pad(0, 1u << 4, PLAY, REC) == (uint8_t)~JOYPAD_RIGHT);   /* A3 */
-    CHECK(lsdj_pad(0, 1u << 24, PLAY, REC) == (uint8_t)~JOYPAD_B);      /* F5 */
-    CHECK(lsdj_pad(0, 1u << 26, PLAY, REC) == (uint8_t)~JOYPAD_A);      /* G5 */
-    CHECK(lsdj_pad(0, (1u << 1) | (1u << 25), PLAY, REC) == 0xFF);      /* other keys do nothing */
-    CHECK(lsdj_pad(PLAY | REC, (1u << 24) | (1u << 26), PLAY, REC) ==
-          (uint8_t)~(JOYPAD_START | JOYPAD_SELECT | JOYPAD_A | JOYPAD_B));   /* combinations */
-    CHECK(lsdj_pad(1u << 0 | 1u << 1, 0, PLAY, REC) == 0xFF);           /* OCT- / OCT+ are not Game Boy keys */
+    /* the button bit of each Game Boy key, in JOYPAD bit order: A, B, SELECT, START, RIGHT, LEFT, UP, DOWN */
+    const uint32_t map[8] = {1u << 5, 1u << 4, 1u << 12, 1u << 13, 1u << 10, 1u << 8, 1u << 3, 1u << 9};
+    uint32_t i;
+    CHECK(lsdj_pad(0, map) == 0xFF);                                  /* active low: nothing held */
+    for (i = 0; i < 8u; i++)
+        CHECK(lsdj_pad(map[i], map) == (uint8_t)~(1u << i));          /* each button: its key only */
+    CHECK(lsdj_pad(map[2] | map[4], map) == (uint8_t)~(JOYPAD_SELECT | JOYPAD_RIGHT));   /* combinations */
+    CHECK(lsdj_pad(0xFFFFFFFFu, map) == 0x00);
+    CHECK(lsdj_pad((1u << 0) | (1u << 1) | (1u << 2), map) == 0xFF);  /* OCT- / OCT+ / others: no Game Boy key */
 }
 
 static void test_pad_text(void)

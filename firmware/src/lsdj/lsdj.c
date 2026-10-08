@@ -36,6 +36,12 @@ static lsdj_ring_t ring;
 static void (*volatile run)(void);            /* lsdj_step once started */
 static void (*volatile draw)(void);           /* lsdj_push once started */
 static uint32_t group, buf_i, splash_done;
+static uint32_t pad_map[8];                   /* button bit per Game Boy key (JOYPAD order), from KEYS */
+
+/* the Game Boy keys on the panel's buttons (labels), in JOYPAD bit order: A, B, SELECT, START, RIGHT, LEFT, UP, DOWN.
+ * OCT- / OCT+ stay the core's (held 5 s together: UBOOT) */
+static const uint8_t KEYS[8] = {CORE_BTN_GLO, CORE_BTN_EDIT, CORE_BTN_PLAY, CORE_BTN_REC,
+                                CORE_BTN_ARP, CORE_BTN_HOME, CORE_BTN_SCL, CORE_BTN_SAVE};
 
 /* RGB565, byte-swapped as the panel takes them: shade 0 (light) .. 3 (dark) */
 #define SW(c) ((uint16_t)(((c) >> 8) | ((c) << 8)))
@@ -138,7 +144,7 @@ static void lsdj_step(void)
     t0 = core_ticks();
     st.buttons = core_buttons();
     st.notes = core_notes();
-    st.pad = lsdj_pad(st.buttons, st.notes, core_play_bit(), core_rec_bit());
+    st.pad = lsdj_pad(st.buttons, pad_map);
     emu_frame(st.pad);
     lsdj_ring_push(&ring, emu.snd, LSDJ_FRAME_SAMPLES);
     us = (core_ticks() - t0) / CORE_TICKS_PER_US;
@@ -184,6 +190,8 @@ static __attribute__((noinline)) void lsdj_start(void)
         core_text(0, 110, 240, CORE_FONT_M, "NOT AN LSDJ ROM", CORE_TEXT, CORE_BG, 1);
         return;
     }
+    for (r = 0; r < 8; r++)
+        pad_map[r] = core_button_bit(KEYS[r]);
     st.start_ms = st.sec_ms = core_ms();
     st.pad = 0xFF;
     st.pad_shown = 0;                         /* draw the keys part once */
@@ -217,8 +225,10 @@ void ble_draw(void)
         return;
     splash_done = 1;
     core_text(0, 160, 240, CORE_FONT_S, "PLAY: START LSDJ", CORE_THEME, CORE_BG, 1);
-    core_text(0, 184, 240, CORE_FONT_S, "D-PAD F3 G3 A3 + G#3 UP", CORE_MID, CORE_BG, 1);
-    core_text(0, 200, 240, CORE_FONT_S, "A G5  B F5  SEL REC  START PLAY", CORE_MID, CORE_BG, 1);
+    core_text(0, 176, 240, CORE_FONT_S, "UP SCL    DOWN SAVE", CORE_MID, CORE_BG, 1);
+    core_text(0, 192, 240, CORE_FONT_S, "LEFT HOME    RIGHT ARP", CORE_MID, CORE_BG, 1);
+    core_text(0, 208, 240, CORE_FONT_S, "A GLO    B EDIT", CORE_MID, CORE_BG, 1);
+    core_text(0, 224, 240, CORE_FONT_S, "SELECT PLAY    START REC", CORE_MID, CORE_BG, 1);
 }
 
 void ble_status(void)                          /* the console's `ble` */

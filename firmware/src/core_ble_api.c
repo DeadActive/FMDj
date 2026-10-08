@@ -62,6 +62,10 @@ void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px)
 uint32_t core_ticks(void) { return fm1_ticks(); }
 uint32_t core_notes(void) { return fm1_in.notes; }
 uint32_t core_buttons(void) { return fm1_in.buttons; }
+_Static_assert(CORE_BTN_FX == B_FX && CORE_BTN_SCL == B_SCL && CORE_BTN_EDIT == B_EDIT && CORE_BTN_GLO == B_GLO &&
+               CORE_BTN_HOME == B_HOME && CORE_BTN_SAVE == B_SAVE && CORE_BTN_ARP == B_ARP && CORE_BTN_PLAY == B_PLAY &&
+               CORE_BTN_REC == B_REC && CORE_BTN_OCTUP == B_OCTUP && CORE_NBTN == NB, "ble_core.h CORE_BTN_* = B_*");
+uint32_t core_button_bit(int label) { return label >= 0 && label < NB ? 1u << panel.btn[label] : 0; }
 uint32_t core_play_bit(void) { return 1u << panel.btn[B_PLAY]; }
 uint32_t core_rec_bit(void) { return 1u << panel.btn[B_REC]; }
 int32_t core_select_steps(void) { return panel_enc(EN_SELECT); }
