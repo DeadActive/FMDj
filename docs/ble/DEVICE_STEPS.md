@@ -54,3 +54,6 @@ All of these show in the console's `ble`.
   - One 10 s scan: 605 reports and 16 devices (the table's limit), RSSI -53 to -91 dBm. Mostly random addresses
     (t1), with no name in the advertisement. None tagged MIDI: the SMC-Mixer was not recognised in this scan
     (still to check: was it on and not connected to another host?).
+- **C (a3d7c6cf…): ok.** With the mixer on and not connected to any other host, the scan finds
+  `5E8BA0792810 t0 -64 MIDI SMC-Mixer`: a public address, the name and the BLE-MIDI service UUID all read. The B
+  round's missing mixer was the mixer, not the list.
