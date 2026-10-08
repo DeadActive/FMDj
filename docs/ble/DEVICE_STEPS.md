@@ -66,3 +66,9 @@ All of these show in the console's `ble`.
   itself, `memcpy`, and the core's interrupt handlers all ran from XIP.
 
   **Fix (round 3):** see `LINK_NOTES.md`, "The radio calibration runs from RAM".
+- **D round 3 (3961ea50…, calibration in RAM): started once, then crashed on PLAY in most tries again.** The
+  device was off USB, so there was no crash record.
+
+  **Next D (ff66d9a6…) adds diagnostics only:**
+  - `ble` prints the whole crash record (dbg, icfg and the four-entry branch trace too);
+  - a `trim` breadcrumb: 1 inside the radio calibration, 2 after it.

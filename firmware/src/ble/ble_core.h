@@ -30,6 +30,15 @@ uint32_t core_buttons(void);
 uint32_t core_play_bit(void);
 uint32_t core_rec_bit(void);
 int32_t core_select_steps(void);
+/* the core's crash record (fm1_irq.h fm1_crash_t, .noinit, same layout): read only, for the console's `ble`
+ * (the core's unit has the real declaration) */
+#ifndef FM1_CRASH_MAGIC
+extern const struct {
+    uint32_t magic, count, vec, pc, rets, emu, dbg, sp, psr, icfg, uptime_ms;
+    uint32_t etm[4];
+    uint32_t early;
+} fm1_crash;
+#endif
 /* console (CDC) */
 void core_con_puts(const char *s);
 /* libc.c */

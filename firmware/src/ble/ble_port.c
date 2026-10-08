@@ -185,12 +185,14 @@ BLE_RAM uint8_t *enter_wifi_rf_trim_region(uint32_t **start_of_region)
 {
     (void)start_of_region;
     fm1_ble_irq_off();
+    ble_diag.trim = 1;                                   /* (a plain RAM store: no call into XIP) */
     return 0;
 }
 BLE_RAM void exit_wifi_rf_trim_region(uint32_t **start_of_region, uint8_t *rf_trim_code_run_addr)
 {
     (void)start_of_region;
     (void)rf_trim_code_run_addr;
+    ble_diag.trim = 2;
     fm1_ble_irq_on();
 }
 const uint8_t WIFI_PA_ENABLE = 0, wifi_temperature_drift_trim_on = 0, RFIinitUseTrimValue = 0;

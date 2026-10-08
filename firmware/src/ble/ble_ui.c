@@ -177,12 +177,26 @@ void ble_status(void)                              /* console `ble` */
         o = put_u(put_s(b, "  starts "), ble_diag.starts);
         o = put_u(put_s(o, " stage "), ble_diag.stage);
         o = put_u(put_s(o, " task "), ble_diag.task);
+        o = put_u(put_s(o, " trim "), ble_diag.trim);
         o = put_x(put_x(put_x(put_x(put_s(o, " irqs 0x"), ble_irqs_requested[1] >> 8), ble_irqs_requested[1]),
                         ble_irqs_requested[0] >> 24), ble_irqs_requested[0] >> 16);
         o = put_x(put_x(o, ble_irqs_requested[0] >> 8), ble_irqs_requested[0]);
         o = put_s(o, "\r\n");
         *o = 0;
         core_con_puts(b);
+    }
+    if (fm1_crash.magic == 0x43525348u) {        /* the core's crash record (fm1_irq.h), all of it */
+        static const char *const F[] = {"vec", "pc", "rets", "emu", "dbg", "sp", "psr", "icfg", "uptime_ms",
+                                        "etm0", "etm1", "etm2", "etm3", "early"};
+        const uint32_t *v = &fm1_crash.vec;
+        core_con_puts("  crash");
+        for (i = 0; i < 14u; i++) {
+            o = put_s(put_s(put_s(b, " "), F[i]), " ");
+            o = put_x(put_x(put_x(put_x(o, v[i] >> 24), v[i] >> 16), v[i] >> 8), v[i]);
+            *o = 0;
+            core_con_puts(b);
+        }
+        core_con_puts("\r\n");
     }
     for (i = 0; i < 4u; i++) {                     /* the task stacks' unused bytes (4096 each) */
         const char *name;
