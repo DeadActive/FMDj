@@ -127,7 +127,7 @@ def selftest():
 
 
 # gate 2a: the update path's sources (the loader's unit and the core's USB / update / flash code) are Felucca
-# 1.0.5.2's, as on branch main
+# 1.0.5.2's (tag v1.0.5.2; not a branch: once the BLE work is merged, main would compare with itself)
 SOURCES = ["firmware/src/usb.c", "firmware/src/ota.c", "firmware/src/ota_hw.c", "firmware/src/libc.c",
            "firmware/hal/fm1_flash.h", "firmware/hal/fm1_sys.h", "firmware/hal/fm1_time.h", "firmware/hal/fm1_usb.h",
            "firmware/loader", "firmware/src/storage_hw.c", "firmware/src/storage.c"]
@@ -145,7 +145,7 @@ def sources(base):
 
 def main(argv):
     if argv[1:2] == ["--sources"]:
-        return sources(argv[2] if len(argv) > 2 else "main")
+        return sources(argv[2] if len(argv) > 2 else "v1.0.5.2")
     if argv[1:] == ["--selftest"]:
         selftest()
         return 0

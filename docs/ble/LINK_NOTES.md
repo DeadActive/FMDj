@@ -126,7 +126,7 @@ In the stripped core nothing ever writes the USB-MIDI-out ring, so the compiler 
 as dead code. In a BLE build the forwarding brings it back, as in every Felucca release, where the keys send MIDI.
 The new wrappers also shift clang's global-merge layout and inlining in the core's unit.
 
-**Gate 2a (`check_update_path.py --sources main`)** checks that the update path's sources are Felucca 1.0.5.2's:
+**Gate 2a (`check_update_path.py --sources v1.0.5.2`)** checks that the update path's sources are Felucca 1.0.5.2's:
 - the loader;
 - `usb.c`, `ota.c`, `ota_hw.c`, `libc.c`, `storage*.c`;
 - the shared HAL headers.
