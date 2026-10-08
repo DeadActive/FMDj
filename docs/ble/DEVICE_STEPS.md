@@ -106,3 +106,11 @@ All of these show in the console's `ble`.
   **Next D (0b04b0a6…):** at BLE start, scans 0xE5000..0xFC000 (read only, through the core's `st_read`) for the
   last valid record and hands it to the library, so the trim does not run. With no record, BT does not start:
   FAILED with `NO RF TRIM IN FLASH`.
+- **D (0b04b0a6…): ok.** BT starts every time, right after boot, with no wait. The scan finds the SMC-Mixer; REC
+  connects; the state reaches RECEIVING, and messages count up as the knobs move.
+  - Console `ble`:
+    - `state RECEIVING msgs 294 pkts 293 errs 0 lost 0`;
+    - `rf trim stored` (the trim never ran: `trim 0`);
+    - stage 7;
+    - stack high-water: btctrler 1104 B, btstack 1492 B of 4096;
+    - counted delay loop: 52 loops/us.
