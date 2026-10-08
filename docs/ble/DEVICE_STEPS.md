@@ -114,3 +114,21 @@ All of these show in the console's `ble`.
     - stage 7;
     - stack high-water: btctrler 1104 B, btstack 1492 B of 4096;
     - counted delay loop: 52 loops/us.
+- **E (e6a8d3f7…): ok.** The connection and the on-screen MIDI monitor show the mixer's values.
+  - Console `ble`: `state RECEIVING msgs 2728 pkts 1798 errs 0 lost 0`.
+  - Core `status`: `midi_tx_pkts 448`. These are USB IN transfers, each carrying up to 16 events, not a count of
+    MIDI events.
+  - Still to confirm on the Mac side: the CCs reaching a MIDI monitor app.
+
+## Summary
+
+The FM-1 scans for BLE devices, lists them, connects to a BLE-MIDI device (M-VAVE SMC-Mixer), subscribes to its
+MIDI characteristic, shows the incoming MIDI on screen and forwards it to USB MIDI. It runs on the stripped core
+with no overclock and no experimental flags. Bluetooth starts only on a key press. The update path is unchanged
+in every build, and the loader is pinned.
+
+What it took on the device, beyond the plan:
+1. The core's stack-limit and vector-table guards had to allow the BT task stacks and `request_irq`.
+2. The radio calibration (`wf_rf_trim`) cannot run on this core's clock and flash setup: it crashed when run from
+   XIP and hung when run from RAM with interrupts off. The stock firmware's stored calibration (config store item
+   187) is used instead, as the SDK provides for (`RFIinitUseTrimValue`).
