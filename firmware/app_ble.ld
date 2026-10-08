@@ -3,7 +3,10 @@
 /* BLE test build (FELUCCA_BLE=1, tools/build.py): app.ld plus the JieLi BT libraries' sections, placed as
  * the AC79 SDK's cpu/wl82/sdk_ld_sfc.c does (Apache-2.0, JieLi): their code and constants in XIP (.text), their
  * data in .data, their zeroed data in .bss. The fragments' pool symbols are given with zero size (no classic BT,
- * no TWS). No library RAM code is placed: build.py fails the link if a *ram_code* section is pulled in.
+ * no TWS). The radio calibration (*.rf.text.cache.L2.rf_trim, .volatile_ram_code) runs from RAM, in .ram_text, as
+ * the SDK's demos build it (CONFIG_RF_TRIM_CODE_AT_RAM): during the ~500 ms trim the flash must not be read
+ * (ble_port.c's enter/exit_wifi_rf_trim_region turn interrupts off; tools/check_rf_trim.py checks that the trim
+ * reaches nothing in XIP). build.py fails the link on any other *ram_code* section.
  * BLE MIDI test: 2026 DEADACTIVE
  * FELUCCA memory map.
  * Code + constants execute in place from XIP (app.bin offset 0 = 0x02000120).
@@ -37,10 +40,15 @@ SECTIONS
         _sys_event_handler_begin = .; PROVIDE(sys_event_handler_begin = .); KEEP(*(.sys_event.*))
         _sys_event_handler_end = .; PROVIDE(sys_event_handler_end = .);
         lp_target_begin = .; KEEP(*(.lp_target)) lp_target_end = .;   /* (include_lib/driver/cpu/wl82/system.ld) */
-        *(.*_code) *(.*_const) *(*.rf.text.cache.L2.rf_trim) *(.LOG_TAG_CONST)
+        /* every library *_code section but .volatile_ram_code (in .ram_text below; first match wins) */
+        *(.[a-uw-z]*_code) *(.v[a-np-z]*_code) *(.*_const) *(.LOG_TAG_CONST)
         . = ALIGN(4); _etext = .;
     } > XIP
-    .ram_text : { _rt_start = .; KEEP(*(.ram_text*)) . = ALIGN(4); _rt_end = .; } > RAMTEXT AT > XIP
+    .ram_text : {
+        _rt_start = .; KEEP(*(.ram_text*))
+        *(.volatile_ram_code) *(*.rf.text.cache.L2.rf_trim)
+        . = ALIGN(4); _rt_end = .;
+    } > RAMTEXT AT > XIP
     _rt_load = LOADADDR(.ram_text);
     .data : { . = ALIGN(4); _data_start = .; *(.data*) *(.sdata*) *(.*_data) . = ALIGN(4); _data_end = .; } > RAM AT > XIP
     _data_load = LOADADDR(.data);

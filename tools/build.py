@@ -251,7 +251,9 @@ def build_app():
             shutil.copy(p, libdir / Path(p).name)
         objs = ble_libs.members(libdir)     # single SDK members (lbuf, circular_buf, wlc, encryption)
         # the BLE module, its own unit: no static data shared with the core's unit (gate 2)
-        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-c", FW / "src" / "ble" / "ble.c", "-o", OUT / "ble.o")
+        # long calls, as the libraries (large-program): the BLE unit calls RAM code (__wrap_memcpy, the delays)
+        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-mllvm", "-pi32v2-large-program=true", "-c",
+           FW / "src" / "ble" / "ble.c", "-o", OUT / "ble.o")
         objs.append(OUT / "ble.o")
         extra = [OUT / "fm1_ctx.o", *cfg_objs, *objs, "--start-group", *[libdir / Path(p).name for p in libs],
                  "--end-group"]
@@ -264,12 +266,16 @@ def build_app():
     script = FW / ("app_ble.ld" if ble else "app.ld")    # (app_ble.ld: app.ld + the BT libraries' sections)
     if ble:
         ld = (*ld, "--orphan-handling=error", "-Map", "build/felucca.map")   # every library section placed on purpose
+        # the libraries' (and the BLE unit's) memcpy calls go to ble_port.c's RAM copy, __wrap_memcpy: the radio
+        # calibration calls memcpy while the flash must not be read. --wrap redirects undefined references only, so
+        # the core's unit, which defines memcpy, keeps calling its own
+        ld = (*ld, "--wrap=memcpy")
     tc(*ld, "-T", script, OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
        OUT / "felucca.o", *extra, "-o", elf)
     if ble:                         # library code meant for RAM would have landed in XIP via *(.*_code): refuse
-        # allowed in XIP, checked by hand (docs/ble/LINK_NOTES.md): .volatile_ram_code = wl_rf_common's wf_rf_trim, which
-        # calls XIP code itself (its enter/exit region hooks are the weak no-ops); .bt_updata_ram_code = bredr_frame's
-        # BT-over-the-air-update helpers, never run here
+        # .volatile_ram_code (wl_rf_common's wf_rf_trim) is placed in .ram_text with the trim (app_ble.ld,
+        # tools/check_rf_trim.py); .bt_updata_ram_code = bredr_frame's BT-over-the-air-update helpers, never run,
+        # allowed in XIP after a check by hand (docs/ble/LINK_NOTES.md)
         ok = {".volatile_ram_code", ".bt_updata_ram_code"}
         ram_code = sorted(set(re.findall(r"^\s*(\.\S*ram_code\S*)", (OUT / "felucca.map").read_text(), re.M)) - ok)
         if ram_code:
@@ -310,11 +316,25 @@ def check(img, syms, dis, rt):
         errors.append(f"_start is not at {APP_XIP:#x}")
     if img[:4] != bytes.fromhex("04818000"):
         errors.append(f"image starts with {img[:4].hex()}, not the entry stub")
-    rt_calls = [ln for ln in rt.splitlines() if re.search(r"\bcall\b", ln)]
-    if rt_calls:                    # RAM code runs with the flash off: no calls into XIP
-        errors.append(f".ram_text contains calls: {rt_calls[:3]}")
+    # RAM code runs while the flash must not be read (the flash driver; in BLE builds also the radio calibration):
+    # it may call and jump only inside .ram_text, never through a register, and use no XIP address as data
+    def in_rt(a): return 0x01C00000 <= a < 0x01C06000
+    rt_bad, rt_calls = [], 0
+    for ln in rt.splitlines():
+        if not LINE.match(ln):
+            continue
+        if re.search(r"\b(call|goto)\s+r\d+\b", ln):
+            rt_bad.append(ln)
+            continue
+        for a in re.findall(r"<[^>]*:\s*([0-9a-f]+)\s*>", ln):
+            if 0x02000000 <= int(a, 16) < 0x02100000 or (re.search(r"\b(call|goto)\b", ln) and not in_rt(int(a, 16))):
+                rt_bad.append(ln)
+        rt_calls += bool(re.search(r"\bcall\b", ln))
+    if rt_bad:
+        errors.append(f".ram_text reaches outside RAM: {rt_bad[:3]}")
     else:
-        notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, no calls")
+        notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, {rt_calls} calls, "
+                     "all inside .ram_text, no XIP address")
     for ln in dis.splitlines():     # nothing may call or load an address in the chip ROM
         mm = LINE.match(ln)
         if not mm:

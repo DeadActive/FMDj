@@ -86,11 +86,22 @@ is 0x980F, a real JieLi key.
 - **`app_ble.ld`:** `--orphan-handling=error`. The libraries' `.*_code` / `.*_const` go in XIP, `.*_data` in .data,
   `.*_bss` / `.bd_base` / `.*_bulk` in .bss. The `lp_target` / `sys_event` tables and `.LOG_TAG_CONST` are placed
   explicitly.
-- **RAM-code sections linked into XIP,** both checked by hand and allowed by name in `build.py` (any other one fails
-  the build):
-  - `.volatile_ram_code` is `wl_rf_common`'s `wf_rf_trim`. It calls XIP tuning code itself, and its
-    `enter` / `exit_wifi_rf_trim_region` hooks are the weak no-ops.
-  - `.bt_updata_ram_code` is `bredr_frame`'s BT-over-the-air-update helpers, never run here.
+- **The radio calibration runs from RAM** (fixed after device step D crashed on PLAY, mostly). `wl_rf_common`'s
+  `wf_rf_trim` (`.volatile_ram_code`) and the trim routines (`*.rf.text.cache.L2.rf_trim`, 3.6 KB) are linked into
+  `.ram_text`, as every SDK demo builds them (`CONFIG_RF_TRIM_CODE_AT_RAM`). The SDK's reason (`app_config.h`,
+  translated): reading the flash during the ~500 ms high-current trim can make it hang. On the FM-1 it gave
+  garbage instruction fetches (a jump to `0x470`, PC guard) in about half the starts.
+  - `ble_port.c` gives the trim:
+    - RAM `delay_us` / `hw_udelay` / `delay`;
+    - `__wrap_memcpy` in RAM (`--wrap=memcpy`: only the libraries' and the BLE unit's references; the core keeps
+      its own);
+    - `enter` / `exit_wifi_rf_trim_region` in RAM, which turn interrupts off for the trim, since every interrupt
+      handler runs from XIP.
+  - The BLE unit is compiled with long calls (`-pi32v2-large-program=true`) to reach RAM.
+  - `build.py` checks every build: `.ram_text` calls and jumps only inside `.ram_text`, never through a register,
+    with no XIP address as data.
+  - `.bt_updata_ram_code` (`bredr_frame`'s BT-over-the-air-update helpers, never run) stays in XIP, allowed by
+    name; any other `*ram_code*` section fails the build.
 - **IRQ handlers passed to `request_irq`.** All end in `rti`, i.e. they are interrupt functions, so `request_irq`
   puts them straight into the vector table:
 

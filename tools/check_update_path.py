@@ -53,6 +53,9 @@ def functions(text):
             out[name].append(normalise(m.group(1), name))
         elif line.startswith("| ") and name:      # a reference file's instruction line (render)
             out[name].append(line[2:].rstrip("\n"))
+    for body in out.values():                     # alignment padding after the last instruction is not code
+        while body and body[-1] == "nop":
+            body.pop()
     return out
 
 
@@ -104,6 +107,14 @@ def selftest():
     ref4 = render(selected(functions(d1)))
     assert compare(d1.replace("_bss_end", "tws_bulk_pool_end"), ref4) == [], "an address alias flagged"
     assert compare(d1.replace("usb_z+0x2A", "usb_z+0x2C"), ref4), "a moved branch target not caught"
+    # alignment padding after a function's last instruction (objdump puts it in the function) is not code: what
+    # follows a function in its section decides it, so it comes and goes with the layout; a nop inside is code
+    e1 = ("usb_w:\n  2000000:    00 49    \tr0 = 1\n  2000002:    80 00    \trts\n  2000004:    00 00    \tnop\n"
+          "other:\n  2000010:    80 00    \trts\n")
+    ref5 = render(selected(functions(e1)))
+    assert compare(e1.replace("  2000004:    00 00    \tnop\n", ""), ref5) == [], "trailing padding flagged"
+    e2 = e1.replace("\tr0 = 1\n", "\tr0 = 1\n  2000001:    00 00    \tnop\n")
+    assert compare(e2, ref5), "a nop inside the function not caught"
     print("check_update_path: selftest ok")
 
 

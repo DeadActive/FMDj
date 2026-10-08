@@ -57,3 +57,12 @@ All of these show in the console's `ble`.
 - **C (a3d7c6cf…): ok.** With the mixer on and not connected to any other host, the scan finds
   `5E8BA0792810 t0 -64 MIDI SMC-Mixer`: a public address, the name and the BLE-MIDI service UUID all read. The B
   round's missing mixer was the mixer, not the list.
+- **D (e5b178bf…): PLAY crashed about half the time** (red screen, reboot); when it started, the scan worked.
+  Crash record: vec 1, pc `0x470`, rets `0x207A2C4` (in `rd_adc_peak` after `call delay_us`), emu 0. Breadcrumb:
+  stage 5, task btctrler.
+
+  **Cause.** The radio calibration ran from XIP. The SDK runs it from RAM with flash access stopped, because
+  reading the flash during the ~500 ms trim can hang it. That gave garbage fetches: our `delay_us`, the trim code
+  itself, `memcpy`, and the core's interrupt handlers all ran from XIP.
+
+  **Fix (round 3):** see `LINK_NOTES.md`, "The radio calibration runs from RAM".

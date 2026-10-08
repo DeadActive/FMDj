@@ -72,14 +72,29 @@ void bit_clr_ie(unsigned char index, uint8_t cpuid) { (void)cpuid; core_irq_mask
 uint8_t irq_read(uint32_t index) { return (uint8_t)!core_irq_is_masked(index); }
 
 /* ---- delays and clocks (clock values read from the hardware, read-only) ---- */
-void hw_udelay(unsigned int us)
+/* in RAM (.ram_text): the radio calibration calls delay_us while the flash must not be read (app_ble.ld) */
+#define BLE_RAM __attribute__((section(".ram_text.ble"), noinline))
+BLE_RAM void hw_udelay(unsigned int us)
 {
-    uint32_t t0 = fm1_ticks();
-    while (fm1_ticks() - t0 < us * FM1_TICKS_PER_US)
+    uint32_t t0 = fm1_ble_ticks();
+    while (fm1_ble_ticks() - t0 < us * FM1_TICKS_PER_US)
         ;
 }
-void delay_us(unsigned int us) { hw_udelay(us); }
-void delay(unsigned int n) { volatile unsigned int i = n; while (i--) ; }   /* (a spin count, as the SDK's) */
+BLE_RAM void delay_us(unsigned int us)
+{
+    uint32_t t0 = fm1_ble_ticks();
+    while (fm1_ble_ticks() - t0 < us * FM1_TICKS_PER_US)
+        ;
+}
+BLE_RAM void *__wrap_memcpy(void *d, const void *s, unsigned n)   /* (build.py --wrap=memcpy) */
+{
+    uint8_t *o = d;
+    const uint8_t *i = s;
+    while (n--)
+        *o++ = *i++;
+    return d;
+}
+BLE_RAM void delay(unsigned int n) { volatile unsigned int i = n; while (i--) ; }   /* (a spin count, as the SDK's) */
 int clk_get(const char *name)
 {
     if (!strcmp(name, "sys")) return (int)fm1_clk_hz(FM1_CLK_SYS);
@@ -162,6 +177,22 @@ uint32_t sdfile_get_disk_capacity(void) { return 0x100000u; }
  * The SDK versions read stored trims and write what they used back to VM; these never write: no stored trim, so
  * the radio calibrates fresh at each start. ---- */
 #include "ble_rf_tables.c"
+/* the radio calibration (wl_rf_common wf_rf_trim, ~500 ms) brackets itself with these. The SDK's (apps/common/net/
+ * wifi_conf.c, CONFIG_RF_TRIM_CODE_AT_RAM) stop flash access (norflash_enter_spi_code); here: interrupts off, as
+ * every interrupt handler runs from XIP, and the trim itself runs from RAM. The return value is the SDK's for code
+ * linked at RAM: no moved copy. */
+BLE_RAM uint8_t *enter_wifi_rf_trim_region(uint32_t **start_of_region)
+{
+    (void)start_of_region;
+    fm1_ble_irq_off();
+    return 0;
+}
+BLE_RAM void exit_wifi_rf_trim_region(uint32_t **start_of_region, uint8_t *rf_trim_code_run_addr)
+{
+    (void)start_of_region;
+    (void)rf_trim_code_run_addr;
+    fm1_ble_irq_on();
+}
 const uint8_t WIFI_PA_ENABLE = 0, wifi_temperature_drift_trim_on = 0, RFIinitUseTrimValue = 0;
 uint8_t RTDebugLevel = 0;
 int wifi_get_rf_trim_data(void *info, int size) { (void)info; (void)size; return -1; }
