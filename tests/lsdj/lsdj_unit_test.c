@@ -149,6 +149,7 @@ int main(void)
     {   /* the push never waits: nothing while the panel is busy; else one transfer of up to 8 line pairs */
         uint32_t b = blits;
         memset(shown, 0xFF, sizeof shown);    /* everything changed */
+        memset(dirty, 1, sizeof dirty);
         lcd_idle = 0;
         ble_draw();
         CHECK(blits == b);
@@ -161,6 +162,9 @@ int main(void)
     for (i = 0; i < 200; i++) {               /* draw passes only: the screen catches up */
         ble_draw();
     }
+    for (y = 0, x = 0; y < LSDJ_H; y++)       /* ... and no line is marked changed any more */
+        x |= dirty[y];
+    CHECK(x == 0);
     CHECK(bad_blits == 0);
     for (y = 0; y < LSDJ_H; y++)              /* every Game Boy pixel on the screen, 1.5x */
         for (x = 0; x < LSDJ_W; x++)

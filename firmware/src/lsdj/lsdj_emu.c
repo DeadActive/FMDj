@@ -30,6 +30,33 @@ static const lsdj_bank_t *emu_rom_t;
 static uint32_t emu_rom_n;
 #define PGB_FAST_ROM_ON (emu_mode & EMU_FAST_ROM)
 #define PGB_FAST_ROM(off) lsdj_rom_byte(emu_rom_t, emu_rom_n, (uint32_t)(off))
+/* the opcode / operand fetch: bank 0 and the selected bank (cached until LSDj switches) read directly. MBC5 only
+ * (emu_init refuses other cartridges): 0x4000..0x7FFF is bank `bank`, bank 0 included */
+static const uint8_t *emu_lo_p, *emu_hi_p;
+static uint32_t emu_lo_n, emu_hi_n, emu_hi_bank;
+static void emu_hi_set(uint32_t b)
+{
+    emu_hi_bank = b;
+    emu_hi_p = b < emu_rom_n ? emu_rom_t[b].p : 0;
+    emu_hi_n = b < emu_rom_n ? emu_rom_t[b].n : 0;
+}
+static inline __attribute__((always_inline)) int emu_fetch(uint32_t a, uint32_t bank, uint32_t boot)
+{
+    if (!(emu_mode & EMU_FAST_ROM))
+        return -1;
+    if (a < 0x4000u) {
+        if (a < 0x100u && !boot)
+            return -1;                        /* (a boot ROM: none here; Peanut-GB's own path) */
+        return a < emu_lo_n ? emu_lo_p[a] : 0xFF;
+    }
+    if (a >= 0x8000u)
+        return -1;
+    if (bank != emu_hi_bank)
+        emu_hi_set(bank);
+    a -= 0x4000u;
+    return a < emu_hi_n ? emu_hi_p[a] : 0xFF;
+}
+#define PGB_FAST_FETCH(a, bank, boot) emu_fetch((a), (bank), (boot))
 #define ENABLE_SOUND 1
 #define ENABLE_LCD 1
 #define PEANUT_GB_USE_INTRINSICS 0
@@ -47,6 +74,7 @@ static struct {
     uint32_t nbanks;
     uint8_t *sram;                            /* LSDJ_SRAM bytes */
     uint8_t (*fb)[LSDJ_W];                    /* LSDJ_H rows of shades */
+    uint8_t *dirty;                           /* LSDJ_H flags: set when a row's pixels change (0: not kept) */
     uint32_t errors, last_error, last_addr;
     int16_t snd[AUDIO_SAMPLES_TOTAL];         /* the last frame's audio, interleaved stereo */
 } emu LSDJ_POOL;
@@ -77,8 +105,8 @@ static void emu_error(struct gb_s *gb, const enum gb_error_e e, const uint16_t a
 static void emu_line(struct gb_s *gb, const uint8_t *px, const uint_fast8_t y)
 {
     (void)gb;
-    if (y < LSDJ_H)
-        lsdj_line(emu.fb[y], px);
+    if (y < LSDJ_H && lsdj_line(emu.fb[y], px) && emu.dirty)
+        emu.dirty[y] = 1;
 }
 
 /* 0 = running; else Peanut-GB's gb_init error (bad header checksum, unsupported cartridge) or -1 (not MBC5 + RAM +
@@ -88,8 +116,12 @@ static int emu_init(const lsdj_bank_t *rom, uint32_t nbanks, uint8_t *sram, uint
     enum gb_init_error_e r;
     emu.rom = emu_rom_t = rom;
     emu.nbanks = emu_rom_n = nbanks;
+    emu_lo_p = nbanks ? rom[0].p : 0;
+    emu_lo_n = nbanks ? rom[0].n : 0;
+    emu_hi_set(~0u);                          /* no bank cached yet */
     emu.sram = sram;
     emu.fb = fb;
+    emu.dirty = 0;
     emu.errors = 0;
     if (lsdj_rom_byte(rom, nbanks, 0x147) != 0x1Bu || lsdj_rom_byte(rom, nbanks, 0x149) != 0x04u)
         return -1;

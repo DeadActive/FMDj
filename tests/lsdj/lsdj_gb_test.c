@@ -61,8 +61,9 @@ static void test_line_and_span(void)
     memset(shown, 0, sizeof shown);
     for (i = 0; i < LSDJ_W; i++)
         px[i] = (uint8_t)(0x20u | (i & 3u));                  /* palette flag bits are dropped */
-    lsdj_line(fb[5], px);
+    CHECK(lsdj_line(fb[5], px) == 1);                         /* changed: reported */
     CHECK(fb[5][0] == 0 && fb[5][1] == 1 && fb[5][3] == 3 && fb[5][159] == 3);
+    CHECK(lsdj_line(fb[5], px) == 0);                         /* the same pixels again: not changed */
     CHECK(!lsdj_span(fb[0], shown[0], &x0, &x1));             /* group 0 (lines 0, 1): clean */
     CHECK(lsdj_span(fb[4], shown[4], &x0, &x1));              /* group 2 (lines 4, 5): line 5 changed */
     CHECK(x0 == 0 && x1 == 160);

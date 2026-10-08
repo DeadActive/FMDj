@@ -902,6 +902,18 @@ PGB_HOT uint8_t __gb_read(struct gb_s *gb, uint16_t addr)
 /**
  * Internal function used to write bytes.
  */
+#ifdef PGB_FAST_FETCH
+/* (LSDj fork) the front end's fetch: PGB_FAST_FETCH(addr, selected ROM bank, IO_BOOT) -> the byte, or < 0 for the
+ * long way (__gb_read); inlined into each fetch */
+static inline __attribute__((always_inline)) uint8_t __gb_fetch(struct gb_s *gb)
+{
+	const uint16_t a = gb->cpu_reg.pc.reg++;
+	const int v = PGB_FAST_FETCH(a, gb->selected_rom_bank, gb->hram_io[IO_BOOT]);
+	if(v >= 0)
+		return (uint8_t)v;
+	return __gb_read(gb, a);
+}
+#else
 static inline uint8_t __gb_fetch(struct gb_s *gb)
 {
 	const uint16_t a = gb->cpu_reg.pc.reg++;
@@ -916,6 +928,7 @@ static inline uint8_t __gb_fetch(struct gb_s *gb)
 #endif
 	return __gb_read(gb, a);
 }
+#endif
 
 PGB_HOT void __gb_write(struct gb_s *gb, uint_fast16_t addr, uint8_t val)
 {

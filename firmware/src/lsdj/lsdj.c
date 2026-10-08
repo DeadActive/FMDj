@@ -29,6 +29,7 @@
 
 static uint8_t sram[LSDJ_SRAM] LSDJ_POOL;
 static uint8_t fb[LSDJ_H][LSDJ_W] LSDJ_POOL, shown[LSDJ_H][LSDJ_W] LSDJ_POOL;
+static uint8_t dirty[LSDJ_H];                 /* rows changed since they were sent (set by emu_line) */
 static int16_t ring_buf[2u * RING_N] LSDJ_POOL;
 static uint16_t pushbuf[2][PUSH_MAX * 3u * 240u] LSDJ_POOL;   /* DMA sources: one filled while the other goes out */
 static lsdj_ring_t ring;
@@ -48,7 +49,7 @@ static const uint8_t KEYS[8] = {CORE_BTN_GLO, CORE_BTN_EDIT, CORE_BTN_PLAY, CORE
 static const uint16_t PAL[4] = {RGB(232, 232, 224), RGB(160, 160, 152), RGB(88, 88, 84), RGB(16, 16, 16)};
 
 static struct {
-    uint32_t frames, waits, frame_max_us, frame_us_sum, pushes, start_ms;
+    uint32_t frames, waits, frame_max_us, frame_us_sum, pushes, start_ms, push_ticks, push_calls;
     uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under, sec_us, last_load;
     uint32_t buttons, notes;                  /* as read for the last frame (console `ble`) */
     int32_t pot, knob;                        /* the MASTER pot: last reading, its filter state */
@@ -175,15 +176,19 @@ static void lsdj_push(void)
     uint32_t k, g0, n, x0, x1, a, b, r;
     if (!core_lcd_idle())
         return;
-    for (k = 0; k < GROUPS; k++) {
+    for (k = 0; k < GROUPS; k++) {            /* only rows marked changed are compared */
         g0 = group;
         group = group + 1u == GROUPS ? 0 : group + 1u;
+        if (!(dirty[2u * g0] | dirty[2u * g0 + 1u]))
+            continue;
         if (lsdj_span(fb[2u * g0], shown[2u * g0], &x0, &x1))
             break;
+        dirty[2u * g0] = dirty[2u * g0 + 1u] = 0;   /* changed back: nothing to send */
     }
     if (k == GROUPS)
         return;                               /* the screen shows the frame */
-    for (n = 1; n < PUSH_MAX && g0 + n < GROUPS && lsdj_span(fb[2u * (g0 + n)], shown[2u * (g0 + n)], &a, &b); n++) {
+    for (n = 1; n < PUSH_MAX && g0 + n < GROUPS && (dirty[2u * (g0 + n)] | dirty[2u * (g0 + n) + 1u]) &&
+                lsdj_span(fb[2u * (g0 + n)], shown[2u * (g0 + n)], &a, &b); n++) {
         x0 = a < x0 ? a : x0;
         x1 = b > x1 ? b : x1;
     }
@@ -191,8 +196,10 @@ static void lsdj_push(void)
         lsdj_scale(pushbuf[buf_i] + k * 3u * LSDJ_SX(x1 - x0), fb[2u * (g0 + k)], x0, x1, PAL);
     core_lcd_blit((int)LSDJ_SX(x0), (int)(Y0 + 3u * g0), (int)LSDJ_SX(x1 - x0), (int)(3u * n), pushbuf[buf_i]);
     buf_i ^= 1u;
-    for (r = 2u * g0; r < 2u * (g0 + n); r++)
+    for (r = 2u * g0; r < 2u * (g0 + n); r++) {
         memcpy(&shown[r][x0], &fb[r][x0], x1 - x0);
+        dirty[r] = 0;                         /* the span covers all of these rows' changes */
+    }
     group = g0 + n == GROUPS ? 0 : g0 + n;
     st.pushes++;
 }
@@ -208,8 +215,10 @@ static __attribute__((noinline)) void lsdj_start(void)
     }
     memset(fb, 0, sizeof fb);
     memset(shown, 0xFF, sizeof shown);        /* no shade: every line pair is sent once */
+    memset(dirty, 1, sizeof dirty);
     lsdj_ring_init(&ring, ring_buf, RING_N);
     r = emu_init(lsdj_rom, LSDJ_ROM_BANKS, sram, fb);
+    emu.dirty = dirty;
     if (r) {
         st.error = r;
         core_text(0, 110, 240, CORE_FONT_M, "NOT AN LSDJ ROM", CORE_TEXT, CORE_BG, 1);
@@ -252,7 +261,10 @@ void ble_draw(void)
 {
     void (*f)(void) = draw;
     if (f) {
+        uint32_t t0 = core_ticks();
         f();
+        st.push_ticks += core_ticks() - t0;
+        st.push_calls++;
         return;
     }
     if (splash_done || st.error)
@@ -322,6 +334,8 @@ void ble_status(void)                          /* the console's `ble` */
     p = put_u(p, lsdj_ring_fill(&ring));
     p = put_s(p, " pushes ");
     p = put_u(p, st.pushes);
+    p = put_s(p, " push_avg_us ");
+    p = put_u(p, st.push_calls ? st.push_ticks / CORE_TICKS_PER_US / st.push_calls : 0);
     p = put_s(p, " s ");
     p = put_u(p, (core_ms() - st.start_ms) / 1000u);
     put_s(p, "\r\n");

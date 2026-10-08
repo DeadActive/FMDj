@@ -69,11 +69,15 @@ static void lsdj_pad_text(char *b, uint8_t pad)
     *o = 0;
 }
 
-static void lsdj_line(uint8_t *row, const uint8_t *px)     /* Peanut-GB's line: shade in bits 0..1 */
+static int lsdj_line(uint8_t *row, const uint8_t *px)      /* Peanut-GB's line: shade in bits 0..1; 1 = changed */
 {
-    uint32_t x;
-    for (x = 0; x < LSDJ_W; x++)
-        row[x] = px[x] & 3u;
+    uint32_t x, d = 0;
+    for (x = 0; x < LSDJ_W; x++) {
+        uint8_t v = px[x] & 3u;
+        d |= row[x] ^ v;
+        row[x] = v;
+    }
+    return d != 0;
 }
 
 /* the line pair at fb (rows fb, fb + LSDJ_W) against what the screen shows: changed -> 1 and [x0, x1), even */
