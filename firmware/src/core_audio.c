@@ -24,12 +24,17 @@ static volatile uint32_t t5_nested_ticks;              /* TIMER4 ticks TIMER5 sp
 static uint32_t audio_cpu_rem;                         /* keep the fractional IIR step: no low-load bias */
 static uint32_t audio_cpu_q8;                          /* render load, 256 = a whole half */
 
+#if FELUCCA_LSDJ
+void lsdj_audio(int32_t *out, uint32_t n);              /* the LSDj unit (firmware/src/lsdj/lsdj.c) */
+static void snd_block(int32_t *out, uint32_t n) { lsdj_audio(out, n); }
+#else
 static void snd_block(int32_t *out, uint32_t n)         /* the sound source: silence for now */
 {
     uint32_t i;
     for (i = 0; i < 2u * n; i++)
         out[i] = 0;
 }
+#endif
 
 static void audio_block(int32_t *out, uint32_t n)       /* source, then Q15 -> 24 bit */
 {

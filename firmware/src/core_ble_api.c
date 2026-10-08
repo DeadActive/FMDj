@@ -54,6 +54,13 @@ void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int
     draw_text_line((uint32_t)x, (uint32_t)y, (uint32_t)w, font == CORE_FONT_M ? &AF_M : &AF_S, s, core_colour(fg),
                    core_colour(bg), centre);
 }
+void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px)
+{
+    if (x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= 240 && y + h <= 240)
+        lcd_blit((uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h, px);
+}
+uint32_t core_ticks(void) { return fm1_ticks(); }
+uint32_t core_notes(void) { return fm1_in.notes; }
 uint32_t core_buttons(void) { return fm1_in.buttons; }
 uint32_t core_play_bit(void) { return 1u << panel.btn[B_PLAY]; }
 uint32_t core_rec_bit(void) { return 1u << panel.btn[B_REC]; }

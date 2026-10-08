@@ -28,6 +28,12 @@
 #ifndef FELUCCA_BLE
 #define FELUCCA_BLE 0            /* BLE MIDI test (firmware/src/ble/, FELUCCA_BLE_STEP): JieLi BT libraries */
 #endif
+#ifndef FELUCCA_LSDJ
+#define FELUCCA_LSDJ 0           /* LSDj (firmware/src/lsdj/): a private build with the owner's ROM; needs FELUCCA_BLE */
+#endif
+#if FELUCCA_LSDJ && !FELUCCA_BLE
+#error "FELUCCA_LSDJ plugs into the BLE unit's hooks: build it with FELUCCA_BLE=1 (tools/build.py does)"
+#endif
 #ifndef FELUCCA_UART
 #define FELUCCA_UART 1           /* TRS MIDI IN on UART1 / PH8 */
 #endif

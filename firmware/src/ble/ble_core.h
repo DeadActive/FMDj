@@ -27,7 +27,14 @@ enum { CORE_BG, CORE_TEXT, CORE_THEME, CORE_MID, CORE_SEL, CORE_INK, CORE_CRASH_
 enum { CORE_FONT_S, CORE_FONT_M };
 void core_fill(int x, int y, int w, int h, int colour);
 void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int centre);
+void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px);   /* RGB565 byte-swapped, px in RAM (DMA,
+                                                                     * still running on return: keep px until the
+                                                                     * next LCD call) */
+/* time: TIMER4 ticks */
+#define CORE_TICKS_PER_US 24u
+uint32_t core_ticks(void);
 /* keys */
+uint32_t core_notes(void);                    /* note keys held: bit 0 = F3 .. 26 = G5 */
 uint32_t core_buttons(void);
 uint32_t core_play_bit(void);
 uint32_t core_rec_bit(void);
@@ -43,10 +50,12 @@ extern const struct {
 #endif
 /* console (CDC) */
 void core_con_puts(const char *s);
-/* libc.c */
+/* libc.c (host tests: <string.h>) */
+#ifndef CORE_HOST_LIBC
 void *memset(void *d, int c, unsigned n);
 void *memcpy(void *d, const void *s, unsigned n);
 int memcmp(const void *a, const void *b, unsigned n);
+#endif
 
 /* the BLE unit's entry points (ble.c) */
 void ble_service(void);
@@ -54,4 +63,6 @@ void ble_key(uint32_t pressed_buttons, int32_t select_steps);
 void ble_draw(void);
 void ble_status(void);
 int ble_started(void);
+/* the LSDj unit (FELUCCA_LSDJ, firmware/src/lsdj/lsdj.c) in that place: also the audio ISR's sound source */
+void lsdj_audio(int32_t *out, uint32_t n);
 #endif

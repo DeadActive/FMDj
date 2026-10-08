@@ -1,0 +1,100 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * LSDj fork: 2026 DEADACTIVE */
+/* The Game Boy: Peanut-GB (MIT, Mahyar Koshkouei) and minigb_apu (MIT, Alex Baines / Mahyar Koshkouei), glued to
+ * the ROM bank table, the save RAM and a frame buffer. Shared by the firmware (lsdj.c) and the host harness
+ * (tests/lsdj/lsdj_host.c). Include lsdj_gb.c first. Integer only (minigb_apu's float constants fold at compile
+ * time). Freestanding: no libc headers beyond <stdint.h>, <stdbool.h>, <stddef.h>. */
+#include <stddef.h>
+#ifndef assert
+#define assert(x) ((void)0)
+#endif
+#ifndef abort
+#define abort() for (;;)
+#endif
+#ifndef LSDJ_HOST
+struct tm { int tm_sec, tm_min, tm_hour, tm_mday, tm_mon, tm_year, tm_wday, tm_yday, tm_isdst; };
+#endif
+
+#define MINIGB_APU_AUDIO_FORMAT_S16SYS
+#define AUDIO_SAMPLE_RATE 44100
+#include "minigb_apu.c"
+static struct minigb_apu_ctx emu_apu;
+uint8_t audio_read(const uint16_t a) { return minigb_apu_audio_read(&emu_apu, a); }
+void audio_write(const uint16_t a, const uint8_t v) { minigb_apu_audio_write(&emu_apu, a, v); }
+#define ENABLE_SOUND 1
+#define ENABLE_LCD 1
+#define PEANUT_GB_USE_INTRINSICS 0
+#include "peanut_gb.h"
+
+#ifndef LSDJ_POOL
+#define LSDJ_POOL                             /* the firmware: section(".pool") */
+#endif
+#define LSDJ_SRAM (128u * 1024u)
+#define LSDJ_FRAME_SAMPLES AUDIO_SAMPLES      /* stereo frames per Game Boy frame (738 at 44.1 kHz) */
+
+static struct {
+    struct gb_s gb;
+    const lsdj_bank_t *rom;
+    uint32_t nbanks;
+    uint8_t *sram;                            /* LSDJ_SRAM bytes */
+    uint8_t (*fb)[LSDJ_W];                    /* LSDJ_H rows of shades */
+    uint32_t errors, last_error, last_addr;
+    int16_t snd[AUDIO_SAMPLES_TOTAL];         /* the last frame's audio, interleaved stereo */
+} emu LSDJ_POOL;
+
+static uint8_t emu_rom_read(struct gb_s *gb, const uint_fast32_t a)
+{
+    (void)gb;
+    return lsdj_rom_byte(emu.rom, emu.nbanks, (uint32_t)a);
+}
+static uint8_t emu_ram_read(struct gb_s *gb, const uint_fast32_t a)
+{
+    (void)gb;
+    return a < LSDJ_SRAM ? emu.sram[a] : 0xFFu;
+}
+static void emu_ram_write(struct gb_s *gb, const uint_fast32_t a, const uint8_t v)
+{
+    (void)gb;
+    if (a < LSDJ_SRAM)
+        emu.sram[a] = v;
+}
+static void emu_error(struct gb_s *gb, const enum gb_error_e e, const uint16_t a)
+{
+    (void)gb;
+    emu.errors++;
+    emu.last_error = (uint32_t)e;
+    emu.last_addr = a;
+}
+static void emu_line(struct gb_s *gb, const uint8_t *px, const uint_fast8_t y)
+{
+    (void)gb;
+    if (y < LSDJ_H)
+        lsdj_line(emu.fb[y], px);
+}
+
+/* 0 = running; else Peanut-GB's gb_init error (bad header checksum, unsupported cartridge) or -1 (not MBC5 + RAM +
+ * battery with a 128 KiB save: what LSDj is) */
+static int emu_init(const lsdj_bank_t *rom, uint32_t nbanks, uint8_t *sram, uint8_t (*fb)[LSDJ_W])
+{
+    enum gb_init_error_e r;
+    emu.rom = rom;
+    emu.nbanks = nbanks;
+    emu.sram = sram;
+    emu.fb = fb;
+    emu.errors = 0;
+    if (lsdj_rom_byte(rom, nbanks, 0x147) != 0x1Bu || lsdj_rom_byte(rom, nbanks, 0x149) != 0x04u)
+        return -1;
+    r = gb_init(&emu.gb, emu_rom_read, emu_ram_read, emu_ram_write, emu_error, 0);
+    if (r != GB_INIT_NO_ERROR)
+        return (int)r;
+    gb_init_lcd(&emu.gb, emu_line);
+    minigb_apu_audio_init(&emu_apu);
+    return 0;
+}
+
+static void emu_frame(uint8_t joypad)          /* one Game Boy frame: the lines into fb, the audio into emu.snd */
+{
+    emu.gb.direct.joypad = joypad;
+    gb_run_frame(&emu.gb);
+    minigb_apu_audio_callback(&emu_apu, emu.snd);
+}

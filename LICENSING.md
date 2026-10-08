@@ -50,6 +50,9 @@ All by Hügelton Instruments (Leo Kuroshita), in this tree:
 | klattsch by Tony Gies (<https://github.com/tgies/klattsch>): design reference for the VOICE engine; no code copied. Formant data from Klatt (1980) / Hillenbrand et al. (1995) | MIT (klattsch) | credit only |
 | X0X by charlesvestal (<https://github.com/charlesvestal/fm1-x0x>), a Felucca fork: the design of the browser emulator (the worklet, the device clock driven by its audio, the exports); its files credit it in their headers | GPL-3.0 | `web/emu/` |
 | DotGothic16 font by The DotGothic16 Project Authors (<https://github.com/fontworks-fonts/DotGothic16>): the browser emulator's knob labels, served with its page (cut to printable ASCII; the font declares no Reserved Font Name) | SIL OFL 1.1 | `web/emu/fonts/DotGothic16-subset.woff`, `LICENSES/OFL-DotGothic16.txt` (also `web/emu/fonts/OFL.txt`) |
+| Peanut-GB by Mahyar Koshkouei (<https://github.com/deltabeard/Peanut-GB>, parts from SameBoy by Lior Halphon): the LSDj build's Game Boy emulator (one added `PGB_HOT` marker, empty by default) | MIT | `firmware/src/lsdj/peanut_gb.h`, `LICENSES/MIT-Peanut-GB.txt` |
+| minigb_apu by Mahyar Koshkouei and Alex Baines (from MiniGBS): the LSDj build's Game Boy sound | MIT | `firmware/src/lsdj/minigb_apu.c`, `firmware/src/lsdj/minigb_apu.h`, `LICENSES/MIT-minigb_apu.txt` |
+| LSDj (Little Sound Dj) by Johan Kotlinski: NOT in this tree and never published. Its licence forbids copying and distributing it; an LSDj build (`FELUCCA_LSDJ=1`) is made by its owner from their own copy (`LSDJ_ROM`) into the git-ignored `build/` and stays private | — | — |
 | JieLi AC79 SDK by JieLi Technology: three of its files go into every `.fwsc` package (below); none are in this tree | Apache-2.0 | `LICENSES/Apache-2.0.txt` |
 
 On the device, HOME held > ABOUT opens the information screen; turning PRESETS scrolls on into

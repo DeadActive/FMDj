@@ -187,13 +187,25 @@ def build_app():
     # BLE builds (and the gate-2 reference core, FELUCCA_CORE_REF=1): no global merging in the core's unit, so the
     # update path's variable offsets do not move with the BLE wrappers (tools/check_update_path.py compares them)
     core_ref = os.environ.get("FELUCCA_CORE_REF") == "1"     # gate 2's reference: the BLE build's core unit, no BLE
+    # LSDj (FELUCCA_LSDJ=1, a private build with the owner's ROM, LSDJ_ROM): the core's unit as in the reference,
+    # with the LSDj unit (firmware/src/lsdj/lsdj.c) in place of the empty BLE entry points
+    lsdj = os.environ.get("FELUCCA_LSDJ") == "1"
+    if lsdj:
+        if os.environ.get("FELUCCA_BLE") == "1":
+            raise SystemExit("build: FELUCCA_LSDJ takes the BLE unit's place; build it without FELUCCA_BLE")
+        core_ref = True
+        rom = os.environ.get("LSDJ_ROM")
+        if not rom:
+            raise SystemExit("build: FELUCCA_LSDJ=1 needs LSDJ_ROM=<your own LSDj .gb> (never committed)")
+        subprocess.run([sys.executable, SRC / "tools" / "lsdj_rom.py", rom, OUT / "lsdj" / "lsdj_rom.h"], check=True)
+        flags.append("-DFELUCCA_LSDJ=1")
     if os.environ.get("FELUCCA_BLE") == "1" or core_ref:
         flags += ["-mllvm", "-enable-global-merge=false"]
     if core_ref and "-DFELUCCA_BLE=1" not in flags:
         flags.append("-DFELUCCA_BLE=1")
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_ICONS", "FELUCCA_SLICE", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_BLE"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_BLE"):     # (FELUCCA_LSDJ: above)
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -237,7 +249,11 @@ def build_app():
            OUT / "felucca_size.ll", "-o", OUT / "felucca.o")
     elf = OUT / "felucca.elf"
     extra = []
-    if core_ref and not ble:        # the reference: empty BLE entry points instead of the BLE unit and the libraries
+    if lsdj:                        # the LSDj unit, its own object: no static data shared with the core's unit
+        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-Ibuild/lsdj", "-Ifirmware/src/lsdj", "-c",
+           FW / "src" / "lsdj" / "lsdj.c", "-o", OUT / "lsdj.o")
+        extra = [OUT / "lsdj.o"]
+    elif core_ref and not ble:      # the reference: empty BLE entry points instead of the BLE unit and the libraries
         tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-c", FW / "src" / "ble" / "ble_stub.c", "-o",
            OUT / "ble_stub.o")
         extra = [OUT / "ble_stub.o"]
@@ -390,7 +406,8 @@ def mmio_check():
         regs |= more
     errors = []
     ble_src = [f for f in (FW / "src" / "ble").glob("*.[ch]") if f.name != "ble_rf_tables.c"]   # (SDK data table)
-    for f in sorted([*(FW / "src").glob("*.[ch]"), *ble_src, *(FW / "loader").glob("*.c")]):
+    lsdj_src = [FW / "src" / "lsdj" / n for n in ("lsdj.c", "lsdj_gb.c", "lsdj_emu.c")]   # (not Peanut-GB's)
+    for f in sorted([*(FW / "src").glob("*.[ch]"), *ble_src, *lsdj_src, *(FW / "loader").glob("*.c")]):
         for no, ln in enumerate(strip(f.read_text()).splitlines(), 1):
             where = f"{f.relative_to(FW)}:{no}"
             for rx, what in ((MMIO_LIT, "register/window address"), (MMIO_CAST, "volatile pointer cast"),
@@ -431,9 +448,10 @@ def main():
     errors, notes = check(img, syms, dis, rt)
     hal_err = mmio_check()
     errors += hal_err
-    if os.environ.get("FELUCCA_BLE") == "1":    # gates 2b and 4 stop a BLE build before its package is written
+    lsdj = os.environ.get("FELUCCA_LSDJ") == "1"
+    if os.environ.get("FELUCCA_BLE") == "1" or lsdj:   # gates 2b and 4 stop a BLE / LSDj build before its package
         for gate in (["tools/check_update_path.py", str(OUT / "felucca.dis"), "tests/ble/update_path.ref"],
-                     ["tools/check_ble_boot.py", str(OUT / "felucca.dis")]):
+                     ["tools/check_ble_boot.py", str(OUT / "felucca.dis"), *(["--lsdj"] if lsdj else [])]):
             r = subprocess.run([sys.executable, *gate], cwd=SRC, capture_output=True, text=True)
             lines = (r.stdout + r.stderr).strip().splitlines() or [f"{gate[0]}: no output"]
             if r.returncode:
@@ -448,6 +466,8 @@ def main():
         print("  FAIL ", e)
     if errors:
         raise SystemExit("build: checks failed")
+    if lsdj:                        # private: it holds the owner's LSDj ROM (git-ignored build/, never published)
+        name = "lsdj-private.fwsc"
     pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
     (OUT / name).write_bytes(pkg)
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"

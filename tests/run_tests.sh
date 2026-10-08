@@ -261,17 +261,25 @@ fi
 run "update path sources = Felucca 1.0.5.2's (gate 2a)" python3 tools/check_update_path.py --sources v1.0.5.2
 if grep -q "^ble_service:" build/felucca.dis; then   # a BLE build: its core unit = the reference's (gate 2b, 4)
     run "update path machine code = the reference core's (gate 2b)" python3 tools/check_update_path.py build/felucca.dis tests/ble/update_path.ref
-    run "no BT start-up at boot (gate 4)" python3 tools/check_ble_boot.py build/felucca.dis
+    if grep -q "^lsdj_start:" build/felucca.dis; then   # the LSDj build (FELUCCA_LSDJ=1): the Game Boy after PLAY only
+        run "no Game Boy at boot (gate 4)" python3 tools/check_ble_boot.py build/felucca.dis --lsdj
+    else
+        run "no BT start-up at boot (gate 4)" python3 tools/check_ble_boot.py build/felucca.dis
+    fi
 else
     echo "== skip gates 2b and 4 (not a BLE build: FELUCCA_BLE=1 ./build.sh)"
 fi
 run "update path check self-test" python3 tools/check_update_path.py --selftest
+run "boot gate self-test (gate 4)" python3 tools/check_ble_boot.py --selftest
 mkdir -p build/tests
 run "BLE-MIDI parser" sh -c 'cc -Wall -O1 -o build/tests/ble_midi_test tests/ble/ble_midi_test.c && build/tests/ble_midi_test'
 run "BLE scan table" sh -c 'cc -Wall -O1 -o build/tests/ble_scan_test tests/ble/ble_scan_test.c && build/tests/ble_scan_test'
 run "BLE central state machine, UUID match, monitor text" sh -c 'cc -Wall -O1 -o build/tests/ble_central_test tests/ble/ble_central_test.c && build/tests/ble_central_test'
 run "BLE stored RF calibration (config store)" sh -c 'cc -Wall -O1 -o build/tests/ble_vm_test tests/ble/ble_vm_test.c && build/tests/ble_vm_test'
 run "BLE OS layer (host back end)" sh -c 'cc -Wall -O1 -Wno-deprecated-declarations -Ifirmware/src/ble -o build/tests/ble_os_test tests/ble/ble_os_test.c && build/tests/ble_os_test'
+run "LSDj unit: ROM banks, keys, screen spans, 1.5x scaler, audio ring, save unpacker" sh -c 'cc -Wall -O1 -Ifirmware/src -o build/tests/lsdj_gb_test tests/lsdj/lsdj_gb_test.c && build/tests/lsdj_gb_test'
+# (with the owner's ROM only: build/lsdj/lsdj_rom.h from FELUCCA_LSDJ=1 LSDJ_ROM=... ./build.sh; never committed)
+run "LSDj unit against a simulated core (skipped without your ROM's private header)" sh -c 'cc -O1 -w -Ifirmware/src -Ifirmware/src/lsdj -Ibuild/lsdj -o build/tests/lsdj_unit_test tests/lsdj/lsdj_unit_test.c && build/tests/lsdj_unit_test'
 
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
 
