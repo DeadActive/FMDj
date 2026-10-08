@@ -51,6 +51,7 @@ static const uint16_t PAL[4] = {RGB(232, 232, 224), RGB(160, 160, 152), RGB(88, 
 static struct {
     uint32_t frames, waits, frame_max_us, frame_us_sum, pushes, start_ms, push_ticks, push_calls;
     uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under, sec_us, last_load;
+    uint32_t win_ms, win_frames, last_speed;  /* SPD: over 4 s windows (whole frames in 1 s jitter by 1.7 %) */
     uint32_t buttons, notes;                  /* as read for the last frame (console `ble`) */
     int32_t pot, knob;                        /* the MASTER pot: last reading, its filter state */
     volatile uint32_t master_q12;             /* its gain, applied by the audio ISR */
@@ -112,7 +113,7 @@ static void status_line(void)
 {
     char b[48], *p = b;
     p = put_s(p, "SPD ");
-    p = put_u(p, st.last_fps * 100u / 60u);
+    p = put_u(p, st.last_speed);
     p = put_s(p, "% LOAD ");
     p = put_u(p, st.last_load);
     put_s(p, "%");
@@ -144,6 +145,11 @@ static void lsdj_step(void)
         st.sec_under = ring.under;
         st.last_load = st.last_fps ? st.sec_us / st.last_fps * 100u / 16742u : 0;
         st.sec_us = 0;
+        if (st.sec_ms - st.win_ms >= 4000u) {
+            st.last_speed = lsdj_speed(st.frames - st.win_frames, st.sec_ms - st.win_ms);
+            st.win_ms = st.sec_ms;
+            st.win_frames = st.frames;
+        }
         status_line();
     }
     if (st.pad != st.pad_shown)
@@ -226,7 +232,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     }
     for (r = 0; r < 8; r++)
         pad_map[r] = core_button_bit(KEYS[r]);
-    st.start_ms = st.sec_ms = core_ms();
+    st.start_ms = st.sec_ms = st.win_ms = core_ms();
     st.pad = 0xFF;
     st.pad_shown = 0;                         /* draw the keys part once */
     draw = lsdj_push;

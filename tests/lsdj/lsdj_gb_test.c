@@ -158,6 +158,17 @@ static void test_master(void)
     CHECK(out[0] == 0 && out[1] == 0 && out[2] == 0 && out[3] == 0);
 }
 
+static void test_speed(void)
+{
+    /* speed % against the Game Boy's own frame rate (4194304 / 70224 = 59.7275 Hz), over a window in ms */
+    CHECK(lsdj_speed(239, 4000) == 100);                      /* 59.75 fps: real time */
+    CHECK(lsdj_speed(59, 1000) == 99);                        /* whole frames in 1 s: 59 is 98.8 % ... */
+    CHECK(lsdj_speed(60, 1000) == 100);                       /* ... 60 is 100.5 %: both round to ~100 */
+    CHECK(lsdj_speed(215, 4000) == 90);                       /* 53.75 fps */
+    CHECK(lsdj_speed(0, 4000) == 0);
+    CHECK(lsdj_speed(10, 0) == 0);                            /* no window yet */
+}
+
 static void test_unpack(void)
 {
     /* PackBits: n < 128 -> n + 1 literal bytes; n >= 128 -> (n & 127) + 1 copies of the next byte */
@@ -182,6 +193,7 @@ int main(void)
     test_ring();
     test_unpack();
     test_master();
+    test_speed();
     printf(fails ? "lsdj_gb_test: %d FAILED\n" : "lsdj_gb_test: all passed\n", fails);
     return fails != 0;
 }

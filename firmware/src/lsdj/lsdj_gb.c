@@ -130,6 +130,15 @@ static void lsdj_scale(uint16_t *out, const uint8_t *fb, uint32_t x0, uint32_t x
     }
 }
 
+/* speed % over a window: frames run against the Game Boy's frame rate (70224 / 4194304 s = 16742.7 us a frame),
+ * rounded; 32-bit only (frames <= 25000) */
+static uint32_t lsdj_speed(uint32_t frames, uint32_t ms)
+{
+    if (!ms)
+        return 0;
+    return (frames * 167427u + ms * 50u) / (ms * 100u);
+}
+
 /* the MASTER pot -> gain Q12 (4096 = 1.0), as Felucca's main loop: an IIR on the 10-bit reading (knob: 16x, state),
  * then squared (an audio taper). adc < 0 (an ADC timeout) keeps the last gain */
 static uint32_t lsdj_master(int32_t *knob, int32_t adc)
