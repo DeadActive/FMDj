@@ -45,10 +45,16 @@ static uint32_t pad_map[8];                   /* button bit per Game Boy key (JO
 static lsdj_xfer_t xfer;                      /* the console's `ble ...` (lsdj_xfer.c): the page moves songs with it */
 static char xfer_out[LSDJ_XFER_OUT];
 
-/* the Game Boy keys on the panel's buttons (labels), in JOYPAD bit order: A, B, SELECT, START, RIGHT, LEFT, UP, DOWN.
- * OCT- / OCT+ stay the core's (held 5 s together: UBOOT) */
-static const uint8_t KEYS[8] = {CORE_BTN_GLO, CORE_BTN_EDIT, CORE_BTN_PLAY, CORE_BTN_REC,
-                                CORE_BTN_ARP, CORE_BTN_HOME, CORE_BTN_SCL, CORE_BTN_SAVE};
+/* The Game Boy keys (the owner's layout, 2026-10-12):
+ *   the cursor: the SELECT knob left / right, the ALGORITHM knob up / down (clockwise: right, down), a step = a press
+ *   A, B: the top F and G of the keyboard (lsdj_gb.c LSDJ_NOTE_A / _B);  START: PLAY;  SELECT: SEQ
+ *   LSDj's screens (SELECT + direction): the PRESETS knob left / right, OCT+ up, OCT- down
+ * and, as before, the cursor on buttons too (they can be held): UP SCL, DOWN SAVE, LEFT HOME, RIGHT ARP.
+ * The buttons below by label, in JOYPAD bit order: A, B (no button), SELECT, START, RIGHT, LEFT, UP, DOWN.
+ * OCT- + OCT+ held 5 s together is still the core's UBOOT. */
+static const int8_t KEYS[8] = {-1, -1, CORE_BTN_SEQ, CORE_BTN_PLAY,
+                               CORE_BTN_ARP, CORE_BTN_HOME, CORE_BTN_SCL, CORE_BTN_SAVE};
+static lsdj_knobs_t knobs;                    /* knob steps and shortcuts waiting to be pressed (lsdj_gb.c) */
 
 /* RGB565, byte-swapped as the panel takes them: shade 0 (light) .. 3 (dark) */
 #define SW(c) ((uint16_t)(((c) >> 8) | ((c) << 8)))
@@ -190,7 +196,7 @@ static void lsdj_step(void)
     t0 = core_ticks();
     st.buttons = core_buttons();
     st.notes = core_notes();
-    st.pad = lsdj_pad(st.buttons, pad_map);
+    st.pad = lsdj_pad(st.buttons, st.notes, pad_map) & (uint8_t)~lsdj_knobs_frame(&knobs);
     emu_frame(st.pad);
     lsdj_ring_push(&ring, emu.snd, LSDJ_FRAME_SAMPLES);
     us = (core_ticks() - t0) / CORE_TICKS_PER_US;
@@ -258,7 +264,7 @@ static __attribute__((noinline)) void lsdj_start(void)
         return;
     }
     for (r = 0; r < 8; r++)
-        pad_map[r] = core_button_bit(KEYS[r]);
+        pad_map[r] = KEYS[r] < 0 ? 0 : core_button_bit(KEYS[r]);
     st.start_ms = st.sec_ms = st.win_ms = core_ms();
     st.pad = 0xFF;
     st.pad_shown = 0;                         /* draw the keys part once */
@@ -270,11 +276,22 @@ static __attribute__((noinline)) void lsdj_start(void)
 /* ---- the core's hooks (named by the BLE test; see the top) ---- */
 void ble_key(uint32_t pressed_buttons, int32_t select_steps)
 {
-    (void)select_steps;
+    int32_t algo = core_enc_steps(CORE_ENC_ALGO), preset = core_enc_steps(CORE_ENC_PRESET);   /* (always taken) */
     if (!run) {
         if (!st.error && (pressed_buttons & core_play_bit()))
             lsdj_start();
         return;
+    }
+    if (xfer.held) {                          /* the host has the Game Boy: turns are not kept for later */
+        memset(&knobs, 0, sizeof knobs);
+    } else {
+        lsdj_knobs_add(&knobs, LSDJ_AX_LR, select_steps);
+        lsdj_knobs_add(&knobs, LSDJ_AX_UD, algo);
+        lsdj_knobs_add(&knobs, LSDJ_AX_NAV_LR, preset);
+        if (pressed_buttons & core_button_bit(CORE_BTN_OCTUP))
+            lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, -1);
+        if (pressed_buttons & core_button_bit(CORE_BTN_OCTDN))
+            lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, 1);
     }
     if (pressed_buttons & core_button_bit(CORE_BTN_FX))           /* the speed options, switched while running */
         emu_mode ^= EMU_FRAME_SKIP;
@@ -304,11 +321,11 @@ void ble_draw(void)
     if (splash_done || st.error)
         return;
     splash_done = 1;
-    core_text(0, 160, 240, CORE_FONT_S, "PLAY: START, THEN REC: DEMO", CORE_THEME, CORE_BG, 1);
-    core_text(0, 176, 240, CORE_FONT_S, "UP SCL    DOWN SAVE", CORE_MID, CORE_BG, 1);
-    core_text(0, 192, 240, CORE_FONT_S, "LEFT HOME    RIGHT ARP", CORE_MID, CORE_BG, 1);
-    core_text(0, 208, 240, CORE_FONT_S, "A GLO    B EDIT", CORE_MID, CORE_BG, 1);
-    core_text(0, 224, 240, CORE_FONT_S, "SELECT PLAY    START REC", CORE_MID, CORE_BG, 1);
+    core_text(0, 160, 240, CORE_FONT_S, "PLAY: START, THEN PLAY: DEMO", CORE_THEME, CORE_BG, 1);
+    core_text(0, 176, 240, CORE_FONT_S, "LEFT RIGHT: SELECT KNOB", CORE_MID, CORE_BG, 1);
+    core_text(0, 192, 240, CORE_FONT_S, "UP DOWN: ALGORITHM KNOB", CORE_MID, CORE_BG, 1);
+    core_text(0, 208, 240, CORE_FONT_S, "A: TOP F  B: TOP G  SEL: SEQ", CORE_MID, CORE_BG, 1);
+    core_text(0, 224, 240, CORE_FONT_S, "SCREENS: PRESETS, OCT- OCT+", CORE_MID, CORE_BG, 1);
 }
 
 static void lsdj_console(const char *args)     /* the words after `ble` on the console line: a transfer command */

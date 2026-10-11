@@ -2,7 +2,8 @@
  * LSDj fork: 2026 DEADACTIVE */
 /* The LSDj unit's pure parts (no core, no hardware; host-tested by tests/lsdj/lsdj_gb_test.c):
  *   the ROM as a bank table (each 16 KiB bank stored without its trailing 0xFF bytes),
- *   the FM-1 buttons -> the Game Boy joypad, the frame buffer (2-bit shades) and the dirty span of a line pair,
+ *   the FM-1 buttons and two note keys -> the Game Boy joypad, knob steps -> short presses, the frame buffer (2-bit
+ *   shades) and the dirty span of a line pair,
  *   the 1.5x scaler (2 x 2 Game Boy pixels -> 3 x 3 screen pixels), the audio ring (main loop -> audio ISR),
  *   the PackBits unpacker (the start-up save). */
 #include <stdint.h>
@@ -36,15 +37,73 @@ static inline uint8_t lsdj_rom_byte(const lsdj_bank_t *t, uint32_t nbanks, uint3
     return t[b].p[i];
 }
 
-/* buttons held (fm1_in.buttons) -> the joypad (active low). map: the button bit of each Game Boy key in JOYPAD bit
- * order (A, B, SELECT, START, RIGHT, LEFT, UP, DOWN); lsdj.c fills it from the panel labels */
-static uint8_t lsdj_pad(uint32_t buttons, const uint32_t map[8])
+/* A and B are the two F and G keys at the top of the keyboard (fm1_in.notes: bit 0 = F3 .. 26 = G5) */
+#define LSDJ_NOTE_A (1u << 24)                /* F5 */
+#define LSDJ_NOTE_B (1u << 26)                /* G5 */
+
+/* buttons and note keys held (fm1_in.buttons, .notes) -> the joypad (active low). map: the button bit of each Game
+ * Boy key in JOYPAD bit order (A, B, SELECT, START, RIGHT, LEFT, UP, DOWN; 0: no button); lsdj.c fills it from the
+ * panel labels */
+static uint8_t lsdj_pad(uint32_t buttons, uint32_t notes, const uint32_t map[8])
 {
     uint32_t down = 0, i;
     for (i = 0; i < 8u; i++)
         if (buttons & map[i])
             down |= 1u << i;
+    if (notes & LSDJ_NOTE_A)
+        down |= JOYPAD_A;
+    if (notes & LSDJ_NOTE_B)
+        down |= JOYPAD_B;
     return (uint8_t)~down;
+}
+
+/* Knob steps -> short presses, one Game Boy frame at a time. LSDj reads its keys once a frame; measured on 9.4.2
+ * (the host harness, 2026-10-12): a direction down one frame and up one frame is exactly one press, and SELECT +
+ * direction moves one screen only if SELECT is down a frame before the direction.
+ * Axes: + = right / down; the NAV ones press SELECT with the direction (LSDj's screen map). */
+enum { LSDJ_AX_LR, LSDJ_AX_UD, LSDJ_AX_NAV_LR, LSDJ_AX_NAV_UD, LSDJ_NAX };
+#define LSDJ_KNOB_MAX 16                      /* steps kept waiting per axis: a spun knob does not run on */
+typedef struct {
+    int8_t want[LSDJ_NAX];                    /* steps not yet sent */
+    uint8_t seq[4], n, i;                     /* the press being sent: keys down (JOYPAD bits) per frame */
+    uint8_t next;                             /* the axis looked at first: the knobs take turns */
+} lsdj_knobs_t;
+
+static void lsdj_knobs_add(lsdj_knobs_t *k, uint32_t axis, int32_t steps)   /* a turn back cancels what waits */
+{
+    int32_t v = k->want[axis] + steps;
+    k->want[axis] = (int8_t)(v > LSDJ_KNOB_MAX ? LSDJ_KNOB_MAX : v < -LSDJ_KNOB_MAX ? -LSDJ_KNOB_MAX : v);
+}
+
+static uint8_t lsdj_knobs_frame(lsdj_knobs_t *k)       /* the keys down (1 = down) in the next Game Boy frame */
+{
+    static const uint8_t KEY[2][2] = {{JOYPAD_LEFT, JOYPAD_RIGHT}, {JOYPAD_UP, JOYPAD_DOWN}};
+    uint32_t t, a;
+    if (k->i < k->n)
+        return k->seq[k->i++];
+    for (t = 0; t < LSDJ_NAX; t++) {
+        uint8_t key;
+        a = (k->next + t) % LSDJ_NAX;
+        if (!k->want[a])
+            continue;
+        key = KEY[a & 1u][k->want[a] > 0];
+        k->want[a] = (int8_t)(k->want[a] + (k->want[a] > 0 ? -1 : 1));
+        k->next = (uint8_t)((a + 1u) % LSDJ_NAX);
+        if (a >= LSDJ_AX_NAV_LR) {
+            k->seq[0] = JOYPAD_SELECT;
+            k->seq[1] = JOYPAD_SELECT | key;
+            k->seq[2] = JOYPAD_SELECT;
+            k->seq[3] = 0;
+            k->n = 4;
+        } else {
+            k->seq[0] = key;
+            k->seq[1] = 0;
+            k->n = 2;
+        }
+        k->i = 1;
+        return k->seq[0];
+    }
+    return 0;
 }
 
 /* the Game Boy keys held in pad (active low) as text, e.g. "START SEL R"; "-" if none (b: >= 22 bytes) */

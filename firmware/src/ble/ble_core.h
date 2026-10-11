@@ -47,6 +47,9 @@ uint32_t core_button_bit(int label);
 uint32_t core_play_bit(void);
 uint32_t core_rec_bit(void);
 int32_t core_select_steps(void);
+/* the ALGORITHM and PRESETS knobs: steps since the last call, + = clockwise (the SELECT knob's come with ble_key) */
+enum { CORE_ENC_ALGO, CORE_ENC_PRESET };
+int32_t core_enc_steps(int knob);
 /* the core's crash record (fm1_irq.h fm1_crash_t, .noinit, same layout): read only, for the console's `ble`
  * (the core's unit has the real declaration) */
 #ifndef FM1_CRASH_MAGIC

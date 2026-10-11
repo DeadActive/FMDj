@@ -72,6 +72,13 @@ void core_con_puts(const char *s)
         strcat(con_log, s);
 }
 const char *core_con_line(void) { return con_line; }
+static int32_t enc_algo, enc_preset;          /* knob steps waiting, as the panel keeps them */
+int32_t core_enc_steps(int knob)
+{
+    int32_t *e = knob == CORE_ENC_PRESET ? &enc_preset : &enc_algo, v = *e;
+    *e = 0;
+    return v;
+}
 
 #if __has_include("lsdj_rom.h")
 #include "lsdj/lsdj.c"
@@ -96,6 +103,62 @@ static void console(const char *line)         /* as the core does: the line `ble
     con_log[0] = 0;
     ble_status();
     con_line[0] = 0;
+}
+
+static uint32_t pad_presses(uint8_t key, uint8_t with, uint32_t passes)   /* times `key` goes down (with `with` down) */
+{
+    uint32_t n = 0, was = 0, i, f;
+    for (i = 0; i < passes; i++) {
+        f = st.frames;
+        pass();
+        if (st.frames != f) {                         /* a Game Boy frame ran: its keys */
+            uint32_t now = !(st.pad & key);
+            if (now && !was) {
+                n++;
+                CHECK(!(st.pad & with));
+            }
+            was = now;
+        }
+    }
+    return n;
+}
+
+static void test_knobs_and_shortcuts(void)    /* the knobs are the cursor; PRESETS and OCT- / OCT+ change LSDj's screen */
+{
+    CHECK(st.pad == 0xFF);
+    ble_key(0, 3);                                    /* SELECT knob, 3 steps clockwise */
+    CHECK(pad_presses(JOYPAD_RIGHT, 0, 40) == 3);
+    ble_key(0, -2);
+    CHECK(pad_presses(JOYPAD_LEFT, 0, 40) == 2);
+    enc_algo = 2;                                     /* ALGORITHM clockwise: down */
+    ble_key(0, 0);
+    CHECK(enc_algo == 0 && pad_presses(JOYPAD_DOWN, 0, 40) == 2);
+    enc_algo = -1;
+    ble_key(0, 0);
+    CHECK(pad_presses(JOYPAD_UP, 0, 40) == 1);
+    notes = 1u << 24;                                 /* the top F held: A + the knob */
+    ble_key(0, 2);
+    CHECK(pad_presses(JOYPAD_RIGHT, JOYPAD_A, 40) == 2);
+    notes = 0;
+    enc_preset = 1;                                   /* PRESETS: SELECT + RIGHT */
+    ble_key(0, 0);
+    CHECK(pad_presses(JOYPAD_RIGHT, JOYPAD_SELECT, 40) == 1);
+    enc_preset = -1;
+    ble_key(0, 0);
+    CHECK(pad_presses(JOYPAD_LEFT, JOYPAD_SELECT, 40) == 1);
+    ble_key(core_button_bit(CORE_BTN_OCTUP), 0);      /* OCT+: SELECT + UP */
+    CHECK(pad_presses(JOYPAD_UP, JOYPAD_SELECT, 40) == 1);
+    ble_key(core_button_bit(CORE_BTN_OCTDN), 0);      /* OCT-: SELECT + DOWN */
+    CHECK(pad_presses(JOYPAD_DOWN, JOYPAD_SELECT, 40) == 1);
+    CHECK(st.pad == 0xFF && emu.errors == 0);
+    console("ble hold");                              /* held for the host: turns are dropped, not kept for later */
+    enc_algo = 3;
+    enc_preset = 2;
+    ble_key(0, 4);
+    console("ble go");
+    ble_key(0, 0);
+    CHECK(enc_algo == 0 && enc_preset == 0);
+    CHECK(pad_presses(JOYPAD_RIGHT, 0, 12) == 0 && st.pad == 0xFF);
 }
 
 static void test_console(void)                /* after PLAY: `ble ...` holds and restarts the Game Boy */
@@ -173,15 +236,21 @@ int main(void)
             pass();
         (void)nz;
     }
-    {   /* PLAY and REC held: SELECT and START reach the Game Boy, and the keys part of the status line is redrawn */
+    {   /* PLAY and SEQ held: START and SELECT reach the Game Boy, and the keys part of the status line is redrawn */
         uint32_t t = texts;
-        buttons = core_play_bit() | core_rec_bit();
+        buttons = core_play_bit() | core_button_bit(CORE_BTN_SEQ);
         pass();
         pass();
         CHECK(st.pad == (uint8_t)~(JOYPAD_START | JOYPAD_SELECT) && st.pad_shown == st.pad && texts > t);
-        buttons = core_button_bit(CORE_BTN_SCL) | core_button_bit(CORE_BTN_GLO);   /* UP + A */
+        buttons = core_button_bit(CORE_BTN_SCL);                                     /* UP (button) + A (the top F) */
+        notes = 1u << 24;
         pass();
         CHECK(st.pad == (uint8_t)~(JOYPAD_UP | JOYPAD_A));
+        buttons = core_rec_bit() | core_button_bit(CORE_BTN_GLO) | core_button_bit(CORE_BTN_EDIT);   /* free now */
+        notes = 1u << 26;                                                            /* B (the top G) */
+        pass();
+        CHECK(st.pad == (uint8_t)~JOYPAD_B);
+        notes = 0;
         buttons = core_button_bit(CORE_BTN_OCTDN) | core_button_bit(CORE_BTN_OCTUP); /* the UBOOT pair: no key */
         pass();
         CHECK(st.pad == 0xFF);
@@ -240,6 +309,7 @@ int main(void)
         }
     }
     test_console();
+    test_knobs_and_shortcuts();
     ble_status();
     printf(fails ? "lsdj_unit_test: %d FAILED\n" : "lsdj_unit_test: all passed (%u blits)\n",
            fails ? (unsigned)fails : blits);

@@ -71,6 +71,7 @@ uint32_t core_button_bit(int label) { return label >= 0 && label < NB ? 1u << pa
 uint32_t core_play_bit(void) { return 1u << panel.btn[B_PLAY]; }
 uint32_t core_rec_bit(void) { return 1u << panel.btn[B_REC]; }
 int32_t core_select_steps(void) { return panel_enc(EN_SELECT); }
+int32_t core_enc_steps(int knob) { return panel_enc(knob == CORE_ENC_PRESET ? EN_PRESET : EN_ALGO); }
 void core_con_puts(const char *s)
 {
 #if FELUCCA_CDC

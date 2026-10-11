@@ -27,15 +27,72 @@ static void test_rom(void)
 
 static void test_pad(void)
 {
-    /* the button bit of each Game Boy key, in JOYPAD bit order: A, B, SELECT, START, RIGHT, LEFT, UP, DOWN */
-    const uint32_t map[8] = {1u << 5, 1u << 4, 1u << 12, 1u << 13, 1u << 10, 1u << 8, 1u << 3, 1u << 9};
+    /* the button bit of each Game Boy key, in JOYPAD bit order: A, B (no button: note keys), SELECT, START, RIGHT,
+     * LEFT, UP, DOWN */
+    const uint32_t map[8] = {0, 0, 1u << 11, 1u << 12, 1u << 10, 1u << 8, 1u << 3, 1u << 9};
     uint32_t i;
-    CHECK(lsdj_pad(0, map) == 0xFF);                                  /* active low: nothing held */
-    for (i = 0; i < 8u; i++)
-        CHECK(lsdj_pad(map[i], map) == (uint8_t)~(1u << i));          /* each button: its key only */
-    CHECK(lsdj_pad(map[2] | map[4], map) == (uint8_t)~(JOYPAD_SELECT | JOYPAD_RIGHT));   /* combinations */
-    CHECK(lsdj_pad(0xFFFFFFFFu, map) == 0x00);
-    CHECK(lsdj_pad((1u << 0) | (1u << 1) | (1u << 2), map) == 0xFF);  /* OCT- / OCT+ / others: no Game Boy key */
+    CHECK(lsdj_pad(0, 0, map) == 0xFF);                               /* active low: nothing held */
+    for (i = 2; i < 8u; i++)
+        CHECK(lsdj_pad(map[i], 0, map) == (uint8_t)~(1u << i));       /* each button: its key only */
+    CHECK(LSDJ_NOTE_A == 1u << 24 && LSDJ_NOTE_B == 1u << 26);        /* note bit 0 = F3: F5 = 24, G5 = 26 */
+    CHECK(lsdj_pad(0, LSDJ_NOTE_A, map) == (uint8_t)~JOYPAD_A);       /* the top F of the keyboard: A */
+    CHECK(lsdj_pad(0, LSDJ_NOTE_B, map) == (uint8_t)~JOYPAD_B);       /* the top G: B */
+    CHECK(lsdj_pad(0, 1u << 25, map) == 0xFF);                        /* F#5 between them: no key */
+    CHECK(lsdj_pad(0, 0x00FFFFFFu, map) == 0xFF);                     /* every note key below: no key */
+    CHECK(lsdj_pad(map[2] | map[4], LSDJ_NOTE_A, map) == (uint8_t)~(JOYPAD_SELECT | JOYPAD_RIGHT | JOYPAD_A));
+    CHECK(lsdj_pad(0xFFFFFFFFu, 0xFFFFFFFFu, map) == 0x00);
+    CHECK(lsdj_pad((1u << 0) | (1u << 1) | (1u << 2), 0, map) == 0xFF);   /* OCT- / OCT+ / others: no Game Boy key */
+}
+
+static uint32_t presses(lsdj_knobs_t *k, uint8_t key, uint32_t frames)   /* times `key` goes down in that many frames */
+{
+    uint32_t n = 0, was = 0, i;
+    for (i = 0; i < frames; i++) {
+        uint32_t now = lsdj_knobs_frame(k) & key;
+        n += now && !was;
+        was = now;
+    }
+    return n;
+}
+
+static void test_knobs(void)
+{
+    lsdj_knobs_t k;
+    memset(&k, 0, sizeof k);
+    CHECK(lsdj_knobs_frame(&k) == 0);                                 /* nothing turned: no key */
+    lsdj_knobs_add(&k, LSDJ_AX_LR, 2);                                /* two steps right: down, up, down, up */
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0);
+    CHECK(lsdj_knobs_frame(&k) == 0);
+    lsdj_knobs_add(&k, LSDJ_AX_LR, -1);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_LEFT && lsdj_knobs_frame(&k) == 0);
+    lsdj_knobs_add(&k, LSDJ_AX_UD, 1);                                /* + = down */
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_DOWN && lsdj_knobs_frame(&k) == 0);
+    lsdj_knobs_add(&k, LSDJ_AX_UD, -1);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_UP && lsdj_knobs_frame(&k) == 0);
+    /* the screen shortcut: SELECT one frame before the direction (LSDj needs that) and one after */
+    lsdj_knobs_add(&k, LSDJ_AX_NAV_LR, 1);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_RIGHT));
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
+    lsdj_knobs_add(&k, LSDJ_AX_NAV_UD, -1);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_UP));
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
+    lsdj_knobs_add(&k, LSDJ_AX_LR, 3);                                /* turned back before it was sent: nothing */
+    lsdj_knobs_add(&k, LSDJ_AX_LR, -3);
+    CHECK(lsdj_knobs_frame(&k) == 0);
+    lsdj_knobs_add(&k, LSDJ_AX_LR, 1000);                             /* a spun knob does not run on */
+    CHECK(presses(&k, JOYPAD_RIGHT, 200) == LSDJ_KNOB_MAX);
+    lsdj_knobs_add(&k, LSDJ_AX_UD, -1000);
+    CHECK(presses(&k, JOYPAD_UP, 200) == LSDJ_KNOB_MAX);
+    memset(&k, 0, sizeof k);                                          /* two knobs at once take turns; no press is cut */
+    lsdj_knobs_add(&k, LSDJ_AX_LR, 2);
+    lsdj_knobs_add(&k, LSDJ_AX_NAV_UD, 1);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_DOWN));
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0 && lsdj_knobs_frame(&k) == 0);
 }
 
 static void test_pad_text(void)
@@ -187,6 +244,7 @@ int main(void)
 {
     test_rom();
     test_pad();
+    test_knobs();
     test_pad_text();
     test_line_and_span();
     test_scale();
