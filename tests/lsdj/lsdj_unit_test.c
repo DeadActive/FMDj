@@ -80,6 +80,36 @@ int32_t core_enc_steps(int knob)
     return v;
 }
 
+/* the store's flash (0xA0000..0xDBFFF) as a NOR flash: bits only go to 0, a sector erase sets 4 KiB to 0xFF */
+static uint8_t flash_sim[60u * 4096u];
+static uint32_t flash_erases, flash_progs, flash_bad;
+const uint8_t *core_flash_ptr(uint32_t off)
+{
+    return off >= 0xA0000u && off < 0xDC000u ? flash_sim + (off - 0xA0000u) : 0;
+}
+int core_flash_erase(uint32_t off)
+{
+    if (off < 0xA0000u || off > 0xDC000u - 4096u || (off & 0xFFFu)) {
+        flash_bad++;
+        return -8;
+    }
+    memset(flash_sim + (off - 0xA0000u), 0xFF, 4096);
+    flash_erases++;
+    return 0;
+}
+int core_flash_prog(uint32_t off, const void *p, uint32_t n)
+{
+    uint32_t i;
+    if (off < 0xA0000u || off > 0xDC000u || n > 0xDC000u - off) {
+        flash_bad++;
+        return -8;
+    }
+    for (i = 0; i < n; i++)
+        flash_sim[off - 0xA0000u + i] &= ((const uint8_t *)p)[i];
+    flash_progs++;
+    return 0;
+}
+
 #if __has_include("lsdj_rom.h")
 #include "lsdj/lsdj.c"
 
@@ -161,6 +191,83 @@ static void test_knobs_and_shortcuts(void)    /* the knobs are the cursor; PRESE
     CHECK(pad_presses(JOYPAD_RIGHT, 0, 12) == 0 && st.pad == 0xFF);
 }
 
+static void test_flash(void)                  /* REC held 1 s saves; PLAY after power-on loads it; a kit bank */
+{
+    static const uint8_t mark[4] = {0x12, 0x34, 0x56, 0x78}, kit[3] = {0x60, 0x40, 0xA1};
+    char line[64];
+    uint32_t i, f, c;
+    CHECK(!store.have && flash_erases == 0 && flash_progs == 0);     /* starting and running wrote nothing */
+    console("ble info");
+    CHECK(strstr(con_log, " kits 00 0C cap 1DFE0 used 00000 saved 0") != 0);
+    console("ble hold");
+    sprintf(line, "ble w 1FF10 12345678 %04X", lsdj_crc16(mark, 4));
+    console(line);
+    console("ble go");
+    buttons = core_rec_bit();                         /* REC held: not at once */
+    for (i = 0; i < 40; i++)                          /* 0.8 s */
+        pass();
+    CHECK(!store.have && flash_progs == 0);
+    for (i = 0; i < 20; i++)                          /* past 1 s: saved */
+        pass();
+    CHECK(store.have && store.seq == 1 && flash_progs > 0 && !strncmp(st.note, "SAVED ", 6));
+    f = flash_erases;
+    for (i = 0; i < 110; i++)                         /* still held: once only; the note goes after 2 s */
+        pass();
+    CHECK(store.seq == 1 && flash_erases == f && st.note[0] == 0);
+    buttons = 0;
+    pass();
+    console("ble info");
+    CHECK(strstr(con_log, " saved 1") && !strstr(con_log, " used 00000"));
+    console("ble save");                              /* the console only queues; the next step writes */
+    CHECK(!strcmp(con_log, "ok\r\n") && store.seq == 1);
+    console("ble st");
+    CHECK(!strcmp(con_log, "ok busy\r\n"));
+    pass();
+    console("ble st");
+    CHECK(!strcmp(con_log, "ok 0\r\n") && store.seq == 2 && store.newest == 1);
+    memset(sram, 0xEE, LSDJ_SRAM);                    /* as after power-off and on: PLAY loads the save */
+    lsdj_start();
+    CHECK(st.error == 0 && !memcmp(sram + 0x1FF10, mark, 4) && !memcmp(sram + 0x1FF00, "\xDE\xAD\xBE\xEF", 4));
+    for (i = 0; i < 100; i++)
+        pass();
+    CHECK(emu.errors == 0 && st.frames > 50);
+    console("ble hold");                              /* a kit bank: one more bank, the kit into it */
+    console("ble kits 1");
+    pass();                                           /* (held: the step still carries the request out) */
+    console("ble st");
+    CHECK(!strcmp(con_log, "ok 0\r\n") && store.k == 1 && store.have);
+    console("ble kb 0");
+    CHECK(!strcmp(con_log, "ok 22\r\n"));             /* the first free bank of LSDj 9.4.2: 34 */
+    console("ble b 22 0 2");
+    CHECK(!strncmp(con_log, "ok FFFF ", 8));          /* free */
+    console("ble k 0");
+    sprintf(line, "ble kd 0 6040A1 %04X", lsdj_crc16(kit, 3));
+    console(line);
+    CHECK(!strcmp(con_log, "ok\r\n"));
+    for (i = 0, c = 0xFFFFFFFFu; i < LSDJ_BANK; i++)
+        c = lsdj_crc32_add(c, kit_buf[i]);
+    sprintf(line, "ble kc %08X", (unsigned)~c);
+    console(line);
+    pass();
+    console("ble st");
+    CHECK(!strcmp(con_log, "ok 0\r\n"));
+    console("ble b 22 0 3");
+    CHECK(!strncmp(con_log, "ok 6040A1 ", 10));       /* the Game Boy's bank 34 is the flash kit bank */
+    console("ble go reset");
+    for (i = 0; i < 100; i++)
+        pass();
+    CHECK(emu.errors == 0);
+    lsdj_start();                                     /* power-on again: K and the kit are there */
+    CHECK(store.k == 1 && lsdj_rom_byte(rom_tab, LSDJ_ROM_BANKS, 34u * LSDJ_BANK + 2u) == 0xA1 && !memcmp(sram + 0x1FF10, mark, 4));
+    console("ble hold");
+    console("ble kx 0");
+    pass();
+    console("ble b 22 0 2");
+    CHECK(!strncmp(con_log, "ok FFFF ", 8));          /* erased: free again */
+    console("ble go");
+    CHECK(flash_bad == 0);
+}
+
 static void test_console(void)                /* after PLAY: `ble ...` holds and restarts the Game Boy */
 {
     static const uint8_t d[4] = {0xDE, 0xAD, 0xBE, 0xEF};
@@ -171,7 +278,7 @@ static void test_console(void)                /* after PLAY: `ble ...` holds and
     console("  ble  ");
     CHECK(strstr(con_log, "lsdj running") != 0);
     console("ble info");
-    CHECK(!strcmp(con_log, "ok v1 started 1 held 0 banks 40\r\n"));
+    CHECK(!strcmp(con_log, "ok v2 started 1 held 0 banks 40 kits 00 0C cap 1DFE0 used 00000 saved 0\r\n"));
     console("ble r 0 4");
     CHECK(!strcmp(con_log, "err hold\r\n"));          /* not while the Game Boy runs */
     console("ble hold");
@@ -203,6 +310,7 @@ int main(void)
 {
     uint32_t i, x, y, diff = 0;
     int32_t out[64];
+    memset(flash_sim, 0xFF, sizeof flash_sim);   /* an empty store */
     ble_draw();                               /* the splash, before PLAY */
     CHECK(texts == 5 && !ble_started());
     for (i = 0; i < 50; i++)
@@ -310,6 +418,7 @@ int main(void)
     }
     test_console();
     test_knobs_and_shortcuts();
+    test_flash();
     ble_status();
     printf(fails ? "lsdj_unit_test: %d FAILED\n" : "lsdj_unit_test: all passed (%u blits)\n",
            fails ? (unsigned)fails : blits);

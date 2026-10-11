@@ -11,8 +11,12 @@
  * by lsdj_start (gate 4, tools/check_ble_boot.py --lsdj, walks the direct calls from boot).
  *
  * Songs move over the console: `ble WORDS` is a transfer command (lsdj_xfer.c; web/lsdj.html drives it). The host
- * holds the Game Boy between two frames, reads or writes the save RAM, and lets it run again. Nothing is written
- * to flash.
+ * holds the Game Boy between two frames, reads or writes the save RAM, and lets it run again.
+ *
+ * Flash (lsdj_store.c: Felucca's user-sample area only): PLAY loads LSDj's save from it (reading only); it is
+ * written when REC is held for a second, and for a request the console queued (`ble save`, the kit banks). Both
+ * happen in lsdj_step, which the core reaches only through its pointer: no flash write is reachable from boot
+ * (gate 4). Custom kits live there too, and show in the ROM's free kit banks (rom_tab).
  *
  * build/lsdj/lsdj_rom.h (tools/lsdj_rom.py): the owner's own LSDj ROM and the start-up save. A private build only:
  * LSDj's licence forbids distributing it, so that header, and every firmware built with it, stays in build/
@@ -24,6 +28,8 @@
 #include "lsdj/lsdj_gb.c"
 #include "lsdj/lsdj_emu.c"
 #include "lsdj/lsdj_xfer.c"
+#define LSDJ_STORE_FN static __attribute__((noinline))   /* gate 4 finds the flash writers by name */
+#include "lsdj/lsdj_store.c"
 #include "lsdj_rom.h"
 
 #define RING_N 4096u                          /* stereo frames: 93 ms, 5.5 Game Boy frames */
@@ -55,6 +61,12 @@ static char xfer_out[LSDJ_XFER_OUT];
 static const int8_t KEYS[8] = {-1, -1, CORE_BTN_SEQ, CORE_BTN_PLAY,
                                CORE_BTN_ARP, CORE_BTN_HOME, CORE_BTN_SCL, CORE_BTN_SAVE};
 static lsdj_knobs_t knobs;                    /* knob steps and shortcuts waiting to be pressed (lsdj_gb.c) */
+static const lsdj_flash_t flash = {core_flash_ptr, core_flash_erase, core_flash_prog};
+static lsdj_store_t store;                    /* what the flash holds (lsdj_store.c), scanned by lsdj_start */
+static uint8_t flash_on;                      /* the core has flash for us */
+static lsdj_bank_t rom_tab[LSDJ_ROM_BANKS];   /* the Game Boy's ROM: lsdj_rom, the flash kit banks in its free ones */
+static uint8_t kit_bank[LSDJ_ST_KMAX], nkit;  /* the ROM's free kit banks in order: flash kit bank j shows as kit_bank[j] */
+static uint8_t kit_buf[LSDJ_BANK] LSDJ_POOL;  /* a kit bank on its way from the console to flash */
 
 /* RGB565, byte-swapped as the panel takes them: shade 0 (light) .. 3 (dark) */
 #define SW(c) ((uint16_t)(((c) >> 8) | ((c) << 8)))
@@ -70,6 +82,9 @@ static struct {
     volatile uint32_t master_q12;             /* its gain, applied by the audio ISR */
     uint8_t pad, pad_shown;                   /* the Game Boy keys of the last frame; those on the status line */
     uint8_t held_shown;                       /* "USB" is on the status line */
+    char note[12];                            /* shown there instead for 2 s: SAVING, SAVED nnK, SAVE FULL, SAVE FAILED */
+    uint32_t note_ms, rec_ms;                 /* since the note; since REC went down (| 1: 0 = up) */
+    uint8_t rec_done;                         /* this REC press has saved */
     int error;
 } st;
 
@@ -139,7 +154,9 @@ static void status_line(void)
 static void keys_line(void)
 {
     char b[24];
-    if (xfer.held) {
+    if (st.note[0]) {
+        put_s(b, st.note);
+    } else if (xfer.held) {
         put_s(b, "USB");
     } else if (st.pad == 0xFFu) {
         put_s(put_s(b, emu_mode & EMU_FAST_ROM ? "FAST " : "SLOW "), emu_mode & EMU_FRAME_SKIP ? "SKIP" : "FULL");
@@ -152,9 +169,79 @@ static void keys_line(void)
 }
 
 /* ---- running ---- */
+/* ---- flash: the save and the kit banks ---- */
+static void lsdj_xfer_flash(void)              /* what `ble info` and the kit commands need to know */
+{
+    xfer.kit = kit_buf;
+    xfer.kit_bank = kit_bank;
+    xfer.nkit = nkit;
+    xfer.kits = store.k;
+    xfer.saved = store.have;
+    xfer.cap = lsdj_st_cap(store.k);
+    xfer.used = store.have ? store.len : 0;
+}
+
+static void lsdj_banks(void)                   /* rom_tab: the ROM, and the K flash kit banks where it has none */
+{
+    uint32_t b, j;
+    memcpy(rom_tab, lsdj_rom, sizeof rom_tab);
+    for (b = 8, nkit = 0; b < LSDJ_ROM_BANKS && nkit < LSDJ_ST_KMAX; b++)   /* kits: banks 8..26 and 32.. */
+        if ((b <= 26u || b >= 32u) && !lsdj_rom[b].n)
+            kit_bank[nkit++] = (uint8_t)b;
+    if (store.k > nkit)
+        store.k = nkit;                       /* (a store made with another ROM) */
+    for (j = 0; j < store.k; j++) {
+        rom_tab[kit_bank[j]].p = core_flash_ptr(lsdj_st_kit_off(j));
+        rom_tab[kit_bank[j]].n = LSDJ_BANK;
+    }
+    emu_hi_set(~0u);                          /* no bank cached */
+    lsdj_xfer_flash();
+}
+
+static void lsdj_note(const char *s)           /* on the status line now, for 2 s */
+{
+    put_s(st.note, s);
+    st.note_ms = core_ms();
+    keys_line();
+}
+
+static int lsdj_save(void)                     /* the save RAM into flash: a second or two, nothing else runs */
+{
+    char b[12];
+    int r;
+    lsdj_note("SAVING");
+    r = flash_on ? lsdj_store_save(&flash, &store, sram, LSDJ_SRAM) : LSDJ_ST_FAIL;
+    if (r == LSDJ_ST_OK) {
+        put_s(put_u(put_s(b, "SAVED "), (store.len + 1023u) / 1024u), "K");
+        lsdj_note(b);
+    } else {
+        lsdj_note(r == LSDJ_ST_FULL ? "SAVE FULL" : "SAVE FAILED");
+    }
+    lsdj_xfer_flash();
+    return r;
+}
+
+static void lsdj_flash_req(void)               /* the console queued it (lsdj_xfer.c): flash is written only here */
+{
+    int r = LSDJ_ST_FAIL;
+    if (xfer.req == LSDJ_REQ_SAVE)
+        r = lsdj_save();
+    else if (!flash_on)
+        r = LSDJ_ST_FAIL;
+    else if (xfer.req == LSDJ_REQ_KIT)
+        r = lsdj_store_kit_write(&flash, &store, xfer.req_arg, kit_buf);
+    else if (xfer.req == LSDJ_REQ_KIT_ERASE)
+        r = lsdj_store_kit_erase(&flash, &store, xfer.req_arg);
+    else if (xfer.req == LSDJ_REQ_KITS)
+        r = lsdj_store_kits(&flash, &store, xfer.req_arg, sram, LSDJ_SRAM);
+    lsdj_banks();                             /* K may have changed */
+    xfer.res = (uint8_t)r;
+    xfer.req = LSDJ_REQ_NONE;
+}
+
 static void lsdj_restart(void)                 /* `ble go reset`: the Game Boy from its reset, the save RAM kept */
 {
-    emu_init(lsdj_rom, LSDJ_ROM_BANKS, sram, fb);     /* (it ran before: the cartridge is LSDj) */
+    emu_init(rom_tab, LSDJ_ROM_BANKS, sram, fb);      /* (it ran before: the cartridge is LSDj) */
     emu.dirty = dirty;
     memset(shown, 0xFF, sizeof shown);        /* every line pair is sent again */
     memset(dirty, 1, sizeof dirty);
@@ -179,8 +266,23 @@ static void lsdj_step(void)
         status_line();
     }
     lsdj_xfer_tick(&xfer, core_ms());
+    if (st.note[0] && core_ms() - st.note_ms >= 2000u) {
+        st.note[0] = 0;
+        st.held_shown = (uint8_t)!xfer.held;  /* redraw what the note covered */
+    }
     if (st.pad != st.pad_shown || xfer.held != st.held_shown)
         keys_line();
+    if (xfer.req)
+        lsdj_flash_req();
+    if (!(core_buttons() & core_rec_bit())) { /* REC held for a second: save (once a press; not under the host) */
+        st.rec_ms = 0;
+        st.rec_done = 0;
+    } else if (!st.rec_ms) {
+        st.rec_ms = core_ms() | 1u;
+    } else if (!st.rec_done && !xfer.held && core_ms() - st.rec_ms >= 1000u) {
+        st.rec_done = 1;
+        lsdj_save();
+    }
     if (xfer.held)
         return;                               /* the host reads or writes the save: no Game Boy frame */
     if (xfer.reset_req) {                     /* the save changed under LSDj: it starts again and reads it */
@@ -245,7 +347,16 @@ static void lsdj_push(void)
 
 static __attribute__((noinline)) void lsdj_start(void)
 {
-    int r = lsdj_unpack(sram, LSDJ_SRAM, lsdj_boot_save, sizeof lsdj_boot_save);
+    int r = -1;
+    flash_on = core_flash_ptr(LSDJ_ST_BASE) != 0;
+    if (flash_on) {                           /* (reading only: flash is written on REC or a console request) */
+        lsdj_store_scan(&flash, &store);
+        if (store.have)
+            r = lsdj_store_load(&flash, &store, sram, LSDJ_SRAM);
+    }
+    if (r)                                    /* no save in flash: the start-up save, as built */
+        r = lsdj_unpack(sram, LSDJ_SRAM, lsdj_boot_save, sizeof lsdj_boot_save);
+    lsdj_banks();
     core_fill(0, 0, 240, 240, CORE_BG);
     if (r) {
         st.error = -2;
@@ -256,7 +367,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     memset(shown, 0xFF, sizeof shown);        /* no shade: every line pair is sent once */
     memset(dirty, 1, sizeof dirty);
     lsdj_ring_init(&ring, ring_buf, RING_N);
-    r = emu_init(lsdj_rom, LSDJ_ROM_BANKS, sram, fb);
+    r = emu_init(rom_tab, LSDJ_ROM_BANKS, sram, fb);
     emu.dirty = dirty;
     if (r) {
         st.error = r;
@@ -332,7 +443,7 @@ static void lsdj_console(const char *args)     /* the words after `ble` on the c
 {
     xfer.sram = sram;
     xfer.size = LSDJ_SRAM;
-    xfer.rom = lsdj_rom;
+    xfer.rom = run ? rom_tab : lsdj_rom;    /* (the flash kit banks are in it once PLAY has read the store) */
     xfer.nbanks = LSDJ_ROM_BANKS;
     lsdj_xfer_cmd(&xfer, args, core_ms(), xfer_out);
     core_con_puts(xfer_out);

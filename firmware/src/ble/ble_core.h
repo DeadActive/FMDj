@@ -22,6 +22,12 @@ void core_ble_stack_window(void);
 void core_midi_out(uint32_t pkt);
 /* flash: read the plain area (0x93000..0xFFFFF) through the core's driver; 0 = ok (never writes) */
 int core_flash_read(uint32_t off, void *buf, uint32_t n);
+/* the LSDj unit's store: plain flash inside Felucca's user-sample area only (0xA0000..0xDBFFF). ptr: the area as
+ * memory (0 outside it, or without flash). erase: one 4 KiB sector; prog: any length, from RAM. Both 0 = done; they
+ * run with interrupts off through the driver's RAM routines, as the core's own storage does. */
+const uint8_t *core_flash_ptr(uint32_t off);
+int core_flash_erase(uint32_t off);
+int core_flash_prog(uint32_t off, const void *src, uint32_t n);
 /* screen: colours and fonts by name */
 enum { CORE_BG, CORE_TEXT, CORE_THEME, CORE_MID, CORE_SEL, CORE_INK, CORE_CRASH_BG, CORE_CRASH_INK };
 enum { CORE_FONT_S, CORE_FONT_M };

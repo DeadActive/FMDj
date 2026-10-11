@@ -20,6 +20,8 @@ static lsdj_xfer_t x;
 static char out[LSDJ_XFER_OUT + 64];
 static FILE *vec;
 static uint32_t now;
+static uint8_t kitbuf[LSDJ_BANK + 16];        /* (16 spare bytes: nothing may be written past the bank) */
+static const uint8_t KIT_BANK[3] = {34, 35, 36};
 
 static const char *say(const char *cmd)
 {
@@ -73,6 +75,30 @@ static void setup(void)
     x.size = sizeof sram;
     x.rom = rom;
     x.nbanks = NB;
+    x.kit = kitbuf;                           /* the flash store's side, as lsdj.c sets it */
+    x.kit_bank = KIT_BANK;
+    x.nkit = 3;
+    x.cap = 0x1DFE0u;
+    memset(kitbuf, 0x11, sizeof kitbuf);
+}
+
+static void flash_state(uint8_t kits, uint32_t cap, uint32_t used, uint8_t saved)   /* as lsdj.c after a request */
+{
+    x.kits = kits;
+    x.cap = cap;
+    x.used = used;
+    x.saved = saved;
+    if (vec)
+        fprintf(vec, "! flash %X %X %X %X\n", (unsigned)kits, (unsigned)cap, (unsigned)used, (unsigned)saved);
+}
+
+static void req_done(uint8_t req, uint8_t arg, uint8_t res)    /* lsdj.c carried out the queued request */
+{
+    CHECK(x.req == req && x.req_arg == arg);
+    x.req = LSDJ_REQ_NONE;
+    x.res = res;
+    if (vec)
+        fprintf(vec, "! done %X\n", (unsigned)res);
 }
 
 static void test_crc(void)
@@ -86,15 +112,16 @@ static void test_crc(void)
 
 static void test_state(void)
 {
-    CHECK(is("info", "ok v1 started 0 held 0 banks 03"));
+    CHECK(is("info", "ok v2 started 0 held 0 banks 03 kits 00 03 cap 1DFE0 used 00000 saved 0"));
     CHECK(is("hold", "err not started"));
     CHECK(is("r 0 4", "err hold"));
     CHECK(is("w 0 00 0000", "err hold"));
+    CHECK(is("save", "err not started"));
     if (vec)
         fprintf(vec, "! started\n");
     x.started = 1;
     CHECK(is("  hold", "ok"));                          /* leading spaces: as the console passes the line */
-    CHECK(is("info", "ok v1 started 1 held 1 banks 03"));
+    CHECK(is("info", "ok v2 started 1 held 1 banks 03 kits 00 03 cap 1DFE0 used 00000 saved 0"));
     CHECK(is("info x", "err ?"));
     CHECK(is("", "err ?"));
     CHECK(is("holdx", "err ?"));
@@ -180,11 +207,67 @@ static void test_bank(void)
     CHECK(is("bc", "err ?"));
 }
 
+static void test_flash(void)                  /* (started and held) the flash commands only queue: lsdj.c writes */
+{
+    static const uint8_t d[3] = {0x60, 0x40, 0xA1}, e = 0x77;
+    char line[80];
+    uint32_t i, bad = 0;
+    CHECK(is("kb 0", "ok 22") && is("kb 2", "ok 24") && is("kb 3", "err range") && is("kb", "err ?"));
+    CHECK(is("st", "ok 0"));
+    CHECK(is("k 0", "err range") && is("kx 0", "err range"));       /* no kit bank yet */
+    CHECK(is("kits 4", "err range"));                               /* the ROM has room for 3 */
+    CHECK(is("kits 2", "ok") && is("st", "ok busy"));
+    CHECK(is("save", "err busy") && is("kits 1", "err busy"));      /* one at a time */
+    flash_state(2, 0x1BFE0u, 0, 0);
+    req_done(LSDJ_REQ_KITS, 2, LSDJ_RES_OK);
+    CHECK(is("st", "ok 0"));
+    CHECK(is("info", "ok v2 started 1 held 1 banks 03 kits 02 03 cap 1BFE0 used 00000 saved 0"));
+    CHECK(is("kd 0 6040 0000", "err kit") && is("kc 00000000", "err kit"));   /* no bank begun */
+    CHECK(is("k 2", "err range") && is("k 1", "ok"));
+    for (i = 0; i < LSDJ_BANK; i++)
+        bad |= kitbuf[i] != 0xFF;
+    CHECK(!bad && kitbuf[LSDJ_BANK] == 0x11);                       /* a new bank starts erased */
+    sprintf(line, "kd 0 6040A1 %04X", lsdj_crc16(d, 3));
+    CHECK(is(line, "ok") && !memcmp(kitbuf, d, 3) && kitbuf[3] == 0xFF);
+    sprintf(line, "kd 3FFF 77 %04X", lsdj_crc16(&e, 1));
+    CHECK(is(line, "ok") && kitbuf[0x3FFF] == 0x77);
+    sprintf(line, "kd 3FFF 6040A1 %04X", lsdj_crc16(d, 3));
+    CHECK(is(line, "err range") && kitbuf[LSDJ_BANK] == 0x11);      /* nothing past the bank */
+    sprintf(line, "kd 4000 77 %04X", lsdj_crc16(&e, 1));
+    CHECK(is(line, "ok") == 0 && !strcmp(out, "err range"));
+    sprintf(line, "kd 10 6040A1 %04X", (unsigned)(lsdj_crc16(d, 3) ^ 1u));
+    CHECK(is(line, "err crc") && kitbuf[0x10] == 0xFF);
+    CHECK(is("kd 10 604 0000", "err hex") && is("kd 10", "err ?"));
+    sprintf(line, "kc %08X", (unsigned)(ref_crc32(kitbuf, LSDJ_BANK) ^ 1u));
+    CHECK(is(line, "err crc") && x.req == LSDJ_REQ_NONE);           /* the bank did not arrive whole: send again */
+    sprintf(line, "kc %08X", (unsigned)ref_crc32(kitbuf, LSDJ_BANK));
+    CHECK(is(line, "ok"));
+    CHECK(is("kd 0 00 0000", "err kit"));                           /* closed: it is on its way to flash */
+    req_done(LSDJ_REQ_KIT, 1, LSDJ_RES_OK);
+    CHECK(is("kx 2", "err range") && is("kx 1", "ok"));
+    req_done(LSDJ_REQ_KIT_ERASE, 1, LSDJ_RES_OK);
+    CHECK(is("save", "ok"));
+    req_done(LSDJ_REQ_SAVE, 0, LSDJ_RES_FULL);
+    CHECK(is("st", "ok 1"));                                        /* the save did not fit */
+    CHECK(is("save now", "err ?") && is("st 1", "err ?"));
+    CHECK(is("save", "ok"));
+    flash_state(2, 0x1BFE0u, 0xF00u, 1);
+    req_done(LSDJ_REQ_SAVE, 0, LSDJ_RES_OK);
+    CHECK(is("info", "ok v2 started 1 held 1 banks 03 kits 02 03 cap 1BFE0 used 00F00 saved 1"));
+    CHECK(is("go", "ok"));                                          /* not held: only a save is taken */
+    CHECK(is("k 1", "err hold") && is("kx 1", "err hold") && is("kits 1", "err hold") && is("kc 0", "err hold"));
+    sprintf(line, "kd 0 6040A1 %04X", lsdj_crc16(d, 3));
+    CHECK(is(line, "err hold"));
+    CHECK(is("save", "ok"));
+    req_done(LSDJ_REQ_SAVE, 0, LSDJ_RES_OK);
+    CHECK(is("hold", "ok"));
+}
+
 static void test_go_and_idle(void)
 {
     CHECK(x.held == 1);
     now = 1000;
-    CHECK(is("info", "ok v1 started 1 held 1 banks 03"));               /* a command while held restarts the timer */
+    CHECK(is("st", "ok 0"));                            /* a command while held restarts the timer */
     lsdj_xfer_tick(&x, 1000 + LSDJ_XFER_IDLE_MS - 1);
     CHECK(x.held == 1);
     lsdj_xfer_tick(&x, 1000 + LSDJ_XFER_IDLE_MS);
@@ -209,6 +292,7 @@ int main(void)
     test_read();
     test_write();
     test_bank();
+    test_flash();
     test_go_and_idle();
     if (vec)
         fclose(vec);

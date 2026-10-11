@@ -35,6 +35,68 @@ int core_flash_read(uint32_t off, void *buf, uint32_t n)    /* plain flash only 
     return -1;
 #endif
 }
+/* the LSDj unit's store (FELUCCA_LSDJ: lsdj/lsdj_store.c). The driver's RAM routines are called here as storage_hw.c
+ * calls them (interrupts off, the audio buffer silenced for an erase: its DMA would loop stale sound); storage_hw.c
+ * and fm1_flash.h are not changed, and the routines keep their own range check (FL_RANGE_OK) under this one. */
+#define CORE_STORE_LO 0xA0000u                /* Felucca's user-sample slots: SMP_USER_BASE .. + 3 x 80 KiB */
+#define CORE_STORE_HI 0xDC000u
+const uint8_t *core_flash_ptr(uint32_t off)
+{
+#if FELUCCA_FLASH
+    if (off >= CORE_STORE_LO && off < CORE_STORE_HI)
+        return fm1_xip_ptr(off);              /* (the plain window: fl_plain_window_init at boot) */
+#endif
+    (void)off;
+    return 0;
+}
+int core_flash_erase(uint32_t off)
+{
+#if FELUCCA_FLASH
+    uint32_t took, f;
+    int rc;
+    if (!flash_ok || off < CORE_STORE_LO || off > CORE_STORE_HI - 0x1000u || (off & 0xFFFu))
+        return -8;
+    f = irq_save();
+    audio_silence();
+    rc = FL_FAR(fl_erase4k_ram)(off, &took);
+    irq_restore(f);
+    fm1_wdt_feed();
+    return rc;
+#else
+    (void)off;
+    return -8;
+#endif
+}
+int core_flash_prog(uint32_t off, const void *src, uint32_t n)
+{
+#if FELUCCA_FLASH
+    const uint8_t *s = src;
+    uint32_t took, f, chunk;
+    int rc;
+    if (!flash_ok || off < CORE_STORE_LO || off > CORE_STORE_HI || n > CORE_STORE_HI - off)
+        return -8;
+    while (n) {                               /* a page at a time (256 B), as fl_write */
+        chunk = 256u - (off & 0xFFu);
+        if (chunk > n)
+            chunk = n;
+        f = irq_save();
+        rc = FL_FAR(fl_prog_ram)(off, s, chunk, &took);
+        irq_restore(f);
+        if (rc)
+            return rc;
+        off += chunk;
+        s += chunk;
+        n -= chunk;
+    }
+    fm1_wdt_feed();
+    return 0;
+#else
+    (void)off;
+    (void)src;
+    (void)n;
+    return -8;
+#endif
+}
 static uint16_t core_colour(int c)
 {
     switch (c) {

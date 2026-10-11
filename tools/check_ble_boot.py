@@ -14,6 +14,10 @@ START = {"ble_start", "btstack_init", "btctrler_task_init", "bt_ble_init", "bt_m
 LSDJ_START = {"lsdj_start", "lsdj_step", "lsdj_push", "emu_init", "emu_frame", "gb_init", "gb_run_frame",
               "__gb_step_cpu"}
 ALLOWED = {"ble_key"}                  # ble_ui.c: the PLAY handler; the only way in
+# the LSDj build's flash writers (core_ble_api.c, lsdj/lsdj_store.c): not reachable from boot at all, not even
+# through the key handler: lsdj_step calls them, and the core reaches that only through its pointer
+LSDJ_FLASH = {"core_flash_erase", "core_flash_prog", "lsdj_store_save", "lsdj_store_kits", "lsdj_store_kit_write",
+              "lsdj_store_kit_erase"}
 LABEL = re.compile(r"^([A-Za-z_.$][\w.$]*):\s*$")
 CALL = re.compile(r"call -?\d+ <([^:>+]+)")
 # a conditional call is printed on two lines: `if (...) {` / `call -486` / `} <callee : addr >`: join them
@@ -34,6 +38,17 @@ def graph(text):
     return g
 
 
+def flash_reach(g):
+    """the flash writers reachable from boot by direct calls, the key handler included"""
+    seen, todo = set(), ["fm1_cstart"]
+    while todo:
+        f = todo.pop()
+        if f not in seen:
+            seen.add(f)
+            todo.extend(g.get(f, ()))
+    return sorted(seen & LSDJ_FLASH)
+
+
 def main(dis, start=START):
     g = graph(open(dis).read())
     seen, todo, bad = set(), ["fm1_cstart"], []
@@ -45,6 +60,13 @@ def main(dis, start=START):
         if f in start:
             bad.append(f)
         todo.extend(g.get(f, ()))
+    if start is LSDJ_START:
+        fl = flash_reach(g)
+        if fl:
+            print("flash write reachable at boot:", ", ".join(fl))
+            return 1
+        if LSDJ_FLASH & set(g):
+            print("no flash write reachable at boot (only through the Game Boy's step)")
     what = "Game Boy" if start is LSDJ_START else "BT start-up"
     if bad:
         print(f"{what} reachable at boot:", ", ".join(sorted(bad)))
@@ -60,6 +82,13 @@ def selftest():
     import tempfile
     boot = "fm1_cstart:\n 0:\t00 00 \tcall -2 <fm1_main : 2000000 >\nfm1_main:\n"
     cases = [  # (disassembly after fm1_main's label, expected exit)
+        (" 0:\t00 00 \tcall -2 <ble_key : 2000000 >\nble_key:\n 0:\t00 00 \tcall -2 <lsdj_start : 2000000 >\n"
+         "lsdj_start:\n 0:\t00 00 \tcall -2 <lsdj_store_save : 2000000 >\nlsdj_store_save:\n", 1),   # a save at PLAY
+        (" 0:\t00 00 \tcall -2 <cdc_task : 2000000 >\ncdc_task:\n 0:\t00 00 \tcall -2 <ble_status : 2000000 >\n"
+         "ble_status:\n 0:\t00 00 \tcall -2 <core_flash_erase : 2000000 >\ncore_flash_erase:\nlsdj_step:\n", 1),   # the console
+        (" 0:\t00 00 \tcall -2 <ble_service : 2000000 >\nble_service:\n 0:\t00 00 \tcall r0\nlsdj_step:\n"
+         " 0:\t00 00 \tcall -2 <lsdj_store_save : 2000000 >\nlsdj_store_save:\n"
+         " 0:\t00 00 \tcall -2 <core_flash_prog : 2000000 >\ncore_flash_prog:\n", 0),               # only from the step
         (" 0:\t00 00 \tcall -2 <ble_key : 2000000 >\nble_key:\n 0:\t00 00 \tcall -2 <lsdj_start : 2000000 >\n"
          "lsdj_start:\n", 0),                                                     # only through the key handler
         (" 0:\t00 00 \tcall -2 <ble_service : 2000000 >\nble_service:\n 0:\t00 00 \tcall r0\nlsdj_step:\n", 0),

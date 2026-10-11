@@ -2,7 +2,9 @@
  * LSDj fork: 2026 DEADACTIVE */
 /* The LSDj unit's transfer commands: what follows `ble` on a console line -> one reply line. Pure (no core, no
  * hardware; host-tested by tests/lsdj/lsdj_xfer_test.c). Include lsdj_gb.c first.
- *   info               ok v1 started S held H banks NN
+ *   info               ok v2 started S held H banks NN kits KK NN cap CCCCC used UUUUU saved D
+ *                                               (kit banks in flash, of how many the ROM has room for; a save
+ *                                               slot's room and the packed size of the save in flash)
  *   hold               ok | err not started     the Game Boy stops between two frames (lsdj.c)
  *   go [reset]         ok                       it runs again; reset: LSDj starts again first
  *   r ADDR LEN         ok HEX CRC16             save RAM, LEN 1..100 (256 bytes); needs hold
@@ -10,13 +12,27 @@
  *                                               needs hold; an error writes nothing
  *   b BANK OFF LEN     ok HEX CRC16             ROM bank bytes (past the stored ones: FF), LEN 1..100
  *   bc BANK            ok CRC32                 of the whole 16 KiB bank
+ * Flash (lsdj_store.c). The console never writes flash: these queue one request, which the Game Boy's step in the
+ * main loop carries out (lsdj.c), and `st` gives its result:
+ *   save               ok | err busy            the save RAM into flash (no hold needed)
+ *   kb J               ok BANK                  the ROM bank number that flash kit bank J shows as
+ *   k J                ok                       begin kit bank J (0 .. kits - 1): a 16 KiB buffer of FF; needs hold
+ *   kd OFF HEX CRC16   ok                       bytes into that buffer, 1..20; needs hold
+ *   kc CRC32           ok | err crc             the buffer arrived whole: write it to flash; needs hold
+ *   kx J               ok                       erase kit bank J (LSDj sees a free bank); needs hold
+ *   kits K             ok                       K kit banks from now on (the save is written again); needs hold
+ *   st                 ok busy | ok R           the last request: 0 done, 1 the save does not fit, 2 the flash
+ *                                               did not take it, 3 no such kit bank
  * Numbers are hex, 1..8 digits, no prefix. CRC16: XMODEM (0x1021, start 0) of the data bytes, 4 digits.
- * Errors: err ? (not a command), err hold, err range, err hex, err crc. */
-#define LSDJ_XFER_VERSION 1u
+ * Errors: err ? (not a command), err hold, err range, err hex, err crc, err busy (a request waits), err kit (no
+ * `k` before). */
+#define LSDJ_XFER_VERSION 2u                  /* 2: the flash store's commands and info fields */
 #define LSDJ_XFER_RD 256u                     /* bytes in a read reply */
 #define LSDJ_XFER_WR 20u                      /* bytes in a write line: "ble w 1FFEC " + 40 + " CRC " <= 63 */
 #define LSDJ_XFER_OUT (3u + 2u * LSDJ_XFER_RD + 1u + 4u + 1u)   /* "ok " HEX " " CRC and the NUL */
 #define LSDJ_XFER_IDLE_MS 5000u               /* held and no command for this long: the host went away */
+enum { LSDJ_REQ_NONE, LSDJ_REQ_SAVE, LSDJ_REQ_KIT, LSDJ_REQ_KIT_ERASE, LSDJ_REQ_KITS };
+enum { LSDJ_RES_OK, LSDJ_RES_FULL, LSDJ_RES_FAIL, LSDJ_RES_RANGE };   /* (lsdj_store.c's LSDJ_ST_*) */
 
 typedef struct {
     uint8_t *sram;                            /* the save RAM */
@@ -25,6 +41,15 @@ typedef struct {
     uint32_t nbanks;
     uint8_t started, held, reset_req;         /* started: PLAY ran LSDj (lsdj.c sets it, and carries out reset_req) */
     uint32_t last_ms;                         /* the last command while held */
+    /* the flash store, as lsdj.c keeps these up to date */
+    uint8_t *kit;                             /* 16 KiB: a kit bank on its way to flash */
+    const uint8_t *kit_bank;                  /* the ROM bank number each possible flash kit bank shows as */
+    uint8_t nkit, kits;                       /* how many the ROM has room for; how many there are (K) */
+    uint8_t saved;                            /* a save is in flash */
+    uint32_t cap, used;                       /* a save slot's room; the packed size of the save in flash */
+    uint8_t req, req_arg, res;                /* the request waiting for lsdj.c (LSDJ_REQ_*), its number; the last
+                                               * one's result (LSDJ_RES_*) */
+    uint8_t kit_open;                         /* `k J` began a bank: J + 1 */
 } lsdj_xfer_t;
 
 static uint16_t lsdj_crc16(const uint8_t *p, uint32_t n)
@@ -157,7 +182,125 @@ static void lsdj_xfer_cmd(lsdj_xfer_t *x, const char *p, uint32_t now_ms, char *
         o = xf_puts(o, " held ");
         o = xf_hex(o, x->held, 1);
         o = xf_puts(o, " banks ");
-        xf_hex(o, x->nbanks, 2);
+        o = xf_hex(o, x->nbanks, 2);
+        o = xf_puts(o, " kits ");
+        o = xf_hex(o, x->kits, 2);
+        *o++ = ' ';
+        o = xf_hex(o, x->nkit, 2);
+        o = xf_puts(o, " cap ");
+        o = xf_hex(o, x->cap, 5);
+        o = xf_puts(o, " used ");
+        o = xf_hex(o, x->used, 5);
+        o = xf_puts(o, " saved ");
+        xf_hex(o, x->saved, 1);
+    } else if (xf_word(&p, "st")) {
+        if (!xf_end(p))
+            goto unknown;
+        if (x->req)
+            xf_puts(out, "ok busy");
+        else
+            xf_hex(xf_puts(out, "ok "), x->res, 1);
+    } else if (xf_word(&p, "save")) {
+        if (!xf_end(p))
+            goto unknown;
+        if (!x->started) {
+            xf_puts(out, "err not started");
+            return;
+        }
+        if (x->req)
+            goto busy;
+        x->req = LSDJ_REQ_SAVE;
+        x->req_arg = 0;
+        xf_puts(out, "ok");
+    } else if (xf_word(&p, "kb")) {
+        if (!xf_num(&p, &b) || !xf_end(p))
+            goto unknown;
+        if (b >= x->nkit) {
+            xf_puts(out, "err range");
+            return;
+        }
+        xf_hex(xf_puts(out, "ok "), x->kit_bank[b], 2);
+    } else if (xf_word(&p, "k") || xf_word(&p, "kx") || xf_word(&p, "kits")) {
+        int which = p[-1] == 'k' ? LSDJ_REQ_KIT : p[-1] == 'x' ? LSDJ_REQ_KIT_ERASE : LSDJ_REQ_KITS;
+        if (!xf_num(&p, &b) || !xf_end(p))
+            goto unknown;
+        if (!x->held) {
+            xf_puts(out, "err hold");
+            return;
+        }
+        if (which == LSDJ_REQ_KITS ? b > x->nkit : b >= x->kits) {
+            xf_puts(out, "err range");
+            return;
+        }
+        if (x->req)
+            goto busy;
+        if (which == LSDJ_REQ_KIT) {          /* begin: the buffer erased; `kc` queues it */
+            for (i = 0; i < LSDJ_BANK; i++)
+                x->kit[i] = 0xFFu;
+            x->kit_open = (uint8_t)(b + 1u);
+        } else {
+            x->req = (uint8_t)which;
+            x->req_arg = (uint8_t)b;
+        }
+        xf_puts(out, "ok");
+    } else if (xf_word(&p, "kd")) {
+        if (!xf_num(&p, &a))
+            goto unknown;
+        k = xf_bytes(&p, d);
+        if (k == -1) {
+            xf_puts(out, "err hex");
+            return;
+        }
+        if (k == -2) {
+            xf_puts(out, "err range");
+            return;
+        }
+        if (!k || !xf_num(&p, &crc) || !xf_end(p))
+            goto unknown;
+        n = (uint32_t)k;
+        if (!x->held) {
+            xf_puts(out, "err hold");
+            return;
+        }
+        if (!x->kit_open) {
+            xf_puts(out, "err kit");
+            return;
+        }
+        if (a > LSDJ_BANK || n > LSDJ_BANK - a) {
+            xf_puts(out, "err range");
+            return;
+        }
+        if (crc != lsdj_crc16(d, n)) {
+            xf_puts(out, "err crc");
+            return;
+        }
+        for (i = 0; i < n; i++)
+            x->kit[a + i] = d[i];
+        xf_puts(out, "ok");
+    } else if (xf_word(&p, "kc")) {
+        if (!xf_num(&p, &a) || !xf_end(p))
+            goto unknown;
+        if (!x->held) {
+            xf_puts(out, "err hold");
+            return;
+        }
+        if (!x->kit_open) {
+            xf_puts(out, "err kit");
+            return;
+        }
+        if (x->req)
+            goto busy;
+        crc = 0xFFFFFFFFu;
+        for (i = 0; i < LSDJ_BANK; i++)
+            crc = lsdj_crc32_add(crc, x->kit[i]);
+        if (~crc != a) {
+            xf_puts(out, "err crc");
+            return;
+        }
+        x->req = LSDJ_REQ_KIT;
+        x->req_arg = (uint8_t)(x->kit_open - 1u);
+        x->kit_open = 0;
+        xf_puts(out, "ok");
     } else if (xf_word(&p, "hold")) {
         if (!xf_end(p))
             goto unknown;
@@ -243,6 +386,9 @@ static void lsdj_xfer_cmd(lsdj_xfer_t *x, const char *p, uint32_t now_ms, char *
 unknown:
         xf_puts(out, "err ?");
     }
+    return;
+busy:
+    xf_puts(out, "err busy");
 }
 
 static void lsdj_xfer_tick(lsdj_xfer_t *x, uint32_t now_ms)   /* held and the host went away: run again */

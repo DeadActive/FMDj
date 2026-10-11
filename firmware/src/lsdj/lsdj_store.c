@@ -3,7 +3,8 @@
 /* The LSDj unit's flash store: LSDj's save and the custom kit banks, in Felucca's user-sample area and nowhere else
  * (flash 0xA0000..0xDBFFF, 60 sectors of 4 KiB: Hortator's projects, presets and settings are not touched; its user
  * samples are). Pure: flash is three functions (the core's, or a simulated flash in tests/lsdj/lsdj_store_test.c).
- * Include lsdj_gb.c (lsdj_unpack) and lsdj_xfer.c (lsdj_crc32_add) first.
+ * Include lsdj_gb.c (lsdj_unpack) and lsdj_xfer.c (lsdj_crc32_add) first. No name here starts with st_ or fl_:
+ * gate 2b (tools/check_update_path.py) takes those for the core's storage and flash driver.
  *
  *   kit banks: K of them (0..12), 16 KiB each, a ROM bank as it is, from the top down; an erased one reads 0xFF,
  *              which LSDj takes for a free bank
@@ -13,6 +14,10 @@
  *              the save, so the power may go at any point.
  *   K changes: both slots move, so both records are erased first and the save is written again: the one step
  *              that is not safe against a power cut (the page takes a .sav to the computer first). */
+#ifndef LSDJ_STORE_FN                         /* the functions that write flash: lsdj.c keeps them out of line, so
+                                               * that gate 4 (tools/check_ble_boot.py) finds them by name */
+#define LSDJ_STORE_FN static
+#endif
 #define LSDJ_ST_BASE 0xA0000u
 #define LSDJ_ST_SECTOR 4096u
 #define LSDJ_ST_SECTORS 60u
@@ -51,7 +56,7 @@ static uint32_t lsdj_st_slot_off(uint32_t k, uint32_t slot)
 static uint32_t lsdj_st_kit_off(uint32_t j) { return LSDJ_ST_BASE + (LSDJ_ST_SECTORS - 4u * (j + 1u)) * LSDJ_ST_SECTOR; }
 static uint32_t lsdj_st_cap(uint32_t k) { return lsdj_st_slot_sectors(k) * LSDJ_ST_SECTOR - (uint32_t)sizeof(lsdj_rec_t); }
 
-static uint32_t st_crc(const uint8_t *p, uint32_t n)
+static uint32_t lsdj_st_crc(const uint8_t *p, uint32_t n)
 {
     uint32_t c = 0xFFFFFFFFu;
     while (n--)
@@ -89,9 +94,9 @@ typedef struct {
     uint32_t off, n, len, crc;
     int err;
     uint8_t page[256];
-} st_sink_t;
+} lsdj_st_sink_t;
 
-static void st_flush(st_sink_t *s)
+static void lsdj_st_flush(lsdj_st_sink_t *s)
 {
     if (s->n && !s->err && s->f->prog(s->off, s->page, s->n))
         s->err = 1;
@@ -99,16 +104,16 @@ static void st_flush(st_sink_t *s)
     s->n = 0;
 }
 
-static void st_out(void *ctx, const uint8_t *p, uint32_t k)
+static void lsdj_st_out(void *ctx, const uint8_t *p, uint32_t k)
 {
-    st_sink_t *s = ctx;
+    lsdj_st_sink_t *s = ctx;
     uint32_t i;
     for (i = 0; i < k; i++) {
         s->crc = lsdj_crc32_add(s->crc, p[i]);
         if (s->f) {
             s->page[s->n++] = p[i];
             if (s->n == sizeof s->page)
-                st_flush(s);
+                lsdj_st_flush(s);
         }
     }
     s->len += k;
@@ -116,19 +121,19 @@ static void st_out(void *ctx, const uint8_t *p, uint32_t k)
 
 static uint32_t lsdj_pack_len(const uint8_t *d, uint32_t n)
 {
-    st_sink_t s;
+    lsdj_st_sink_t s;
     s.f = 0;
     s.len = 0;
     s.crc = 0;
-    lsdj_pack(d, n, st_out, &s);
+    lsdj_pack(d, n, lsdj_st_out, &s);
     return s.len;
 }
 
-static int st_rec(const lsdj_flash_t *f, uint32_t off, lsdj_rec_t *r)    /* 1: a whole record of ours */
+static int lsdj_st_rec(const lsdj_flash_t *f, uint32_t off, lsdj_rec_t *r)    /* 1: a whole record of ours */
 {
     memcpy(r, f->ptr(off), sizeof *r);
     return r->magic == LSDJ_ST_MAGIC && r->version == LSDJ_ST_VERSION && r->k <= LSDJ_ST_KMAX &&
-           r->len <= lsdj_st_cap(r->k) && r->hcrc == st_crc((const uint8_t *)r, sizeof *r - 4u);
+           r->len <= lsdj_st_cap(r->k) && r->hcrc == lsdj_st_crc((const uint8_t *)r, sizeof *r - 4u);
 }
 
 /* what the flash holds, as after power-on: K and the newest whole save (st->have) */
@@ -138,14 +143,14 @@ static void lsdj_store_scan(const lsdj_flash_t *f, lsdj_store_t *st)
     int ok[2];
     uint32_t k, s, tries;
     memset(st, 0, sizeof *st);
-    ok[0] = st_rec(f, LSDJ_ST_BASE, &r[0]);
+    ok[0] = lsdj_st_rec(f, LSDJ_ST_BASE, &r[0]);
     ok[1] = 0;
     if (ok[0]) {
-        ok[1] = st_rec(f, lsdj_st_slot_off(r[0].k, 1), &r[1]) && r[1].k == r[0].k;
+        ok[1] = lsdj_st_rec(f, lsdj_st_slot_off(r[0].k, 1), &r[1]) && r[1].k == r[0].k;
     } else {                                  /* slot A's record is gone: slot B is where its own K puts it */
         for (k = 0; k <= LSDJ_ST_KMAX; k++) {
             lsdj_rec_t t;
-            if (st_rec(f, lsdj_st_slot_off(k, 1), &t) && t.k == k && (!ok[1] || t.seq > r[1].seq)) {
+            if (lsdj_st_rec(f, lsdj_st_slot_off(k, 1), &t) && t.k == k && (!ok[1] || t.seq > r[1].seq)) {
                 r[1] = t;
                 ok[1] = 1;
             }
@@ -160,7 +165,7 @@ static void lsdj_store_scan(const lsdj_flash_t *f, lsdj_store_t *st)
         if (!ok[0] && !ok[1])
             return;
         s = ok[1] && (!ok[0] || r[1].seq > r[0].seq);
-        if (st_crc(f->ptr(lsdj_st_slot_off(r[s].k, s) + sizeof(lsdj_rec_t)), r[s].len) == r[s].crc) {
+        if (lsdj_st_crc(f->ptr(lsdj_st_slot_off(r[s].k, s) + sizeof(lsdj_rec_t)), r[s].len) == r[s].crc) {
             st->have = 1;
             st->newest = (uint8_t)s;
             st->len = r[s].len;
@@ -178,15 +183,15 @@ static int lsdj_store_load(const lsdj_flash_t *f, const lsdj_store_t *st, uint8_
     return lsdj_unpack(dst, n, f->ptr(lsdj_st_slot_off(st->k, st->newest) + sizeof(lsdj_rec_t)), st->len);
 }
 
-static int lsdj_store_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_t *src, uint32_t n)
+LSDJ_STORE_FN int lsdj_store_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_t *src, uint32_t n)
 {
-    st_sink_t s;
+    lsdj_st_sink_t s;
     lsdj_rec_t r;
     uint32_t slot = st->have ? !st->newest : 0u, off = lsdj_st_slot_off(st->k, slot), i, len, crc;
     s.f = 0;
     s.len = 0;
     s.crc = 0xFFFFFFFFu;
-    lsdj_pack(src, n, st_out, &s);            /* first only counted: a save that does not fit writes nothing */
+    lsdj_pack(src, n, lsdj_st_out, &s);            /* first only counted: a save that does not fit writes nothing */
     len = s.len;
     crc = ~s.crc;
     if (len > lsdj_st_cap(st->k))
@@ -205,9 +210,9 @@ static int lsdj_store_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_
     s.len = 0;
     s.crc = 0xFFFFFFFFu;
     s.err = 0;
-    lsdj_pack(src, n, st_out, &s);
-    st_flush(&s);
-    if (s.err || st_crc(f->ptr(off + sizeof r), len) != crc)
+    lsdj_pack(src, n, lsdj_st_out, &s);
+    lsdj_st_flush(&s);
+    if (s.err || lsdj_st_crc(f->ptr(off + sizeof r), len) != crc)
         return LSDJ_ST_FAIL;
     memset(&r, 0, sizeof r);
     r.magic = LSDJ_ST_MAGIC;
@@ -216,7 +221,7 @@ static int lsdj_store_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_
     r.seq = st->seq + 1u;
     r.len = len;
     r.crc = crc;
-    r.hcrc = st_crc((const uint8_t *)&r, sizeof r - 4u);
+    r.hcrc = lsdj_st_crc((const uint8_t *)&r, sizeof r - 4u);
     if (f->prog(off, &r, sizeof r) || memcmp(f->ptr(off), &r, sizeof r))   /* the record: now this slot is the save */
         return LSDJ_ST_FAIL;
     st->have = 1;
@@ -227,7 +232,7 @@ static int lsdj_store_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_
 }
 
 /* K kit banks from now on, the save (src) written again in the new layout. Not safe against a power cut. */
-static int lsdj_store_kits(const lsdj_flash_t *f, lsdj_store_t *st, uint32_t k, const uint8_t *src, uint32_t n)
+LSDJ_STORE_FN int lsdj_store_kits(const lsdj_flash_t *f, lsdj_store_t *st, uint32_t k, const uint8_t *src, uint32_t n)
 {
     uint32_t j, i;
     if (k > LSDJ_ST_KMAX)
@@ -245,7 +250,7 @@ static int lsdj_store_kits(const lsdj_flash_t *f, lsdj_store_t *st, uint32_t k, 
     return lsdj_store_save(f, st, src, n);
 }
 
-static int lsdj_store_kit_erase(const lsdj_flash_t *f, const lsdj_store_t *st, uint32_t j)
+LSDJ_STORE_FN int lsdj_store_kit_erase(const lsdj_flash_t *f, const lsdj_store_t *st, uint32_t j)
 {
     uint32_t i;
     if (j >= st->k)
@@ -257,7 +262,7 @@ static int lsdj_store_kit_erase(const lsdj_flash_t *f, const lsdj_store_t *st, u
 }
 
 /* a kit bank (16 KiB in RAM) into flash kit bank j; its trailing 0xFF bytes are left erased */
-static int lsdj_store_kit_write(const lsdj_flash_t *f, const lsdj_store_t *st, uint32_t j, const uint8_t *bank)
+LSDJ_STORE_FN int lsdj_store_kit_write(const lsdj_flash_t *f, const lsdj_store_t *st, uint32_t j, const uint8_t *bank)
 {
     uint32_t n = LSDJ_BANK;
     int r = lsdj_store_kit_erase(f, st, j);
