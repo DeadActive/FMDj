@@ -275,8 +275,8 @@ async function deviceCrcs(link, inf) {                   // the CRC-32 of every 
 }
 
 /* the ROM bank each of a song file's kits has on this FM-1; a kit it lacks goes into a free flash kit bank, or one
-   more bank (then the save goes to the computer first: opts.backup(bytes)). Nothing is written unless all fit. */
-async function placeKits(link, inf, kits, opts, progress) {
+   more bank (the FM-1 changes the number of banks safely: lsdj_store.c). Nothing is written unless all fit. */
+async function placeKits(link, inf, kits, progress) {
     const crcs = await deviceCrcs(link, inf), want = kits.map(k => crc32(k));
     const banks = want.map(c => crcs.findIndex((v, b) => v === c && isKitBank(b)));
     const missing = banks.map((b, i) => (b < 0 ? i : -1)).filter(i => i >= 0);
@@ -293,9 +293,6 @@ async function placeKits(link, inf, kits, opts, progress) {
     if (more > 0) {
         if (inf.kits + more > inf.nkit)
             throw new Error(`this song brings ${count}, and there is no room for another kit bank (${inf.kits} of ${inf.nkit} are in use): remove a kit first`);
-        if (!opts.backup)
-            throw new Error(`this song brings ${count}; that takes ${more} more kit bank${more > 1 ? "s" : ""} in flash, and the save must go to the computer first`);
-        await opts.backup(await link.read(0, SAV_SIZE, progress));
         await link.flash("kits " + hx(inf.kits + more), "there is no room for another kit bank: the save would no longer fit (delete songs first)");
         for (let j = inf.kits; j < inf.kits + more; j++) {
             shownAs.push(await link.kitBankNo(j));
@@ -304,21 +301,21 @@ async function placeKits(link, inf, kits, opts, progress) {
         }
     }
     for (const [n, i] of missing.entries()) {
-        await link.writeKit(free[n], kits[i], progress);
         banks[i] = shownAs[free[n]];
+        crcs[banks[i]] = -1;                             // (not known until the kit is there whole)
+        await link.writeKit(free[n], kits[i], progress);
         crcs[banks[i]] = want[i];
     }
     return banks;
 }
 
-/* a song file onto the FM-1 -> { slot, unsaved }: unsaved is null, or why the change is not in flash.
-   opts.backup(bytes): called with the whole save before the number of kit banks changes. */
-export function uploadSong(link, bytes, progress = () => {}, opts = {}) {
+/* a song file onto the FM-1 -> { slot, unsaved }: unsaved is null, or why the change is not in flash */
+export function uploadSong(link, bytes, progress = () => {}) {
     const file = parseSongFile(bytes);                   // a damaged file stops here: nothing is sent
     return whileHeld(link, true, async () => {
         const inf = await link.info(), old = await fsHeader(link);
         importSong(old, { ...file, kits: [] });          // no slot, no room, a damaged song: before any kit is stored
-        const kitBanks = file.kits.length ? await placeKits(link, inf, file.kits, opts, progress) : [];
+        const kitBanks = file.kits.length ? await placeKits(link, inf, file.kits, progress) : [];
         const { sav, slot } = importSong(old, file, kitBanks);
         await writeChange(link, old, sav, progress);
         return { slot, unsaved: await persist(link, inf) };
@@ -381,18 +378,16 @@ export async function listKits(link) {
 
 export function removeKit(link, j) {                     // (songs that use it lose its sounds)
     return whileHeld(link, true, async () => {
+        link.crcs = null;                                // (whatever happens next, the banks are read again)
         await link.flash("kx " + hx(j));
-        link.crcs = null;
     });
 }
 
-/* k kit banks from now on. The save moves in flash, which is not safe against a power cut: it goes to the computer
-   first (backup(bytes)). */
-export function setKitBanks(link, k, backup, progress = () => {}) {
+/* k kit banks from now on */
+export function setKitBanks(link, k) {
     return whileHeld(link, true, async () => {
-        await backup(await link.read(0, SAV_SIZE, progress));
-        await link.flash("kits " + hx(k), "the save would not fit with that many kit banks (delete songs first)");
         link.crcs = null;
+        await link.flash("kits " + hx(k), "the save would not fit with that many kit banks (delete songs first)");
     });
 }
 

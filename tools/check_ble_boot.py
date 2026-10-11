@@ -18,8 +18,13 @@ ALLOWED = {"ble_key"}                  # ble_ui.c: the PLAY handler; the only wa
 # through the key handler: lsdj_step calls them, and the core reaches that only through its pointer
 LSDJ_FLASH = {"core_flash_erase", "core_flash_prog", "lsdj_store_save", "lsdj_store_kits", "lsdj_store_kit_write",
               "lsdj_store_kit_erase"}
+# ... and their helpers, if the compiler kept them out of line
+LSDJ_FLASH_MORE = {"lsdj_st_save", "lsdj_st_kits", "lsdj_st_layout", "lsdj_st_flush", "lsdj_st_out", "lsdj_save",
+                   "lsdj_flash_req"}
 LABEL = re.compile(r"^([A-Za-z_.$][\w.$]*):\s*$")
 CALL = re.compile(r"call -?\d+ <([^:>+]+)")
+# a tail call: `goto N <other_function : addr >` (a jump inside a function names itself: `<fn+0x2A : addr >`)
+GOTO = re.compile(r"goto -?\d+ <([^:>+]+)")
 # a conditional call is printed on two lines: `if (...) {` / `call -486` / `} <callee : addr >`: join them
 COND_CALL = re.compile(r"(call -?\d+)[ \t]*\n[ \t]*\} <")
 
@@ -35,6 +40,9 @@ def graph(text):
         elif name:
             for c in CALL.findall(line):
                 g[name].add(c.strip())
+            for c in GOTO.findall(line):
+                if c.strip() != name:
+                    g[name].add(c.strip())
     return g
 
 
@@ -46,10 +54,10 @@ def flash_reach(g):
         if f not in seen:
             seen.add(f)
             todo.extend(g.get(f, ()))
-    return sorted(seen & LSDJ_FLASH)
+    return sorted(seen & (LSDJ_FLASH | LSDJ_FLASH_MORE))
 
 
-def main(dis, start=START):
+def main(dis, start=START, strict=True):
     g = graph(open(dis).read())
     seen, todo, bad = set(), ["fm1_cstart"], []
     while todo:
@@ -64,6 +72,10 @@ def main(dis, start=START):
         fl = flash_reach(g)
         if fl:
             print("flash write reachable at boot:", ", ".join(fl))
+            return 1
+        missing = sorted(LSDJ_FLASH - set(g))
+        if strict and missing:                # a rename or inlining must not empty the check unnoticed
+            print("flash writers not found by name (renamed or inlined?):", ", ".join(missing))
             return 1
         if LSDJ_FLASH & set(g):
             print("no flash write reachable at boot (only through the Game Boy's step)")
@@ -82,6 +94,9 @@ def selftest():
     import tempfile
     boot = "fm1_cstart:\n 0:\t00 00 \tcall -2 <fm1_main : 2000000 >\nfm1_main:\n"
     cases = [  # (disassembly after fm1_main's label, expected exit)
+        (" 0:\t00 00 \tcall -2 <ble_key : 2000000 >\nble_key:\n 0:\t00 00 \tgoto -824 <lsdj_start : 2009ab8 >\n"
+         "lsdj_start:\n 0:\t00 00 \tcall -2 <lsdj_store_save : 2000000 >\nlsdj_store_save:\n", 1),   # ... by a tail call
+        (" 0:\t00 00 \tgoto 38 <fm1_main+0x2A : 2002d6c >\n 2:\t00 00 \tgoto -8 <lsdj_step : 2000000 >\nlsdj_step:\n", 1),
         (" 0:\t00 00 \tcall -2 <ble_key : 2000000 >\nble_key:\n 0:\t00 00 \tcall -2 <lsdj_start : 2000000 >\n"
          "lsdj_start:\n 0:\t00 00 \tcall -2 <lsdj_store_save : 2000000 >\nlsdj_store_save:\n", 1),   # a save at PLAY
         (" 0:\t00 00 \tcall -2 <cdc_task : 2000000 >\ncdc_task:\n 0:\t00 00 \tcall -2 <ble_status : 2000000 >\n"
@@ -100,7 +115,7 @@ def selftest():
     for i, (body, want) in enumerate(cases):
         with tempfile.NamedTemporaryFile("w", suffix=".dis", delete=False) as f:
             f.write(boot + body)
-        got = main(f.name, LSDJ_START)
+        got = main(f.name, LSDJ_START, strict=False)
         if got != want:
             print(f"selftest case {i}: exit {got}, expected {want}")
             bad += 1

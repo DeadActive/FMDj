@@ -62,6 +62,7 @@ static const int8_t KEYS[8] = {-1, -1, CORE_BTN_SEQ, CORE_BTN_PLAY,
                                CORE_BTN_ARP, CORE_BTN_HOME, CORE_BTN_SCL, CORE_BTN_SAVE};
 static lsdj_knobs_t knobs;                    /* knob steps and shortcuts waiting to be pressed (lsdj_gb.c) */
 static const lsdj_flash_t flash = {core_flash_ptr, core_flash_erase, core_flash_prog};
+static const lsdj_flash_t flash_ro = {core_flash_ptr, 0, 0};   /* PLAY's: it reads, and has nothing to write with */
 static lsdj_store_t store;                    /* what the flash holds (lsdj_store.c), scanned by lsdj_start */
 static uint8_t flash_on;                      /* the core has flash for us */
 static lsdj_bank_t rom_tab[LSDJ_ROM_BANKS];   /* the Game Boy's ROM: lsdj_rom, the flash kit banks in its free ones */
@@ -175,7 +176,7 @@ static void lsdj_xfer_flash(void)              /* what `ble info` and the kit co
     xfer.kit = kit_buf;
     xfer.kit_bank = kit_bank;
     xfer.nkit = nkit;
-    xfer.kits = store.k;
+    xfer.kits = store.k < nkit ? store.k : nkit;
     xfer.saved = store.have;
     xfer.cap = lsdj_st_cap(store.k);
     xfer.used = store.have ? store.len : 0;
@@ -188,9 +189,8 @@ static void lsdj_banks(void)                   /* rom_tab: the ROM, and the K fl
     for (b = 8, nkit = 0; b < LSDJ_ROM_BANKS && nkit < LSDJ_ST_KMAX; b++)   /* kits: banks 8..26 and 32.. */
         if ((b <= 26u || b >= 32u) && !lsdj_rom[b].n)
             kit_bank[nkit++] = (uint8_t)b;
-    if (store.k > nkit)
-        store.k = nkit;                       /* (a store made with another ROM) */
-    for (j = 0; j < store.k; j++) {
+    for (j = 0; j < store.k && j < nkit; j++) {   /* (store.k is the flash layout's: never changed here, even if a
+                                                   * store made with another ROM has more banks than this one shows) */
         rom_tab[kit_bank[j]].p = core_flash_ptr(lsdj_st_kit_off(j));
         rom_tab[kit_bank[j]].n = LSDJ_BANK;
     }
@@ -350,9 +350,9 @@ static __attribute__((noinline)) void lsdj_start(void)
     int r = -1;
     flash_on = core_flash_ptr(LSDJ_ST_BASE) != 0;
     if (flash_on) {                           /* (reading only: flash is written on REC or a console request) */
-        lsdj_store_scan(&flash, &store);
+        lsdj_store_scan(&flash_ro, &store);
         if (store.have)
-            r = lsdj_store_load(&flash, &store, sram, LSDJ_SRAM);
+            r = lsdj_store_load(&flash_ro, &store, sram, LSDJ_SRAM);
     }
     if (r)                                    /* no save in flash: the start-up save, as built */
         r = lsdj_unpack(sram, LSDJ_SRAM, lsdj_boot_save, sizeof lsdj_boot_save);

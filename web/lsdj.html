@@ -103,9 +103,6 @@
     }
 
     const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`; };
-    /* before the number of kit banks changes, the whole save goes to the computer: that step is not safe against a
-       power cut */
-    const backup = bytes => saveFile(`lsdj-fm1-backup-${stamp()}.sav`, bytes);
     const kept = (what, r) => what + (r && r.unsaved ? ` It is NOT saved on the FM-1: ${r.unsaved}.` : "");
 
     async function drawFlash() {
@@ -146,7 +143,10 @@
         let need = kits.length;
         while (need && kits[need - 1].free) need--;
         $("shrink").hidden = need === kits.length;
-        $("shrink").onclick = () => job("Give kit banks back", async () => { await setKitBanks(uiLink, need, backup, bar); await draw(); });
+        $("shrink").onclick = () => {
+            if (!confirm(`Give ${kits.length - need} unused kit bank${kits.length - need > 1 ? "s" : ""} back to the save? LSDj starts again.`)) return;
+            job("Give kit banks back", async () => { await setKitBanks(uiLink, need); await draw(); });
+        };
     }
 
     async function draw() {
@@ -198,7 +198,7 @@
                 for (const f of files) {
                     say(`Upload ${f.name}…`);
                     try {
-                        last = await uploadSong(uiLink, new Uint8Array(await f.arrayBuffer()), bar, { backup });
+                        last = await uploadSong(uiLink, new Uint8Array(await f.arrayBuffer()), bar);
                     } catch (e) {
                         throw new Error(`${f.name}: ${plain(e)}` + (done.length ? ` (uploaded before it: ${done.join(", ")})` : ""));
                     }

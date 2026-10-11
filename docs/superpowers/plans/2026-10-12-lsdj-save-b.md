@@ -17,6 +17,18 @@ this is the short form: decisions, units, tests. Branch `lsdj-xfer`.
   edited and no `st_*` / `fl_*` function is added (gate 2b). The wrappers accept 0xA0000..0xDBFFF only.
 - The page saves to flash after every change it makes (upload, delete, restore), so what it did survives power-off.
 
+## After the review of 2026-10-12 (the layout as built)
+
+- **K has its own record**: sectors 0 and 1 of the area hold two copies of a layout record (K). The save slots are
+  29 - 2K sectors each, slot A from sector 2 (it never moves); a slot's record sits alone in its first page, the
+  packed save from byte 256, as `storage.c` lays its sectors out.
+- **Changing K is safe against a power cut**: the save goes into slot A first, the new banks are erased, then the
+  layout record is written (the older copy first: that write is the change). The page no longer takes a `.sav`
+  backup before it.
+- A flash error makes the store read its state from the flash again.
+- Gate 4 follows tail calls (the key handler reaches `lsdj_start` by one) and fails if a flash writer is not found
+  by name; `lsdj_start` gets a flash table with no erase and no program function.
+
 ## Units
 
 1. `core_ble_api.c` / `ble_core.h`: `core_flash_ptr(off)`, `core_flash_erase(off)`, `core_flash_prog(off, p, n)`.

@@ -42,16 +42,16 @@ int core_flash_read(uint32_t off, void *buf, uint32_t n)    /* plain flash only 
 #define CORE_STORE_HI 0xDC000u
 const uint8_t *core_flash_ptr(uint32_t off)
 {
-#if FELUCCA_FLASH
-    if (off >= CORE_STORE_LO && off < CORE_STORE_HI)
+#if FELUCCA_FLASH && FELUCCA_LSDJ
+    if (flash_ok && off >= CORE_STORE_LO && off < CORE_STORE_HI)
         return fm1_xip_ptr(off);              /* (the plain window: fl_plain_window_init at boot) */
 #endif
     (void)off;
     return 0;
 }
-int core_flash_erase(uint32_t off)
+int core_flash_erase(uint32_t off)             /* (only the LSDj build has these two: the BLE test writes no flash) */
 {
-#if FELUCCA_FLASH
+#if FELUCCA_FLASH && FELUCCA_LSDJ
     uint32_t took, f;
     int rc;
     if (!flash_ok || off < CORE_STORE_LO || off > CORE_STORE_HI - 0x1000u || (off & 0xFFFu))
@@ -69,7 +69,7 @@ int core_flash_erase(uint32_t off)
 }
 int core_flash_prog(uint32_t off, const void *src, uint32_t n)
 {
-#if FELUCCA_FLASH
+#if FELUCCA_FLASH && FELUCCA_LSDJ
     const uint8_t *s = src;
     uint32_t took, f, chunk;
     int rc;

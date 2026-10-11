@@ -16,15 +16,15 @@ those samples, take them off the FM-1 with Hortator first.
 3. **Save with REC.** Change something in the song, hold REC for a second. Expected: the status line says SAVING,
    then SAVED and a size; the picture and sound stop for a second or two. Please note how long.
 4. **Power off and on, PLAY.** Expected: your change is there.
-5. **Save from the page.** Connect the songs page. Expected: a line "Flash: the save takes N of 120 KiB. Kit banks:
+5. **Save from the page.** Connect the songs page. Expected: a line "Flash: the save takes N of 116 KiB. Kit banks:
    0 of 12". Upload a song (stock kits). Expected: "Uploaded ...", no "NOT saved". Power off and on, PLAY, LOAD the
    song in LSDj: it is there.
-6. **A song with a custom kit.** Drop a `.lsdprj` that brings its own kit. Expected: the browser first downloads
-   `lsdj-fm1-backup-....sav` (the save, before the flash layout changes), then the kit goes over (about 15 s a
-   kit), the page lists it under "Kit bank 1", and LSDj starts again. Load the song: its kit instrument plays the
+6. **A song with a custom kit.** Drop a `.lsdprj` that brings its own kit. Expected: the FM-1 makes a kit bank (a
+   few seconds: the save is written again), the kit goes over (about 15 s a kit), the page lists it under "Kit
+   bank 1", and LSDj starts again. Load the song: its kit instrument plays the
    kit; in LSDj's instrument screen the kit shows by its name. Power off and on: still there.
 7. **Remove the kit.** Press Remove on its row. Expected: the row says (free). "Give unused kit banks back to the
-   save" then returns the room (another backup download first).
+   save" then returns the room.
 8. **A save that does not fit** (optional, if you have a big `.sav`): with several kit banks, restore a save with
    many songs. Expected: the page says it is NOT saved on the FM-1 and why; LSDj still has it until power-off.
 9. **Back to Hortator** (optional): install Hortator. Expected: it starts normally; projects, presets and settings

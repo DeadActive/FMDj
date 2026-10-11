@@ -198,7 +198,7 @@ static void test_flash(void)                  /* REC held 1 s saves; PLAY after 
     uint32_t i, f, c;
     CHECK(!store.have && flash_erases == 0 && flash_progs == 0);     /* starting and running wrote nothing */
     console("ble info");
-    CHECK(strstr(con_log, " kits 00 0C cap 1DFE0 used 00000 saved 0") != 0);
+    CHECK(strstr(con_log, " kits 00 0C cap 1CF00 used 00000 saved 0") != 0);
     console("ble hold");
     sprintf(line, "ble w 1FF10 12345678 %04X", lsdj_crc16(mark, 4));
     console(line);
@@ -278,7 +278,7 @@ static void test_console(void)                /* after PLAY: `ble ...` holds and
     console("  ble  ");
     CHECK(strstr(con_log, "lsdj running") != 0);
     console("ble info");
-    CHECK(!strcmp(con_log, "ok v2 started 1 held 0 banks 40 kits 00 0C cap 1DFE0 used 00000 saved 0\r\n"));
+    CHECK(!strcmp(con_log, "ok v2 started 1 held 0 banks 40 kits 00 0C cap 1CF00 used 00000 saved 0\r\n"));
     console("ble r 0 4");
     CHECK(!strcmp(con_log, "err hold\r\n"));          /* not while the Game Boy runs */
     console("ble hold");

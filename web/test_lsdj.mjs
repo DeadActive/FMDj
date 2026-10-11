@@ -155,12 +155,13 @@ class Sim {
                               mute: false, corrupt: 0, failWrite: -1, failFrom: Infinity, writes: 0, hasLsdj: true, onHold: null, latency: 0,
                               // the flash store: K kit banks of nkit, shown as ROM banks kitBank[]; a queued request
                               kits: 0, nkit: 0, kitBank: [], used: 0, saved: false, kit: new Uint8Array(0x4000), kitOpen: 0,
-                              req: 0, reqArg: 0, res: 0, manual: false, slow: 0, v1: false, flashImage: null, saves: 0, fullOver: Infinity });
+                              req: 0, reqArg: 0, res: 0, manual: false, slow: 0, v1: false, flashImage: null, saves: 0, fullOver: Infinity, failReq: 0, noBank: false });
     }
-    cap() { return (30 - 2 * this.kits) * 4096 - 32; }
+    cap() { return (29 - 2 * this.kits) * 4096 - 256; }    // (lsdj_store.c: two slots of 29 - 2K sectors, a 256-byte head)
     runReq() {                                          // as lsdj.c's step: the queued request, carried out
         const [req, j] = [this.req, this.reqArg];
         this.req = 0; this.res = 0;
+        if (this.failReq) { this.res = this.failReq; if (req === 3) this.banks[this.kitBank[j]] = new Uint8Array(0); return; }   // the flash failed (an erase half done)
         if (req === 1) {                                // save: the "packed size" here is the count of bytes not 0
             const n = this.sram.reduce((a, v) => a + (v ? 1 : 0), 0);
             if (n > Math.min(this.cap(), this.fullOver)) this.res = 1;
@@ -169,7 +170,7 @@ class Sim {
         else if (req === 3) this.banks[this.kitBank[j]] = new Uint8Array(0);
         else if (req === 4) {
             const was = this.kits; this.kits = j;
-            if (this.used > this.cap()) { this.kits = was; this.res = 1; }
+            if (this.noBank || this.used > this.cap()) { this.kits = was; this.res = 1; }
             else for (let k = was; k < j; k++) this.banks[this.kitBank[k]] = new Uint8Array(0);
         }
     }
@@ -461,7 +462,7 @@ await (async () => {
     };
     sim = flashSim();
     const inf = await sim.link.info();
-    ok(inf.version === 2 && inf.kits === 0 && inf.nkit === 3 && inf.cap === 30 * 4096 - 32 && inf.used === 0 && !inf.saved && inf.flash, "info: the flash store");
+    ok(inf.version === 2 && inf.kits === 0 && inf.nkit === 3 && inf.cap === 29 * 4096 - 256 && inf.used === 0 && !inf.saved && inf.flash, "info: the flash store");
     await ln.saveToFlash(sim.link);
     ok(sim.saved && sim.saves === 1 && eq(sim.flashImage, sim.sram) && !sim.held, "save now");
     sim.slow = 3;
@@ -497,23 +498,30 @@ await (async () => {
     const kl = await ln.listKits(sim.link);
     ok(kl.length === 1 && kl[0].j === 0 && kl[0].bank === 34 && kl[0].name === "KIT-A" && !kl[0].free, "the kit list: the bank and the kit's name");
 
-    sim = flashSim(0);                                          // no kit bank yet: one more, after a backup
-    ok(await rejects(ln.uploadSong(sim.link, custom), /kit bank/) && sim.kits === 0 && fs.songs(sim.sram).length === 1 && !sim.held && sim.resets === 0, "no free kit bank and no backup taken: refused, nothing changed");
-    let backup = null;
-    const up5 = await ln.uploadSong(sim.link, custom, undefined, { backup: b => { backup = b; } });
-    ok(backup && backup.length === fs.SAV_SIZE && eq(backup, base) && sim.kits === 1 && eq(sim.banks[34], kitA) && up5.unsaved === null, "one more kit bank: the save goes to the computer first");
+    sim = flashSim(0);                                          // no kit bank yet: the FM-1 makes one
+    const up5 = await ln.uploadSong(sim.link, custom);
+    ok(sim.kits === 1 && eq(sim.banks[34], kitA) && up5.unsaved === null && fs.songs(sim.sram).length === 2, "no free kit bank: one more is made, and the kit goes into it");
     sim = flashSim(3); sim.banks[34] = kitBankData(1); sim.banks[35] = kitBankData(2); sim.banks[36] = kitBankData(3);
-    ok(await rejects(ln.uploadSong(sim.link, custom, undefined, { backup: () => {} }), /no room for another kit/) && fs.songs(sim.sram).length === 1, "every kit bank taken: refused");
+    ok(await rejects(ln.uploadSong(sim.link, custom), /no room for another kit/) && fs.songs(sim.sram).length === 1 && !sim.held, "every kit bank taken: refused, nothing changed");
     const twoKits = fs.buildSongFile(src, 0, [kitA, kitB]);
     sim = flashSim(1);
-    ok(await rejects(ln.uploadSong(sim.link, twoKits), /kit bank/) && sim.banks[34].length === 0, "two kits, one free bank, no backup: nothing is written");
+    await ln.uploadSong(sim.link, twoKits);
+    ok(sim.kits === 2 && eq(sim.banks[34], kitA) && eq(sim.banks[35], kitB), "two kits, one free bank: one more bank, both stored");
+    sim = flashSim(0); sim.noBank = true;                       // (a save that leaves no room for a bank)
+    ok(await rejects(ln.uploadSong(sim.link, custom), /would no longer fit/) && fs.songs(sim.sram).length === 1 && sim.kits === 0 && !sim.held, "no room for a kit bank beside the save: said, and the song is not added");
 
     sim = flashSim(2); sim.banks[34] = kitA.slice();
     await ln.removeKit(sim.link, 0);
     ok(sim.banks[34].length === 0 && sim.resets === 1 && (await ln.listKits(sim.link))[0].free, "a kit is removed: its bank is free");
-    backup = null;
-    await ln.setKitBanks(sim.link, 0, b => { backup = b; });
-    ok(sim.kits === 0 && backup && backup.length === fs.SAV_SIZE && sim.resets === 2, "unused kit banks go back to the save, after a backup");
+    await ln.setKitBanks(sim.link, 0);
+    ok(sim.kits === 0 && sim.resets === 2, "unused kit banks go back to the save");
+    sim = flashSim(1);                                          // a removal the flash reports as failed, the bank already erased
+    await ln.uploadSong(sim.link, custom);                      // (the page now knows bank 34 holds kitA)
+    sim.failReq = 2;
+    ok(await rejects(ln.removeKit(sim.link, 0), /did not take it/) && sim.banks[34].length === 0, "a removal that fails is said");
+    sim.failReq = 0;
+    await ln.uploadSong(sim.link, custom);
+    ok(eq(sim.banks[34], kitA), "... and the kit is not believed to be there still: the next song brings it again");
 
     /* an FM-1 with the firmware before saving (protocol 1): everything but flash still works */
     sim = withKits(); sim.v1 = true;
