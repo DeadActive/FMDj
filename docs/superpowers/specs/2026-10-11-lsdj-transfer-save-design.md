@@ -11,11 +11,19 @@ move a song on or off the device. This work adds:
    as `.lsdprj`, plus the whole save as `.sav`. Custom kits travel with the songs.
 2. **Saving on the FM-1.** The save and the custom kits are kept in flash and survive power-off.
 
-Order: transfer first (it is also the backup route), then saving.
+Order: transfer first (it is also the backup route), then saving. Two plans:
+
+- **Plan A, transfer**: the console command without `k*`, `kits` and `save`; the page with songs and `.sav`. A
+  song whose kits are all in the ROM uploads; one with other kits is refused with their count until plan B.
+- **Plan B, saving**: flash, the save key, custom kits, the flash-use bar.
 
 Not in this version:
 
 - automatic saving, or an "unsaved" mark on the screen (saving is a key press);
+- downloading the song being edited without saving it in LSDj first: LSDj changes the song when it saves it to
+  a slot (measured on 9.4.2: the 4 KiB of waves are stored bit-inverted, and two bookkeeping bytes differ), and
+  that step belongs to each LSDj version. Save in LSDj (PROJECT, LOAD/SAVE SONG, SAVE), then download; the
+  `.sav` download holds the edited song as it is;
 - a command-line tool (the page is the only host tool; its logic is one JavaScript module with node tests);
 - editing kits, fonts or palettes (LSDPatcher does that on the ROM file);
 - any change to the ROM inside the firmware, to the CPU clock or to the emulator's speed options.
@@ -77,12 +85,16 @@ line and waits for the reply.
 | `lsdj info` | protocol version, started / held, kit banks (ROM bank numbers, which hold a kit), flash layout and use |
 | `lsdj hold` | stops the Game Boy between two frames; audio silent; refused until PLAY has started LSDj |
 | `lsdj go` / `lsdj go reset` | runs again; `reset` restarts LSDj so it reads the changed file system |
-| `lsdj r ADDR LEN` | save RAM as hex, up to 64 bytes a line |
+| `lsdj r ADDR LEN` | save RAM as hex, up to 256 bytes a reply |
 | `lsdj w ADDR HEX CRC` | writes save RAM, up to 64 bytes a line |
-| `lsdj b BANK OFF LEN` | ROM bank bytes through the bank table (flash kit banks included) |
+| `lsdj b BANK OFF LEN` | ROM bank bytes through the bank table (flash kit banks included), up to 256 a reply |
+| `lsdj bc BANK` | the CRC-32 of the whole 16 KiB bank: the page finds a song's kits on the device by it |
 | `lsdj k BANK` + `lsdj kd OFF HEX CRC` + `lsdj kc CRC32` | a kit bank: into a 16 KiB RAM buffer, then written to flash and read back |
 | `lsdj kits K` | changes the number of flash kit banks (part 2) |
 | `lsdj save` | saves to flash now (part 2) |
+
+Numbers are hex. A reply is one line: `ok ...` or `err REASON`. `go reset` is carried out by the Game Boy's own
+step in the main loop, not by the console (gate 4).
 
 `r`, `w`, `k*`, `kits` and `save` need `hold`. While held, the status line shows `USB`. If the host goes away, the
 unit runs again after 5 s without a command.
@@ -138,11 +150,10 @@ pointers (read, erase, program).
 ## Part 3: the Chrome page
 
 - `web/lsdjfs.js`: the formats, no browser: the save's file system (list, add, remove a song), `.lsdprj` /
-  `.lsdsng` in and out, unpacking, a packer for the working song, kit matching and renumbering as LSDPatcher does
-  (an identical bank already on the device is reused; a missing one takes a free flash kit bank).
+  `.lsdsng` in and out, unpacking, kit renumbering as LSDPatcher does (an identical bank already on the device,
+  found by CRC-32, is reused; a missing one takes a free flash kit bank).
 - `web/lsdjlink.js`: the console protocol over a byte stream (Web Serial in the page, a simulated device in tests).
-- `web/lsdj.html`: connect; the song list (slot, name, version, blocks) with a download button each, "download the
-  song being edited" (packed by the page; named after the active slot, or typed), drop files to upload, the kit list with remove buttons, `.sav` download and upload, and a
+- `web/lsdj.html`: connect; the song list (slot, name, version, blocks) with a download button each, drop files to upload, the kit list with remove buttons, `.sav` download and upload, and a
   bar of flash use. `web/make_site.py` adds it as `webapp/lsdj/index.html`, self-contained like the installer.
 
 An upload: hold, read the file system, add the song and its kits, write only the changed bytes, save to flash,
@@ -165,8 +176,10 @@ says what to remove if not.
   exported, imported into another save and unpacked to the same 32 KiB. The C test of `lsdj_xfer` writes its
   command and reply lines to a file, and the node test replays them against the simulated device, so the two
   sides cannot drift apart.
-- **Host, the real ROM** (private, the existing harness): a song put into a save by `lsdjfs` is loaded in LSDj's
-  own file screen and plays the same audio as the original.
+- **Host, the real ROM** (private, the existing harness): LSDj saves the demo song to a slot; `lsdjfs` exports it
+  and adds it to another save in other blocks; LSDj's own file screen loads it; the working memory equals LSDj's
+  own load outside its timer bytes (0x3FB0..0x3FCF) and the song plays. (Tried by hand on 2026-10-11: one byte,
+  0x3FB8, differed.)
 - **Gates**: 2a, 2b (reference untouched), 4 (extended), image and pool sizes.
 - **Device** (the owner): upload a `.lsdprj` with a custom kit, load and play it; save; power off and on; the song
   and kit are there; download it and compare with the file; `.sav` round trip; the update path still installs.
