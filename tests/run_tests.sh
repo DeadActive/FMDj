@@ -290,6 +290,7 @@ if command -v node >/dev/null 2>&1; then
     run "web pages: editor protocol + samples, package builder, update protocol" node web/test_web.mjs
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
     run "LSDj songs: the save's file system, song files, the console link, the page's flows" node web/test_lsdj.mjs
+    run "LSDj songs with the real ROM: LSDj loads what the page writes (skipped without LSDJ_ROM)" node tests/lsdj/lsdj_song_test.mjs
 else
     echo "== skip web tests (no node)"
 fi
