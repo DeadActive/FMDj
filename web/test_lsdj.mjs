@@ -152,7 +152,7 @@ const kitBankData = n => { const b = new Uint8Array(fs.BANK); b[0] = 0x60; b[1] 
 class Sim {
     constructor(sram, banks) {                          // banks: the stored bytes of each (the rest reads FF)
         Object.assign(this, { sram, banks, started: false, held: false, resets: 0, line: "", log: [], link: null,
-                              mute: false, corrupt: 0, failWrite: -1, failFrom: Infinity, writes: 0, hasLsdj: true, onHold: null });
+                              mute: false, corrupt: 0, failWrite: -1, failFrom: Infinity, writes: 0, hasLsdj: true, onHold: null, latency: 0 });
     }
     bankByte(b, i) { return i < this.banks[b].length ? this.banks[b][i] : 0xFF; }
     data(d) { return `ok ${ln.hexBytes(d)} ${ln.crc16(d).toString(16).toUpperCase().padStart(4, "0")}`; }
@@ -209,8 +209,11 @@ class Sim {
             outp += "\r\n" + reply + "> ";
         }
         if (this.mute) return Promise.resolve();
-        for (let i = 0; i < outp.length; i += 7)        // in small pieces, later, as USB delivers them
-            queueMicrotask(() => this.link.feed(Uint8Array.from(outp.slice(i, i + 7), c => c.charCodeAt(0))));
+        for (let i = 0; i < outp.length; i += 7) {      // in small pieces, later, as USB delivers them
+            const piece = Uint8Array.from(outp.slice(i, i + 7), c => c.charCodeAt(0));
+            if (this.latency) setTimeout(() => this.link.feed(piece), this.latency);   // (a slow link: in order, late)
+            else queueMicrotask(() => this.link.feed(piece));
+        }
         return Promise.resolve();
     }
 }
@@ -219,6 +222,21 @@ function simWith(sav, banks = [[0x11], [0x22]]) {
     sim.started = true;
     sim.link = new ln.Link(b => sim.send(b), 150);
     return sim;
+}
+function fakePort(sim) {
+    const port = { isOpen: false, readerLocked: false, writerLocked: false, ended: false, queue: [], waiting: null };
+    const end = () => { port.ended = true; if (port.waiting) { const w = port.waiting; port.waiting = null; w({ value: undefined, done: true }); } };
+    sim.link = { feed: bytes => { if (port.waiting) { const w = port.waiting; port.waiting = null; w({ value: bytes, done: false }); } else port.queue.push(bytes); } };
+    port.open = async () => { if (port.isOpen) throw new Error("The port is already open."); port.isOpen = true; port.ended = false; port.queue = []; };
+    port.setSignals = async () => {};
+    port.close = async () => { if (port.readerLocked || port.writerLocked) throw new TypeError("Cannot close: a stream is locked."); port.isOpen = false; };
+    port.unplug = end;
+    port.readable = { getReader: () => { port.readerLocked = true; return {
+        read: () => (port.queue.length ? Promise.resolve({ value: port.queue.shift(), done: false }) : port.ended ? Promise.resolve({ value: undefined, done: true }) : new Promise(r => { port.waiting = r; })),
+        cancel: async () => end(),
+        releaseLock: () => { port.readerLocked = false; } }; } };
+    port.writable = { getWriter: () => { port.writerLocked = true; return { write: b => sim.send(b), releaseLock: () => { port.writerLocked = false; } }; } };
+    return port;
 }
 const rejects = async (p, re) => { try { await p; } catch (e) { return re.test(e.message); } return false; };
 
@@ -327,6 +345,52 @@ await (async () => {
     ok(await rejects(Promise.resolve().then(() => ln.uploadSav(sim.link, other.subarray(0, 0x8000))), /131072/), "a save of the wrong size is refused");
     const blank = new Uint8Array(fs.SAV_SIZE);
     ok(await rejects(Promise.resolve().then(() => ln.uploadSav(sim.link, blank)), /file system mark/), "a file that is not an LSDj save is refused");
+
+    /* ---- after the final review (2026-10-12) ---- */
+    /* a reply belongs to its command: the console's own banner (printed when the port opens) on a slow link */
+    sim = simWith(base); sim.latency = 3;
+    setTimeout(() => sim.link.feed(Uint8Array.from("\r\nLSDj FM-1 lsdj-9 console - 'help'\r\n> ", c => c.charCodeAt(0))), 1);
+    await sim.link.sync();
+    const afterBanner = await sim.link.info().catch(e => e);
+    ok(afterBanner.started === true, "the console's banner at connect is not taken for a reply");
+    sim = simWith(base); await sim.link.hold(); sim.latency = 200;                 // slower than this link's 150 ms patience
+    ok(await rejects(sim.link.cmd("r 8000 4"), /does not answer/), "(a reply later than the link waits)");
+    sim.latency = 80;                                                              // the late reply lands while the next command waits
+    ok((await sim.link.cmd("r 8100 4").catch(e => e.message)) === sim.data(base.subarray(0x8100, 0x8104)).slice(3), "a late reply is not taken for the next command's");
+
+    /* a failed connect closes the port, so the next one works (Web Serial refuses to close a locked port) */
+    const dev = new Sim(base.slice(), [Uint8Array.of(1)]); dev.started = true; dev.hasLsdj = false;
+    const port = fakePort(dev);
+    let lost = 0;
+    ok(await rejects(ln.openPort(port, () => lost++, 150), /no transfer command/) && !port.isOpen && !port.readerLocked && !port.writerLocked, "a failed connect leaves the port closed");
+    dev.hasLsdj = true;
+    const conn = await ln.openPort(port, () => lost++, 150).catch(e => e);
+    ok(conn.info && conn.info.started && conn.info.banks === 1 && port.isOpen, "... so the next connect works");
+    if (conn.close) await conn.close();
+    ok(!port.isOpen && lost === 0, "closing is not reported as a lost FM-1");
+    await ln.openPort(port, () => lost++, 150);
+    port.unplug();
+    await new Promise(r => setTimeout(r, 5));
+    ok(lost === 1 && !port.isOpen, "an unplugged FM-1 is reported once and the port closed");
+
+    /* Delete and Download act on the song the list showed, not on whatever is in that slot now */
+    sim = withKits();
+    const shown = (await ln.listSongs(sim.link)).list[0];                          // DEVSONG in slot 2
+    const resave = () => { sim.onHold = null; sim.sram.set(fs.removeSong(sim.sram, 2)); addPacked(sim.sram, 2, testSong(8), "NEWTRACK", 9); };
+    sim.onHold = resave;                                                           // re-saved in LSDj meanwhile
+    ok(await rejects(ln.deleteSong(sim.link, shown.slot, shown), /list has changed/) && fs.songs(sim.sram)[0].name === "NEWTRACK" && sim.resets === 0 && !sim.held, "Delete on a row that changed removes nothing");
+    ok(await rejects(ln.downloadSong(sim.link, shown.slot, undefined, shown), /list has changed/) && !sim.held, "... and Download does not hand over another song under the old name");
+    const now = (await ln.listSongs(sim.link)).list[0];
+    await ln.deleteSong(sim.link, now.slot, now);
+    ok(fs.songs(sim.sram).length === 0, "the song the list shows is deleted");
+
+    /* a restore writes the file system's header last, and says so when it could not finish */
+    sim = withKits();
+    await ln.uploadSav(sim.link, other);
+    const inHead = a => a >= 0x8000 && a < fs.BLOCKS;
+    ok(eq(sim.sram, other) && sim.log.some(inHead) && sim.log.findIndex(inHead) > sim.log.findLastIndex(a => !inHead(a)), "a restore writes the names and the block table after everything else");
+    sim = withKits(); sim.failFrom = 3;
+    ok(await rejects(ln.uploadSav(sim.link, other), /incomplete: restore it again/) && !sim.held && sim.resets === 0 && eq(sim.sram.subarray(0x8000, fs.BLOCKS), base.subarray(0x8000, fs.BLOCKS)), "a restore that stops says the save is incomplete; the names and block table are still the old ones");
 })();
 
 /* ---- the page, inlined as web/make_site.py does: one script that compiles ---- */

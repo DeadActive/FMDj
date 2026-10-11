@@ -6,7 +6,7 @@
 //   a command: "ble WORDS\r" -> the console echoes it, then "\r\n", one line "ok ..." or "err ...", "\r\n> "
 //   (the console line is 64 characters: a write carries 20 bytes)
 //   the save RAM is read and written only while the Game Boy is held; every flow ends with `go`
-import { ACTIVE, BANK, BLOCK, BLOCKS, FAT, NBLOCKS, SAV_SIZE, SLOTS, buildSongFile, crc32, freeBlocks, importSong, parseSongFile, removeSong, slotBlocks, songFileName, songKitBanks, songs } from "./lsdjfs.js";
+import { ACTIVE, BANK, BLOCK, BLOCKS, FAT, NBLOCKS, SAV_SIZE, SLOTS, VERSIONS, buildSongFile, crc32, freeBlocks, importSong, nameText, parseSongFile, removeSong, slotBlocks, songFileName, songKitBanks, songs } from "./lsdjfs.js";
 
 const RD = 256, WR = 20, TRIES = 3, FS_HEAD = 0x8000;
 const hx = (v, digits = 1) => v.toString(16).toUpperCase().padStart(digits, "0");
@@ -36,38 +36,51 @@ export function crc16(bytes) {                           // XMODEM: 0x1021, star
 
 export class Link {
     constructor(send, timeoutMs = 2000) {
-        Object.assign(this, { send, timeoutMs, text: "", wake: null, queue: Promise.resolve() });
+        Object.assign(this, { send, timeoutMs, text: "", wake: null, queue: Promise.resolve(), stamp: 0 });
     }
 
     feed(bytes) {                                        // what arrived from the FM-1
         for (const b of bytes) this.text += String.fromCharCode(b);
+        this.stamp++;
         if (this.wake) this.wake();
     }
 
-    until(re) {                                          // the received text matches re, or the time is up
+    until(found) {                                       // found(text) gives something, or the time is up
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => { this.wake = null; reject(new Error("the FM-1 does not answer")); }, this.timeoutMs);
             this.wake = () => {
-                const m = re.exec(this.text);
+                const m = found(this.text);
                 if (m) { clearTimeout(timer); this.wake = null; resolve(m); }
             };
             this.wake();
         });
     }
 
-    async sync() {                                       // an empty line: the console answers with its prompt
+    /* an empty line: the console answers with its prompt. Then wait until nothing more arrives: the console also
+       prints a banner and a prompt when the port opens, and that must not be read as a reply */
+    async sync(quietMs = 40) {
         this.text = "";
         await this.send(ascii("\r"));
-        await this.until(/> $/);
+        await this.until(t => /> $/.test(t));
+        for (let seen = -1; seen !== this.stamp;) {
+            seen = this.stamp;
+            await new Promise(r => setTimeout(r, quietMs));
+        }
     }
 
-    /* one command -> what follows "ok" in its reply; "err ..." and silence throw. Commands run one at a time. */
+    /* one command -> what follows "ok" in its reply; "err ..." and silence throw. Commands run one at a time.
+       A reply counts only after the console's echo of this very line: text that was still on its way (the banner,
+       the reply to a command that had timed out) is not this command's answer. */
     cmd(line) {
         const run = async () => {
+            const echo = `ble ${line}\r\n`;
             this.text = "";
             await this.send(ascii(`ble ${line}\r`));
-            await this.until(/\r\n> $/);
-            const m = /(?:^|\n)(ok|err)(?: ([^\r\n]*))?\r\n> $/.exec(this.text);
+            const reply = await this.until(t => {
+                const i = t.lastIndexOf(echo);
+                return i >= 0 && /\r\n> $/.test(t.slice(i + echo.length - 2)) ? t.slice(i + echo.length) : null;
+            });
+            const m = /^(ok|err)(?: ([^\r\n]*))?\r\n> $/.exec(reply);
             if (!m) throw new Error("this FM-1's firmware has no transfer command: install the LSDj build that has it");
             if (m[1] === "err") throw new Error("FM-1: " + (m[2] || "error"));
             return m[2] || "";
@@ -177,6 +190,13 @@ async function writeChange(link, old, sav, progress = () => {}) {
     }
 }
 
+/* shown: the song as the page's list has it ({ name, version, blocks }). Between drawing the list and a click, LSDj
+   may have saved another song into the slot: then nothing is done */
+function checkShown(sav, slot, shown) {
+    if (shown && (nameText(sav, slot) !== shown.name || sav[VERSIONS + slot] !== shown.version || slotBlocks(sav, slot).length !== shown.blocks))
+        throw new Error("the list has changed on the FM-1: press Refresh and try again");
+}
+
 export function listSongs(link) {
     return whileHeld(link, false, async () => {
         const sav = await fsHeader(link);
@@ -184,9 +204,10 @@ export function listSongs(link) {
     });
 }
 
-export function downloadSong(link, slot, progress = () => {}) {
+export function downloadSong(link, slot, progress = () => {}, shown = null) {
     return whileHeld(link, false, async () => {
         const sav = await fsHeader(link), blocks = slotBlocks(sav, slot);
+        checkShown(sav, slot, shown);
         if (!blocks.length) throw new Error("the slot is empty");
         for (const b of blocks) sav.set(await link.read(BLOCKS + BLOCK * b, BLOCK), BLOCKS + BLOCK * b);
         const banks = songKitBanks(sav, slot), kits = [];
@@ -209,9 +230,10 @@ export function uploadSong(link, bytes, romCrcs, progress = () => {}) {
     });
 }
 
-export function deleteSong(link, slot) {
+export function deleteSong(link, slot, shown = null) {
     return whileHeld(link, true, async () => {
         const old = await fsHeader(link);
+        checkShown(old, slot, shown);
         await writeChange(link, old, removeSong(old, slot));
     });
 }
@@ -220,16 +242,27 @@ export function downloadSav(link, progress = () => {}) {
     return whileHeld(link, false, () => link.read(0, SAV_SIZE, progress));
 }
 
+/* the whole save. It cannot be replaced in one step: the names and the block table (0x8000..0x81FF) go last, so
+   until then LSDj's song list is the old one; a restore that stops leaves a mixed save, and says so */
 export function uploadSav(link, bytes, progress = () => {}) {
     if (bytes.length !== SAV_SIZE) throw new Error("not an LSDj save: it must be 131072 bytes");
     if (bytes[0x813E] !== 0x6A || bytes[0x813F] !== 0x6B) throw new Error("not an LSDj save: no file system mark");
     return whileHeld(link, true, async () => {
         const old = await link.read(0, SAV_SIZE, (a, n) => progress(a, 2 * n));
         const pieces = [];
-        for (let o = 0; o < SAV_SIZE; o += WR) if (!samePiece(old, bytes, o, Math.min(WR, SAV_SIZE - o))) pieces.push(o);
+        for (const [a, e] of [[0, FS_HEAD], [BLOCKS, SAV_SIZE], [FS_HEAD, BLOCKS]])
+            for (let o = a; o < e; o += WR) {
+                const n = Math.min(WR, e - o);
+                if (!samePiece(old, bytes, o, n)) pieces.push([o, n]);
+            }
         let i = 0;
-        for (const o of pieces) {
-            await link.write(o, bytes.subarray(o, Math.min(o + WR, SAV_SIZE)));
+        for (const [o, n] of pieces) {
+            try {
+                await link.write(o, bytes.subarray(o, o + n));
+            } catch (e) {
+                if (!i) throw e;                         // nothing was written yet
+                throw new Error(`the save on the FM-1 is incomplete: restore it again (${e.message})`);
+            }
             progress(SAV_SIZE + Math.round(SAV_SIZE * ++i / pieces.length), 2 * SAV_SIZE);
         }
     });
@@ -239,4 +272,41 @@ export async function bankCrcs(link, n) {
     const out = [];
     for (let b = 0; b < n; b++) out.push(await link.bankCrc(b));
     return out;
+}
+
+/* Web Serial: open the port and reach the console -> { link, info, close }. onLost: the FM-1 went away (not called
+   for our own close). A failed connect leaves the port closed: Web Serial refuses to close a port while a reader or
+   writer holds it, so they are let go first. */
+export async function openPort(port, onLost = () => {}, timeoutMs = 2000) {
+    await port.open({ baudRate: 115200 });
+    let reader = null, writer = null, closing = false;
+    const close = async () => {
+        if (closing) return;
+        closing = true;
+        for (const step of [() => reader && reader.cancel(), () => reader && reader.releaseLock(),
+                            () => writer && writer.releaseLock(), () => port.close()])
+            try { await step(); } catch (e) { /* already gone */ }
+    };
+    try {
+        await port.setSignals({ dataTerminalReady: true });   // the console answers only with DTR on
+        writer = port.writable.getWriter();
+        reader = port.readable.getReader();
+        const link = new Link(b => writer.write(b), timeoutMs);
+        (async () => {
+            for (;;) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                link.feed(value);
+            }
+        })().catch(() => {}).finally(async () => {
+            if (closing) return;
+            await close();
+            onLost();
+        });
+        await link.sync();
+        return { link, info: await link.info(), close };
+    } catch (e) {
+        await close();
+        throw e;
+    }
 }

@@ -38,6 +38,7 @@
     is not in the list until you save it in LSDj: PROJECT, LOAD/SAVE SONG, SAVE. After an upload LSDj starts
     again; load the song there: PROJECT, LOAD/SAVE SONG, LOAD.</p>
   <p class="small">Nothing is kept when the FM-1 is switched off yet: download what you want to keep.</p>
+  <p class="small">Use this page while LSDj is idle: not while it shows its own save or load in progress.</p>
   <p><button id="connect">Connect</button> <button id="refresh" class="quiet" hidden>Refresh</button></p>
   <div id="panel" hidden>
     <table>
@@ -107,14 +108,14 @@
             get.textContent = "Download";
             get.className = del.className = "quiet";
             get.onclick = () => job("Download " + (s.name || "song"), async () => {
-                const f = await downloadSong(uiLink, s.slot, bar);
+                const f = await downloadSong(uiLink, s.slot, bar, s);
                 saveFile(f.name, f.bytes);
                 return "Downloaded " + f.name;
             });
             del.textContent = "Delete";
             del.onclick = () => {
                 if (!confirm(`Delete ${s.name || "this song"} from the FM-1? LSDj starts again.`)) return;
-                job("Delete " + (s.name || "song"), async () => { await deleteSong(uiLink, s.slot); await draw(); });
+                job("Delete " + (s.name || "song"), async () => { await deleteSong(uiLink, s.slot, s); await draw(); });
             };
             act.append(get, del);
             $("list").append(tr);
@@ -154,41 +155,33 @@
 
     $("connect").onclick = async () => {
         if (!navigator.serial) return say("This browser has no Web Serial: use Chrome or Edge on a computer.", true);
-        let port;
+        if (uiBusy) return;
+        let port, conn = null;
         try {
             port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x1209, usbProductId: 0x0001 }] });
         } catch (e) {
             return say("No FM-1 chosen.", true);
         }
+        uiBusy = true;
+        buttons();
+        say("Connecting…");
         try {
-            await port.open({ baudRate: 115200 });
-            await port.setSignals({ dataTerminalReady: true });   // the console answers only with DTR on
-            const writer = port.writable.getWriter(), link = new Link(b => writer.write(b));
-            (async () => {
-                const reader = port.readable.getReader();
-                for (;;) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    link.feed(value);
-                }
-            })().catch(() => {}).finally(() => {
+            conn = await openPort(port, () => {       // (a failed connect leaves the port closed: Connect works again)
                 uiLink = null;
                 $("panel").hidden = $("refresh").hidden = true;
                 buttons();
                 say("The FM-1 was disconnected.", true);
             });
-            say("Connecting…");
-            await link.sync();
-            const info = await link.info();
-            uiCrcs = await bankCrcs(link, info.banks);
-            uiLink = link;
+            uiCrcs = await bankCrcs(conn.link, conn.info.banks);
+            uiLink = conn.link;
             $("panel").hidden = $("refresh").hidden = false;
-            buttons();
-            await job("Read the song list", draw);
         } catch (e) {
+            if (conn) await conn.close();
             say(plain(e), true);
-            await port.close().catch(() => {});
         }
+        uiBusy = false;
+        buttons();
+        if (uiLink) await job("Read the song list", draw);
     };
     $("refresh").onclick = () => job("Read the song list", draw);
     $("pick").onclick = () => $("files").click();
