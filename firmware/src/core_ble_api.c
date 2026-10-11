@@ -79,3 +79,11 @@ void core_con_puts(const char *s)
     (void)s;
 #endif
 }
+const char *core_con_line(void)
+{
+#if FELUCCA_CDC
+    return con.line;
+#else
+    return "";
+#endif
+}

@@ -10,6 +10,10 @@
  * changed line pairs to the screen (1.5x: 240 x 216). The emulator is reached only through function pointers set
  * by lsdj_start (gate 4, tools/check_ble_boot.py --lsdj, walks the direct calls from boot).
  *
+ * Songs move over the console: `ble WORDS` is a transfer command (lsdj_xfer.c; web/lsdj.html drives it). The host
+ * holds the Game Boy between two frames, reads or writes the save RAM, and lets it run again. Nothing is written
+ * to flash.
+ *
  * build/lsdj/lsdj_rom.h (tools/lsdj_rom.py): the owner's own LSDj ROM and the start-up save. A private build only:
  * LSDj's licence forbids distributing it, so that header, and every firmware built with it, stays in build/
  * (git-ignored) and is never published. */
@@ -19,6 +23,7 @@
 #endif
 #include "lsdj/lsdj_gb.c"
 #include "lsdj/lsdj_emu.c"
+#include "lsdj/lsdj_xfer.c"
 #include "lsdj_rom.h"
 
 #define RING_N 4096u                          /* stereo frames: 93 ms, 5.5 Game Boy frames */
@@ -37,6 +42,8 @@ static void (*volatile run)(void);            /* lsdj_step once started */
 static void (*volatile draw)(void);           /* lsdj_push once started */
 static uint32_t group, buf_i, splash_done;
 static uint32_t pad_map[8];                   /* button bit per Game Boy key (JOYPAD order), from KEYS */
+static lsdj_xfer_t xfer;                      /* the console's `ble ...` (lsdj_xfer.c): the page moves songs with it */
+static char xfer_out[LSDJ_XFER_OUT];
 
 /* the Game Boy keys on the panel's buttons (labels), in JOYPAD bit order: A, B, SELECT, START, RIGHT, LEFT, UP, DOWN.
  * OCT- / OCT+ stay the core's (held 5 s together: UBOOT) */
@@ -56,6 +63,7 @@ static struct {
     int32_t pot, knob;                        /* the MASTER pot: last reading, its filter state */
     volatile uint32_t master_q12;             /* its gain, applied by the audio ISR */
     uint8_t pad, pad_shown;                   /* the Game Boy keys of the last frame; those on the status line */
+    uint8_t held_shown;                       /* "USB" is on the status line */
     int error;
 } st;
 
@@ -120,20 +128,32 @@ static void status_line(void)
     core_text(0, (int)STATUS_Y, 112, CORE_FONT_S, b, CORE_MID, CORE_BG, 0);
 }
 
-/* right: the Game Boy keys held, or with none the speed options (FAST / SLOW ROM read, SKIP / FULL drawing) */
+/* right: USB while the host holds the Game Boy; else the Game Boy keys held, or with none the speed options (FAST /
+ * SLOW ROM read, SKIP / FULL drawing) */
 static void keys_line(void)
 {
     char b[24];
-    if (st.pad == 0xFFu) {
+    if (xfer.held) {
+        put_s(b, "USB");
+    } else if (st.pad == 0xFFu) {
         put_s(put_s(b, emu_mode & EMU_FAST_ROM ? "FAST " : "SLOW "), emu_mode & EMU_FRAME_SKIP ? "SKIP" : "FULL");
     } else {
         lsdj_pad_text(b, st.pad);
     }
     core_text(112, (int)STATUS_Y, 128, CORE_FONT_S, b, CORE_THEME, CORE_BG, 0);
     st.pad_shown = st.pad;
+    st.held_shown = xfer.held;
 }
 
 /* ---- running ---- */
+static void lsdj_restart(void)                 /* `ble go reset`: the Game Boy from its reset, the save RAM kept */
+{
+    emu_init(lsdj_rom, LSDJ_ROM_BANKS, sram, fb);     /* (it ran before: the cartridge is LSDj) */
+    emu.dirty = dirty;
+    memset(shown, 0xFF, sizeof shown);        /* every line pair is sent again */
+    memset(dirty, 1, sizeof dirty);
+}
+
 static void lsdj_step(void)
 {
     uint32_t t0, us;
@@ -152,8 +172,15 @@ static void lsdj_step(void)
         }
         status_line();
     }
-    if (st.pad != st.pad_shown)
+    lsdj_xfer_tick(&xfer, core_ms());
+    if (st.pad != st.pad_shown || xfer.held != st.held_shown)
         keys_line();
+    if (xfer.held)
+        return;                               /* the host reads or writes the save: no Game Boy frame */
+    if (xfer.reset_req) {                     /* the save changed under LSDj: it starts again and reads it */
+        xfer.reset_req = 0;
+        lsdj_restart();
+    }
     if (lsdj_ring_free(&ring) < LSDJ_FRAME_SAMPLES) {     /* ahead of the audio: wait for it */
         st.waits++;
         return;
@@ -237,6 +264,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     st.pad_shown = 0;                         /* draw the keys part once */
     draw = lsdj_push;
     run = lsdj_step;
+    xfer.started = 1;
 }
 
 /* ---- the core's hooks (named by the BLE test; see the top) ---- */
@@ -283,9 +311,31 @@ void ble_draw(void)
     core_text(0, 224, 240, CORE_FONT_S, "SELECT PLAY    START REC", CORE_MID, CORE_BG, 1);
 }
 
-void ble_status(void)                          /* the console's `ble` */
+static void lsdj_console(const char *args)     /* the words after `ble` on the console line: a transfer command */
+{
+    xfer.sram = sram;
+    xfer.size = LSDJ_SRAM;
+    xfer.rom = lsdj_rom;
+    xfer.nbanks = LSDJ_ROM_BANKS;
+    lsdj_xfer_cmd(&xfer, args, core_ms(), xfer_out);
+    core_con_puts(xfer_out);
+    core_con_puts("\r\n");
+}
+
+void ble_status(void)                          /* the console's `ble`: the status; `ble WORDS`: a transfer command */
 {
     char b[96], *p = b;
+    const char *a = core_con_line();          /* (console.c is not ours to change: gate 2b; it calls this for `ble`) */
+    while (*a == ' ')
+        a++;
+    if (a[0] == 'b' && a[1] == 'l' && a[2] == 'e')
+        a += 3;
+    while (*a == ' ')
+        a++;
+    if (*a) {
+        lsdj_console(a);
+        return;
+    }
     p = put_s(p, run ? "lsdj running " : "lsdj stopped ");
     p = put_s(p, "error ");
     if (st.error < 0) {

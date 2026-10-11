@@ -58,6 +58,8 @@ extern const struct {
 #endif
 /* console (CDC) */
 void core_con_puts(const char *s);
+/* the console line being carried out ("ble ...": the words after `ble` are the unit's); "" without a console */
+const char *core_con_line(void);
 /* libc.c (host tests: <string.h>) */
 #ifndef CORE_HOST_LIBC
 void *memset(void *d, int c, unsigned n);

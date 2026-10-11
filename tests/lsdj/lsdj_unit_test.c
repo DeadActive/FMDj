@@ -63,7 +63,15 @@ uint32_t core_notes(void) { return notes; }
 uint32_t core_button_bit(int label) { return 1u << label; }   /* (the stub: matrix id = label) */
 uint32_t core_play_bit(void) { return 1u << 10; }
 uint32_t core_rec_bit(void) { return 1u << 11; }
-void core_con_puts(const char *s) { fputs(s, stdout); }
+static char con_log[4096];                    /* what the unit printed on the console */
+static char con_line[64];                     /* the console line being carried out */
+void core_con_puts(const char *s)
+{
+    fputs(s, stdout);
+    if (strlen(con_log) + strlen(s) < sizeof con_log)
+        strcat(con_log, s);
+}
+const char *core_con_line(void) { return con_line; }
 
 #if __has_include("lsdj_rom.h")
 #include "lsdj/lsdj.c"
@@ -80,6 +88,52 @@ static void pass(void)                        /* one main-loop pass, then 20 ms 
     for (i = 0; i < 882u; i += 32u)           /* 20 ms at 44.1 kHz in blocks of 32 (as CTL) */
         lsdj_audio(out, 32);
     ms += 20;
+}
+
+static void console(const char *line)         /* as the core does: the line `ble ...`, then the unit's ble_status */
+{
+    strcpy(con_line, line);
+    con_log[0] = 0;
+    ble_status();
+    con_line[0] = 0;
+}
+
+static void test_console(void)                /* after PLAY: `ble ...` holds and restarts the Game Boy */
+{
+    static const uint8_t d[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+    char line[64];
+    uint32_t i, f, t;
+    console("ble");
+    CHECK(strstr(con_log, "lsdj running") && !strstr(con_log, "ok"));   /* bare: the status, as before */
+    console("  ble  ");
+    CHECK(strstr(con_log, "lsdj running") != 0);
+    console("ble info");
+    CHECK(!strcmp(con_log, "ok v1 started 1 held 0 banks 40\r\n"));
+    console("ble r 0 4");
+    CHECK(!strcmp(con_log, "err hold\r\n"));          /* not while the Game Boy runs */
+    console("ble hold");
+    t = texts;
+    f = st.frames;
+    for (i = 0; i < 20; i++)
+        pass();
+    CHECK(st.frames == f);                            /* held: no Game Boy frame */
+    CHECK(texts > t);                                 /* "USB" on the status line */
+    sprintf(line, "ble w 1FF00 DEADBEEF %04X", lsdj_crc16(d, 4));   /* a free block at the end of the save */
+    console(line);
+    CHECK(!strcmp(con_log, "ok\r\n") && !memcmp(sram + 0x1FF00, d, 4));
+    console("ble go reset");
+    for (i = 0; i < 100; i++)
+        pass();
+    CHECK(xfer.reset_req == 0 && st.frames > f && emu.errors == 0);   /* LSDj started again and runs */
+    CHECK(!memcmp(sram + 0x1FF00, d, 4));             /* the save RAM as it was written */
+    console("ble hold");
+    f = st.frames;
+    for (i = 0; i < 240; i++)                         /* 4.8 s without a command */
+        pass();
+    CHECK(xfer.held == 1 && st.frames == f);
+    for (i = 0; i < 20; i++)                          /* past 5 s: the host went away */
+        pass();
+    CHECK(xfer.held == 0 && st.frames > f);
 }
 
 int main(void)
@@ -185,6 +239,7 @@ int main(void)
             fclose(f);
         }
     }
+    test_console();
     ble_status();
     printf(fails ? "lsdj_unit_test: %d FAILED\n" : "lsdj_unit_test: all passed (%u blits)\n",
            fails ? (unsigned)fails : blits);
