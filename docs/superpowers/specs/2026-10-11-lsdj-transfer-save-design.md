@@ -66,8 +66,9 @@ Defaults chosen by Claude, to confirm at review:
 - **Flash**: the driver writes only inside Felucca's store. The user-sample area is 0xA0000..0xDBFFF: 240 KiB, 60
   sectors of 4 KiB. The core maps flash above 0x93000 as plain memory, so data there is read through a pointer.
 - **Hortator** takes a user-sample slot only with its `FSMP` header at 0xA0000, 0xB4000 or 0xC8000.
-- **The console** (`cdc_task`, USB serial, VID 0x1209 / PID 0x0001) is outside gate 2b by design. Its line is 64
-  characters; the USB input ring is 256 bytes.
+- **The console** (USB serial, VID 0x1209 / PID 0x0001): its handler is compiled into `fm1_main`, which gate 2b
+  compares, so `console.c` cannot change at all (measured 2026-10-12: a new word or a longer line fails the gate).
+  Its existing word `ble` already calls the unit (`ble_status`). Its line is 64 characters.
 - **This build**: image 562,632 B of 585,728; pool 295,988 B of 344,064; `.data` + `.bss` 14,816 B of 98,304. The
   low-level erase and program routines (`fl_erase4k_ram`, `fl_prog_ram`, RAM code) are in the build; Felucca's
   `st_erase` / `st_prog` are not.
@@ -76,9 +77,10 @@ Defaults chosen by Claude, to confirm at review:
 
 ### Console command
 
-`console.c` passes the rest of an `lsdj ...` line to the unit (`lsdj_console`, a new entry in `ble_core.h`). The
-console line grows to 160 characters. Every data line carries a CRC-16 (XMODEM) of its bytes; the host sends one
-line and waits for the reply.
+The command word on the wire is the console's existing `ble`: `ble WORDS` reaches the unit's `ble_status`, which
+reads the line through one new core accessor (`core_con_line`) and takes the words as a transfer command; a bare
+`ble` prints the status as before. `console.c` is not edited. The tables below write `lsdj` for these words.
+Every data line carries a CRC-16 (XMODEM) of its bytes; the host sends one line and waits for the reply.
 
 | Command | Does |
 |---|---|
@@ -86,7 +88,7 @@ line and waits for the reply.
 | `lsdj hold` | stops the Game Boy between two frames; audio silent; refused until PLAY has started LSDj |
 | `lsdj go` / `lsdj go reset` | runs again; `reset` restarts LSDj so it reads the changed file system |
 | `lsdj r ADDR LEN` | save RAM as hex, up to 256 bytes a reply |
-| `lsdj w ADDR HEX CRC` | writes save RAM, up to 64 bytes a line |
+| `lsdj w ADDR HEX CRC` | writes save RAM, up to 20 bytes a line (the 64-character console line) |
 | `lsdj b BANK OFF LEN` | ROM bank bytes through the bank table (flash kit banks included), up to 256 a reply |
 | `lsdj bc BANK` | the CRC-32 of the whole 16 KiB bank: the page finds a song's kits on the device by it |
 | `lsdj k BANK` + `lsdj kd OFF HEX CRC` + `lsdj kc CRC32` | a kit bank: into a 16 KiB RAM buffer, then written to flash and read back |
