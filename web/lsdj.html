@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LSDj songs</title>
+<style>
+  :root { --bg: #fff; --fg: #000; --dim: #777; --line: #ddd; --bad: #b00020; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --dim: #888; --line: #333; --bad: #ff6b81; }
+  }
+  :root[data-theme="dark"] { --bg: #000; --fg: #fff; --dim: #888; --line: #333; --bad: #ff6b81; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 24px; }
+  p { margin: 0 0 16px; }
+  button { font: inherit; background: var(--fg); color: var(--bg); border: 0; padding: 8px 20px; cursor: pointer; }
+  button.quiet { background: none; color: var(--fg); padding: 2px 8px; text-decoration: underline; }
+  button:disabled { opacity: .3; cursor: default; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+  th { font-weight: 400; color: var(--dim); font-size: 13px; }
+  td.name { font-family: ui-monospace, Menlo, monospace; white-space: pre; }
+  td.act { text-align: right; white-space: nowrap; padding-right: 0; }
+  #drop { border: 1px dashed var(--dim); color: var(--dim); padding: 24px 16px; text-align: center; }
+  #drop.over { border-color: var(--fg); color: var(--fg); }
+  #status { margin-top: 16px; min-height: 1.6em; }
+  #status.bad { color: var(--bad); }
+  .small { color: var(--dim); font-size: 13px; }
+  progress { width: 100%; height: 4px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LSDj on the FM-1: songs</h1>
+  <p class="small">Chrome or Edge on a computer, the FM-1 on USB, LSDj started (PLAY). The song you are editing
+    is not in the list until you save it in LSDj: PROJECT, LOAD/SAVE SONG, SAVE. After an upload LSDj starts
+    again; load the song there: PROJECT, LOAD/SAVE SONG, LOAD.</p>
+  <p class="small">Nothing is kept when the FM-1 is switched off yet: download what you want to keep.</p>
+  <p><button id="connect">Connect</button> <button id="refresh" class="quiet" hidden>Refresh</button></p>
+  <div id="panel" hidden>
+    <table>
+      <thead><tr><th>Slot</th><th>Name</th><th>Version</th><th>Blocks</th><th></th></tr></thead>
+      <tbody id="list"></tbody>
+    </table>
+    <p class="small" id="room"></p>
+    <p id="drop">Drop .lsdprj or .lsdsng files here, or <button id="pick" class="quiet">choose files</button></p>
+    <input type="file" id="files" accept=".lsdprj,.lsdsng" multiple hidden>
+    <p><button id="savget">Download the whole save (.sav)</button>
+       <button id="savput" class="quiet">Restore a save…</button></p>
+    <input type="file" id="savfile" accept=".sav" hidden>
+  </div>
+  <div id="status" role="status"></div>
+  <progress id="bar" value="0" max="1" hidden></progress>
+</main>
+<script>
+/*LIB*/
+(function () {
+    const $ = id => document.getElementById(id);
+    let uiLink = null, uiCrcs = [], uiBusy = false;
+
+    const say = (text, bad) => { $("status").textContent = text; $("status").className = bad ? "bad" : ""; };
+    const bar = (done, total) => { $("bar").hidden = false; $("bar").max = total; $("bar").value = done; };
+    const plain = e => (/not started/.test(e.message) ? "LSDj is not running: press PLAY on the FM-1, then Refresh" : e.message);
+    function buttons() {
+        for (const b of document.querySelectorAll("#panel button, #refresh")) b.disabled = uiBusy || !uiLink;
+        $("connect").disabled = uiBusy || !!uiLink;
+    }
+    function saveFile(name, bytes) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([bytes]));
+        a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }
+
+    /* one thing at a time; the buttons are off while it runs; what went wrong is said in a sentence */
+    async function job(what, fn) {
+        if (uiBusy || !uiLink) return;
+        uiBusy = true;
+        buttons();
+        say(what + "…");
+        try {
+            say((await fn()) || what + ": done");
+        } catch (e) {
+            say(what + ": " + plain(e), true);
+        } finally {
+            uiBusy = false;
+            $("bar").hidden = true;
+            buttons();
+        }
+    }
+
+    async function draw() {
+        const { list, free } = await listSongs(uiLink);
+        $("list").textContent = "";
+        for (const s of list) {
+            const tr = document.createElement("tr");
+            const cell = (text, cls) => { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; tr.append(td); return td; };
+            cell(s.slot.toString(16).toUpperCase().padStart(2, "0"));
+            cell(s.name || "(no name)", "name");
+            cell(s.version.toString(16).toUpperCase().padStart(2, "0"));
+            cell(String(s.blocks));
+            const act = cell("", "act");
+            const get = document.createElement("button"), del = document.createElement("button");
+            get.textContent = "Download";
+            get.className = del.className = "quiet";
+            get.onclick = () => job("Download " + (s.name || "song"), async () => {
+                const f = await downloadSong(uiLink, s.slot, bar);
+                saveFile(f.name, f.bytes);
+                return "Downloaded " + f.name;
+            });
+            del.textContent = "Delete";
+            del.onclick = () => {
+                if (!confirm(`Delete ${s.name || "this song"} from the FM-1? LSDj starts again.`)) return;
+                job("Delete " + (s.name || "song"), async () => { await deleteSong(uiLink, s.slot); await draw(); });
+            };
+            act.append(get, del);
+            $("list").append(tr);
+        }
+        if (!list.length) {
+            const tr = document.createElement("tr"), td = document.createElement("td");
+            td.colSpan = 5;
+            td.className = "small";
+            td.textContent = "No saved songs.";
+            tr.append(td);
+            $("list").append(tr);
+        }
+        $("room").textContent = `${list.length} of 32 songs, ${free} of 191 blocks free.`;
+        buttons();
+    }
+
+    async function upload(files) {
+        if (!files.length) return;
+        await job("Upload", async () => {
+            const done = [];
+            try {
+                for (const f of files) {
+                    say(`Upload ${f.name}…`);
+                    try {
+                        await uploadSong(uiLink, new Uint8Array(await f.arrayBuffer()), uiCrcs, bar);
+                    } catch (e) {
+                        throw new Error(`${f.name}: ${plain(e)}` + (done.length ? ` (uploaded before it: ${done.join(", ")})` : ""));
+                    }
+                    done.push(f.name);
+                }
+            } finally {
+                await draw().catch(() => {});
+            }
+            return `Uploaded ${done.join(", ")}. Load it in LSDj: PROJECT, LOAD/SAVE SONG, LOAD.`;
+        });
+    }
+
+    $("connect").onclick = async () => {
+        if (!navigator.serial) return say("This browser has no Web Serial: use Chrome or Edge on a computer.", true);
+        let port;
+        try {
+            port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x1209, usbProductId: 0x0001 }] });
+        } catch (e) {
+            return say("No FM-1 chosen.", true);
+        }
+        try {
+            await port.open({ baudRate: 115200 });
+            await port.setSignals({ dataTerminalReady: true });   // the console answers only with DTR on
+            const writer = port.writable.getWriter(), link = new Link(b => writer.write(b));
+            (async () => {
+                const reader = port.readable.getReader();
+                for (;;) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    link.feed(value);
+                }
+            })().catch(() => {}).finally(() => {
+                uiLink = null;
+                $("panel").hidden = $("refresh").hidden = true;
+                buttons();
+                say("The FM-1 was disconnected.", true);
+            });
+            say("Connecting…");
+            await link.sync();
+            const info = await link.info();
+            uiCrcs = await bankCrcs(link, info.banks);
+            uiLink = link;
+            $("panel").hidden = $("refresh").hidden = false;
+            buttons();
+            await job("Read the song list", draw);
+        } catch (e) {
+            say(plain(e), true);
+            await port.close().catch(() => {});
+        }
+    };
+    $("refresh").onclick = () => job("Read the song list", draw);
+    $("pick").onclick = () => $("files").click();
+    $("files").onchange = () => { upload([...$("files").files]); $("files").value = ""; };
+    $("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"); };
+    $("drop").ondragleave = () => $("drop").classList.remove("over");
+    $("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); upload([...e.dataTransfer.files]); };
+    $("savget").onclick = () => job("Download the save", async () => {
+        const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+        saveFile(`lsdj-fm1-${stamp}.sav`, await downloadSav(uiLink, bar));
+        return "Downloaded the save.";
+    });
+    $("savput").onclick = () => $("savfile").click();
+    $("savfile").onchange = () => {
+        const f = $("savfile").files[0];
+        $("savfile").value = "";
+        if (!f || !confirm(`Replace everything in LSDj on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
+        job("Restore the save", async () => { await uploadSav(uiLink, new Uint8Array(await f.arrayBuffer()), bar); await draw(); return "Restored " + f.name + ". LSDj started again."; });
+    };
+    buttons();
+})();
+</script>
+</body>
+</html>

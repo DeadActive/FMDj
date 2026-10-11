@@ -8,6 +8,7 @@
                               JieLi SDK files under Apache-2.0, see LICENSING.md)
   webapp/installer/index.html index_pkg.html, self-contained (fm1pkg.js, fm1ota.js, metadata inlined)
   webapp/editor/index.html    editor.html (+ fukiai.ttf, FUKIAI-LICENSE.txt)
+  webapp/lsdj/index.html      lsdj.html, self-contained (lsdjfs.js, lsdjlink.js inlined): the LSDj build's songs
   src/                        not touched
 
   web/make_site.py build/felucca-X.Y.fwsc X.Y OUT_DIR
@@ -78,6 +79,13 @@ def main(pkg, version, out):
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt", "fm1backup.js"):
         if (HERE / f).exists():
             shutil.copy(HERE / f, ed / f)
+    page = (HERE / "lsdj.html").read_text(encoding="utf-8")      # the LSDj build's song page (the USB console)
+    if page.count("/*LIB*/") != 1:
+        raise SystemExit("lsdj.html must contain /*LIB*/ once; update make_site.py")
+    songs_lib = strip_module((HERE / "lsdjfs.js").read_text(encoding="utf-8")) + "\n" + \
+        strip_module((HERE / "lsdjlink.js").read_text(encoding="utf-8"))
+    (out / "webapp" / "lsdj").mkdir(parents=True, exist_ok=True)
+    (out / "webapp" / "lsdj" / "index.html").write_text(page.replace("/*LIB*/", songs_lib), encoding="utf-8")
     (out / "index.html").write_text(
         '<!doctype html><meta charset="utf-8"><title>Felucca</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
