@@ -37,7 +37,8 @@
   <p class="small">Chrome or Edge on a computer, the FM-1 on USB, LSDj started (PLAY). The song you are editing
     is not in the list until you save it in LSDj: PROJECT, LOAD/SAVE SONG, SAVE. After an upload LSDj starts
     again; load the song there: PROJECT, LOAD/SAVE SONG, LOAD.</p>
-  <p class="small">Nothing is kept when the FM-1 is switched off yet: download what you want to keep.</p>
+  <p class="small">The page saves to the FM-1's flash after every change it makes. What you edit in LSDj is kept
+    when you hold REC for a second (the status line says SAVED), or with "Save now" here.</p>
   <p class="small">Use this page while LSDj is idle: not while it shows its own save or load in progress.</p>
   <p><button id="connect">Connect</button> <button id="refresh" class="quiet" hidden>Refresh</button></p>
   <div id="panel" hidden>
@@ -51,6 +52,14 @@
     <p><button id="savget">Download the whole save (.sav)</button>
        <button id="savput" class="quiet">Restore a save…</button></p>
     <input type="file" id="savfile" accept=".sav" hidden>
+    <div id="flashpart" hidden>
+      <p class="small" id="flashline"></p>
+      <p><button id="savenow">Save now</button> <button id="shrink" class="quiet" hidden>Give unused kit banks back to the save</button></p>
+      <table>
+        <thead><tr><th>Kit bank</th><th>Kit</th><th></th></tr></thead>
+        <tbody id="kits"></tbody>
+      </table>
+    </div>
   </div>
   <div id="status" role="status"></div>
   <progress id="bar" value="0" max="1" hidden></progress>
@@ -59,7 +68,7 @@
 /*LIB*/
 (function () {
     const $ = id => document.getElementById(id);
-    let uiLink = null, uiCrcs = [], uiBusy = false;
+    let uiLink = null, uiBusy = false;
 
     const say = (text, bad) => { $("status").textContent = text; $("status").className = bad ? "bad" : ""; };
     const bar = (done, total) => { $("bar").hidden = false; $("bar").max = total; $("bar").value = done; };
@@ -93,6 +102,53 @@
         }
     }
 
+    const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`; };
+    /* before the number of kit banks changes, the whole save goes to the computer: that step is not safe against a
+       power cut */
+    const backup = bytes => saveFile(`lsdj-fm1-backup-${stamp()}.sav`, bytes);
+    const kept = (what, r) => what + (r && r.unsaved ? ` It is NOT saved on the FM-1: ${r.unsaved}.` : "");
+
+    async function drawFlash() {
+        const info = await uiLink.info();
+        $("flashpart").hidden = !info.flash;
+        if (!info.flash) return;
+        const kib = n => Math.ceil(n / 1024);
+        $("flashline").textContent = (info.saved ? `Flash: the save takes ${kib(info.used)} of ${kib(info.cap)} KiB.` : `Flash: nothing saved yet (room for ${kib(info.cap)} KiB).`) +
+            ` Kit banks: ${info.kits} of ${info.nkit}; each one takes 8 KiB from the save's room.`;
+        const kits = await listKits(uiLink);
+        $("kits").textContent = "";
+        for (const k of kits) {
+            const tr = document.createElement("tr");
+            const cell = (text, cls) => { const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls; tr.append(td); return td; };
+            cell(String(k.j + 1));
+            cell(k.free ? "(free)" : k.name || "(no name)", k.free ? "small" : "name");
+            const act = cell("", "act");
+            if (!k.free) {
+                const del = document.createElement("button");
+                del.className = "quiet";
+                del.textContent = "Remove";
+                del.onclick = () => {
+                    if (!confirm(`Remove the kit ${k.name || k.j + 1} from the FM-1? Songs that use it lose its sounds. LSDj starts again.`)) return;
+                    job("Remove the kit", async () => { await removeKit(uiLink, k.j); await draw(); });
+                };
+                act.append(del);
+            }
+            $("kits").append(tr);
+        }
+        if (!kits.length) {
+            const tr = document.createElement("tr"), td = document.createElement("td");
+            td.colSpan = 3;
+            td.className = "small";
+            td.textContent = "No kit banks yet: one is made when a song brings a kit the FM-1 does not have.";
+            tr.append(td);
+            $("kits").append(tr);
+        }
+        let need = kits.length;
+        while (need && kits[need - 1].free) need--;
+        $("shrink").hidden = need === kits.length;
+        $("shrink").onclick = () => job("Give kit banks back", async () => { await setKitBanks(uiLink, need, backup, bar); await draw(); });
+    }
+
     async function draw() {
         const { list, free } = await listSongs(uiLink);
         $("list").textContent = "";
@@ -115,7 +171,7 @@
             del.textContent = "Delete";
             del.onclick = () => {
                 if (!confirm(`Delete ${s.name || "this song"} from the FM-1? LSDj starts again.`)) return;
-                job("Delete " + (s.name || "song"), async () => { await deleteSong(uiLink, s.slot, s); await draw(); });
+                job("Delete " + (s.name || "song"), async () => { const r = await deleteSong(uiLink, s.slot, s); await draw(); return kept("Deleted.", r); });
             };
             act.append(get, del);
             $("list").append(tr);
@@ -129,6 +185,7 @@
             $("list").append(tr);
         }
         $("room").textContent = `${list.length} of 32 songs, ${free} of 191 blocks free.`;
+        await drawFlash();
         buttons();
     }
 
@@ -136,11 +193,12 @@
         if (!files.length) return;
         await job("Upload", async () => {
             const done = [];
+            let last = null;
             try {
                 for (const f of files) {
                     say(`Upload ${f.name}…`);
                     try {
-                        await uploadSong(uiLink, new Uint8Array(await f.arrayBuffer()), uiCrcs, bar);
+                        last = await uploadSong(uiLink, new Uint8Array(await f.arrayBuffer()), bar, { backup });
                     } catch (e) {
                         throw new Error(`${f.name}: ${plain(e)}` + (done.length ? ` (uploaded before it: ${done.join(", ")})` : ""));
                     }
@@ -149,7 +207,7 @@
             } finally {
                 await draw().catch(() => {});
             }
-            return `Uploaded ${done.join(", ")}. Load it in LSDj: PROJECT, LOAD/SAVE SONG, LOAD.`;
+            return kept(`Uploaded ${done.join(", ")}. Load it in LSDj: PROJECT, LOAD/SAVE SONG, LOAD.`, last);
         });
     }
 
@@ -172,7 +230,6 @@
                 buttons();
                 say("The FM-1 was disconnected.", true);
             });
-            uiCrcs = await bankCrcs(conn.link, conn.info.banks);
             uiLink = conn.link;
             $("panel").hidden = $("refresh").hidden = false;
         } catch (e) {
@@ -190,16 +247,16 @@
     $("drop").ondragleave = () => $("drop").classList.remove("over");
     $("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); upload([...e.dataTransfer.files]); };
     $("savget").onclick = () => job("Download the save", async () => {
-        const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-        saveFile(`lsdj-fm1-${stamp}.sav`, await downloadSav(uiLink, bar));
+        saveFile(`lsdj-fm1-${stamp()}.sav`, await downloadSav(uiLink, bar));
         return "Downloaded the save.";
     });
     $("savput").onclick = () => $("savfile").click();
+    $("savenow").onclick = () => job("Save to flash", async () => { await saveToFlash(uiLink); await drawFlash(); return "Saved on the FM-1."; });
     $("savfile").onchange = () => {
         const f = $("savfile").files[0];
         $("savfile").value = "";
         if (!f || !confirm(`Replace everything in LSDj on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
-        job("Restore the save", async () => { await uploadSav(uiLink, new Uint8Array(await f.arrayBuffer()), bar); await draw(); return "Restored " + f.name + ". LSDj started again."; });
+        job("Restore the save", async () => { const r = await uploadSav(uiLink, new Uint8Array(await f.arrayBuffer()), bar); await draw(); return kept("Restored " + f.name + ". LSDj started again.", r); });
     };
     buttons();
 })();

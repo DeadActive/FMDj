@@ -20,7 +20,9 @@ Shortcuts for LSDj's screens:
 Editing as in LSDj: hold A (the top F) and turn SELECT to change a value by one, ALGORITHM by an octave or 0x10.
 
 The FM-1's own: MASTER is the volume; FX switches drawing every frame / every second frame, LFO the fast / slow
-ROM read (both shown on the status line); OCT- and OCT+ held together for 5 s enter UBOOT. REC, GLO, EDIT and ENV
-do nothing.
+ROM read (both shown on the status line); OCT- and OCT+ held together for 5 s enter UBOOT.
+
+**REC held for a second saves to the FM-1's flash** (the status line: SAVING, then SAVED and the size; SAVE FULL if
+it does not fit). PLAY after power-on loads that save. GLO, EDIT and ENV do nothing.
 
 A knob turned fast is followed at up to 30 presses a second; no more than 16 steps wait.

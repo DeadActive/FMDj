@@ -45,9 +45,9 @@ export class Link {
         if (this.wake) this.wake();
     }
 
-    until(found) {                                       // found(text) gives something, or the time is up
+    until(found, ms = this.timeoutMs) {                  // found(text) gives something, or the time is up
         return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => { this.wake = null; reject(new Error("the FM-1 does not answer")); }, this.timeoutMs);
+            const timer = setTimeout(() => { this.wake = null; reject(new Error("the FM-1 does not answer")); }, ms);
             this.wake = () => {
                 const m = found(this.text);
                 if (m) { clearTimeout(timer); this.wake = null; resolve(m); }
@@ -71,7 +71,7 @@ export class Link {
     /* one command -> what follows "ok" in its reply; "err ..." and silence throw. Commands run one at a time.
        A reply counts only after the console's echo of this very line: text that was still on its way (the banner,
        the reply to a command that had timed out) is not this command's answer. */
-    cmd(line) {
+    cmd(line, ms = this.timeoutMs) {
         const run = async () => {
             const echo = `ble ${line}\r\n`;
             this.text = "";
@@ -79,7 +79,7 @@ export class Link {
             const reply = await this.until(t => {
                 const i = t.lastIndexOf(echo);
                 return i >= 0 && /\r\n> $/.test(t.slice(i + echo.length - 2)) ? t.slice(i + echo.length) : null;
-            });
+            }, ms);
             const m = /^(ok|err)(?: ([^\r\n]*))?\r\n> $/.exec(reply);
             if (!m) throw new Error("this FM-1's firmware has no transfer command: install the LSDj build that has it");
             if (m[1] === "err") throw new Error("FM-1: " + (m[2] || "error"));
@@ -90,10 +90,13 @@ export class Link {
         return p;
     }
 
+    /* flash: the store's side (protocol 2); an FM-1 with the firmware before saving answers protocol 1 */
     async info() {
-        const m = /^v([0-9A-F]+) started ([01]) held ([01]) banks ([0-9A-F]+)$/.exec(await this.cmd("info"));
+        const m = /^v([0-9A-F]+) started ([01]) held ([01]) banks ([0-9A-F]+)(?: kits ([0-9A-F]+) ([0-9A-F]+) cap ([0-9A-F]+) used ([0-9A-F]+) saved ([01]))?$/.exec(await this.cmd("info"));
         if (!m) throw new Error("FM-1: an info reply this page does not know");
-        return { version: parseInt(m[1], 16), started: m[2] === "1", held: m[3] === "1", banks: parseInt(m[4], 16) };
+        const h = t => parseInt(t || "0", 16);
+        return { version: h(m[1]), started: m[2] === "1", held: m[3] === "1", banks: h(m[4]), kits: h(m[5]), nkit: h(m[6]),
+                 cap: h(m[7]), used: h(m[8]), saved: m[9] === "1", flash: h(m[1]) >= 2 && h(m[7]) > 0 };
     }
 
     hold() { return this.cmd("hold"); }
@@ -126,17 +129,49 @@ export class Link {
         return out;
     }
 
-    async write(addr, bytes, progress = () => {}) {      // the save RAM (held); a piece is sent again on a bad CRC
-        for (let o = 0; o < bytes.length; o += WR) {
-            const d = bytes.subarray(o, o + WR), line = `w ${hx(addr + o)} ${hexBytes(d)} ${hx(crc16(d), 4)}`;
-            for (let t = 0; ; t++) {
-                try { await this.cmd(line); break; } catch (e) {
-                    if (t + 1 === TRIES || !/FM-1: (crc|hex)|does not answer/.test(e.message)) throw e;
-                    if (/does not answer/.test(e.message)) await this.sync().catch(() => {});
-                }
+    async piece(line) {                                  // a line that carries data: sent again on a bad CRC
+        for (let t = 0; ; t++) {
+            try { await this.cmd(line); return; } catch (e) {
+                if (t + 1 === TRIES || !/FM-1: (crc|hex)|does not answer/.test(e.message)) throw e;
+                if (/does not answer/.test(e.message)) await this.sync().catch(() => {});
             }
+        }
+    }
+
+    async write(addr, bytes, progress = () => {}) {      // the save RAM (held)
+        for (let o = 0; o < bytes.length; o += WR) {
+            const d = bytes.subarray(o, o + WR);
+            await this.piece(`w ${hx(addr + o)} ${hexBytes(d)} ${hx(crc16(d), 4)}`);
             progress(Math.min(o + WR, bytes.length), bytes.length);
         }
+    }
+
+    /* a flash request (save, kc, kx, kits): the FM-1 queues it and its Game Boy step carries it out, which can take
+       seconds with nothing else answered; `st` then gives the result. full: what "it does not fit" means here. */
+    async flash(line, full = "it does not fit in the FM-1's flash") {
+        await this.cmd(line);
+        for (let n = 0; n < 500; n++) {
+            const r = await this.cmd("st", Math.max(this.timeoutMs, 30000));
+            if (r !== "busy") {
+                const code = parseInt(r, 16);
+                if (!code) return;
+                throw new Error(code === 1 ? full : code === 2 ? "the FM-1's flash did not take it" : "the FM-1 has no such kit bank");
+            }
+            await new Promise(res => setTimeout(res, 20));
+        }
+        throw new Error("the FM-1 is still busy");
+    }
+
+    async kitBankNo(j) { return parseInt(await this.cmd("kb " + hx(j)), 16); }   // the ROM bank flash kit bank j shows as
+
+    async writeKit(j, bytes, progress = () => {}) {      // a 16 KiB kit bank into flash kit bank j (held)
+        await this.cmd("k " + hx(j));
+        for (let o = 0; o < BANK; o += WR) {
+            const d = bytes.subarray(o, Math.min(o + WR, BANK));
+            if (!d.every(v => v === 0xFF)) await this.piece(`kd ${hx(o)} ${hexBytes(d)} ${hx(crc16(d), 4)}`);   // (the buffer starts as FF)
+            progress(Math.min(o + WR, BANK), BANK);
+        }
+        await this.flash("kc " + hx(crc32(bytes), 8));
     }
 
     async readBank(bank, progress = () => {}) {          // a whole 16 KiB ROM bank
@@ -216,17 +251,77 @@ export function downloadSong(link, slot, progress = () => {}, shown = null) {
     });
 }
 
-/* bankCrcs: the CRC-32 of each ROM bank of this FM-1 (bankCrcs() below), to find the song's kits there */
-export function uploadSong(link, bytes, romCrcs, progress = () => {}) {
+const SAVE_FULL = "the save does not fit in the FM-1's flash (delete songs or remove a kit)";
+
+/* after a change in the save RAM: into flash, so it survives power-off. -> null, or why it is not saved */
+async function persist(link, inf) {
+    if (!inf.flash) return "this FM-1's firmware cannot save to flash: it is lost at power-off";
+    try {
+        await link.flash("save", SAVE_FULL);
+        return null;
+    } catch (e) {
+        return e.message;
+    }
+}
+
+export function saveToFlash(link) { return link.flash("save", SAVE_FULL); }
+
+let freeCrc = 0;                                         // of a bank of 0xFF: a free kit bank
+const isKitBank = b => b >= 8 && (b <= 26 || b >= 32);
+
+async function deviceCrcs(link, inf) {                   // the CRC-32 of every ROM bank as the Game Boy sees them
+    if (!link.crcs || link.crcs.length !== inf.banks) link.crcs = await bankCrcs(link, inf.banks);
+    return link.crcs;
+}
+
+/* the ROM bank each of a song file's kits has on this FM-1; a kit it lacks goes into a free flash kit bank, or one
+   more bank (then the save goes to the computer first: opts.backup(bytes)). Nothing is written unless all fit. */
+async function placeKits(link, inf, kits, opts, progress) {
+    const crcs = await deviceCrcs(link, inf), want = kits.map(k => crc32(k));
+    const banks = want.map(c => crcs.findIndex((v, b) => v === c && isKitBank(b)));
+    const missing = banks.map((b, i) => (b < 0 ? i : -1)).filter(i => i >= 0);
+    if (!missing.length) return banks;
+    const count = `${missing.length} kit${missing.length > 1 ? "s" : ""} that this FM-1 does not have`;
+    if (!inf.flash || !inf.nkit) throw new Error(`this song brings ${count}, and it has no kit banks in flash for them`);
+    if (!freeCrc) freeCrc = crc32(new Uint8Array(BANK).fill(0xFF));
+    const shownAs = [], free = [];
+    for (let j = 0; j < inf.kits; j++) {
+        shownAs.push(await link.kitBankNo(j));
+        if (crcs[shownAs[j]] === freeCrc) free.push(j);
+    }
+    const more = missing.length - free.length;
+    if (more > 0) {
+        if (inf.kits + more > inf.nkit)
+            throw new Error(`this song brings ${count}, and there is no room for another kit bank (${inf.kits} of ${inf.nkit} are in use): remove a kit first`);
+        if (!opts.backup)
+            throw new Error(`this song brings ${count}; that takes ${more} more kit bank${more > 1 ? "s" : ""} in flash, and the save must go to the computer first`);
+        await opts.backup(await link.read(0, SAV_SIZE, progress));
+        await link.flash("kits " + hx(inf.kits + more), "there is no room for another kit bank: the save would no longer fit (delete songs first)");
+        for (let j = inf.kits; j < inf.kits + more; j++) {
+            shownAs.push(await link.kitBankNo(j));
+            crcs[shownAs[j]] = freeCrc;
+            free.push(j);
+        }
+    }
+    for (const [n, i] of missing.entries()) {
+        await link.writeKit(free[n], kits[i], progress);
+        banks[i] = shownAs[free[n]];
+        crcs[banks[i]] = want[i];
+    }
+    return banks;
+}
+
+/* a song file onto the FM-1 -> { slot, unsaved }: unsaved is null, or why the change is not in flash.
+   opts.backup(bytes): called with the whole save before the number of kit banks changes. */
+export function uploadSong(link, bytes, progress = () => {}, opts = {}) {
     const file = parseSongFile(bytes);                   // a damaged file stops here: nothing is sent
-    const kitBanks = file.kits.map(k => romCrcs.indexOf(crc32(k)));
-    const missing = kitBanks.filter(b => b < 0).length;
-    if (missing)
-        throw new Error(`this song brings ${missing} kit${missing > 1 ? "s" : ""} that this FM-1 does not have (custom kits arrive with saving to flash)`);
     return whileHeld(link, true, async () => {
-        const old = await fsHeader(link), { sav, slot } = importSong(old, file, kitBanks);
+        const inf = await link.info(), old = await fsHeader(link);
+        importSong(old, { ...file, kits: [] });          // no slot, no room, a damaged song: before any kit is stored
+        const kitBanks = file.kits.length ? await placeKits(link, inf, file.kits, opts, progress) : [];
+        const { sav, slot } = importSong(old, file, kitBanks);
         await writeChange(link, old, sav, progress);
-        return slot;
+        return { slot, unsaved: await persist(link, inf) };
     });
 }
 
@@ -235,6 +330,7 @@ export function deleteSong(link, slot, shown = null) {
         const old = await fsHeader(link);
         checkShown(old, slot, shown);
         await writeChange(link, old, removeSong(old, slot));
+        return { unsaved: await persist(link, await link.info()) };
     });
 }
 
@@ -265,6 +361,38 @@ export function uploadSav(link, bytes, progress = () => {}) {
             }
             progress(SAV_SIZE + Math.round(SAV_SIZE * ++i / pieces.length), 2 * SAV_SIZE);
         }
+        link.crcs = null;
+        return { unsaved: await persist(link, await link.info()) };
+    });
+}
+
+/* the flash kit banks: [{ j, bank (the ROM bank it shows as), name, free }] */
+export async function listKits(link) {
+    const inf = await link.info(), out = [];
+    for (let j = 0; j < inf.kits; j++) {
+        const bank = await link.kitBankNo(j), head = await link.data(`b ${hx(bank)} 0 2`, 2);
+        const free = head[0] === 0xFF && head[1] === 0xFF;
+        let name = "";
+        if (!free) for (const c of await link.data(`b ${hx(bank)} 52 6`, 6)) name += c >= 0x20 && c < 0x7F ? String.fromCharCode(c) : " ";
+        out.push({ j, bank, name: name.trim(), free });
+    }
+    return out;
+}
+
+export function removeKit(link, j) {                     // (songs that use it lose its sounds)
+    return whileHeld(link, true, async () => {
+        await link.flash("kx " + hx(j));
+        link.crcs = null;
+    });
+}
+
+/* k kit banks from now on. The save moves in flash, which is not safe against a power cut: it goes to the computer
+   first (backup(bytes)). */
+export function setKitBanks(link, k, backup, progress = () => {}) {
+    return whileHeld(link, true, async () => {
+        await backup(await link.read(0, SAV_SIZE, progress));
+        await link.flash("kits " + hx(k), "the save would not fit with that many kit banks (delete songs first)");
+        link.crcs = null;
     });
 }
 

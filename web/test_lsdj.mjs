@@ -152,14 +152,71 @@ const kitBankData = n => { const b = new Uint8Array(fs.BANK); b[0] = 0x60; b[1] 
 class Sim {
     constructor(sram, banks) {                          // banks: the stored bytes of each (the rest reads FF)
         Object.assign(this, { sram, banks, started: false, held: false, resets: 0, line: "", log: [], link: null,
-                              mute: false, corrupt: 0, failWrite: -1, failFrom: Infinity, writes: 0, hasLsdj: true, onHold: null, latency: 0 });
+                              mute: false, corrupt: 0, failWrite: -1, failFrom: Infinity, writes: 0, hasLsdj: true, onHold: null, latency: 0,
+                              // the flash store: K kit banks of nkit, shown as ROM banks kitBank[]; a queued request
+                              kits: 0, nkit: 0, kitBank: [], used: 0, saved: false, kit: new Uint8Array(0x4000), kitOpen: 0,
+                              req: 0, reqArg: 0, res: 0, manual: false, slow: 0, v1: false, flashImage: null, saves: 0, fullOver: Infinity });
+    }
+    cap() { return (30 - 2 * this.kits) * 4096 - 32; }
+    runReq() {                                          // as lsdj.c's step: the queued request, carried out
+        const [req, j] = [this.req, this.reqArg];
+        this.req = 0; this.res = 0;
+        if (req === 1) {                                // save: the "packed size" here is the count of bytes not 0
+            const n = this.sram.reduce((a, v) => a + (v ? 1 : 0), 0);
+            if (n > Math.min(this.cap(), this.fullOver)) this.res = 1;
+            else { this.used = n; this.saved = true; this.flashImage = this.sram.slice(); this.saves++; }
+        } else if (req === 2) this.banks[this.kitBank[j]] = this.kit.slice();
+        else if (req === 3) this.banks[this.kitBank[j]] = new Uint8Array(0);
+        else if (req === 4) {
+            const was = this.kits; this.kits = j;
+            if (this.used > this.cap()) { this.kits = was; this.res = 1; }
+            else for (let k = was; k < j; k++) this.banks[this.kitBank[k]] = new Uint8Array(0);
+        }
     }
     bankByte(b, i) { return i < this.banks[b].length ? this.banks[b][i] : 0xFF; }
     data(d) { return `ok ${ln.hexBytes(d)} ${ln.crc16(d).toString(16).toUpperCase().padStart(4, "0")}`; }
     exec(text) {
         const w = text.trim().split(/ +/), num = s => (/^[0-9A-Fa-f]{1,8}$/.test(s || "") ? parseInt(s, 16) : NaN);
         const [c, ...a] = w;
-        if (c === "info" && !a.length) return `ok v1 started ${+this.started} held ${+this.held} banks ${this.banks.length.toString(16).toUpperCase().padStart(2, "0")}`;
+        const H = (v, n) => v.toString(16).toUpperCase().padStart(n, "0"), one = a.length === 1 && !isNaN(num(a[0]));
+        if (c === "info" && !a.length) return `ok v${this.v1 ? 1 : 2} started ${+this.started} held ${+this.held} banks ${H(this.banks.length, 2)}` +
+            (this.v1 ? "" : ` kits ${H(this.kits, 2)} ${H(this.nkit, 2)} cap ${H(this.capFixed ?? this.cap(), 5)} used ${H(this.used, 5)} saved ${+this.saved}`);
+        if (this.v1 && ["st", "save", "kb", "k", "kx", "kits", "kd", "kc"].includes(c)) return "err ?";
+        if (c === "st" && !a.length) return this.req ? "ok busy" : "ok " + H(this.res, 1);
+        if (c === "save" && !a.length) {
+            if (!this.started) return "err not started";
+            if (this.req) return "err busy";
+            this.req = 1; this.reqArg = 0; return "ok";
+        }
+        if (c === "kb" && one) return num(a[0]) >= this.nkit ? "err range" : "ok " + H(this.kitBank[num(a[0])], 2);
+        if ((c === "k" || c === "kx" || c === "kits") && one) {
+            const n = num(a[0]);
+            if (!this.held) return "err hold";
+            if (c === "kits" ? n > this.nkit : n >= this.kits) return "err range";
+            if (this.req) return "err busy";
+            if (c === "k") { this.kit.fill(0xFF); this.kitOpen = n + 1; }
+            else { this.req = c === "kx" ? 3 : 4; this.reqArg = n; }
+            return "ok";
+        }
+        if (c === "kd" && a.length >= 1 && !isNaN(num(a[0]))) {
+            const h = a[1] || "";
+            if (/[^0-9A-Fa-f]/.test(h) || h.length % 2) return "err hex";
+            if (h.length > 40) return "err range";
+            if (!h.length || a.length !== 3 || isNaN(num(a[2]))) return "err ?";
+            const d = ln.unhex(h), at = num(a[0]);
+            if (!this.held) return "err hold";
+            if (!this.kitOpen) return "err kit";
+            if (at + d.length > 0x4000) return "err range";
+            if (num(a[2]) !== ln.crc16(d)) return "err crc";
+            this.kit.set(d, at); return "ok";
+        }
+        if (c === "kc" && one) {
+            if (!this.held) return "err hold";
+            if (!this.kitOpen) return "err kit";
+            if (this.req) return "err busy";
+            if (num(a[0]) !== fs.crc32(this.kit)) return "err crc";
+            this.req = 2; this.reqArg = this.kitOpen - 1; this.kitOpen = 0; return "ok";
+        }
         if (c === "hold" && !a.length) {
             if (!this.started) return "err not started";
             this.held = true; this.onHold?.(); return "ok";
@@ -206,6 +263,7 @@ class Sim {
             let reply = !l ? "" : !/^ble( |$)/.test(l) ? "? (help)\r\n" :           // an older firmware: `ble` is only the status
                         this.hasLsdj && l.trim() !== "ble" ? this.exec(l.slice(3)) + "\r\n" : "lsdj running error 0 emu_errors 0\r\n";
             if (this.corrupt > 0 && /^ok [0-9A-F]{2}/.test(reply)) { this.corrupt--; reply = reply.replace(/^ok ../, "ok ZZ"); }
+            if (this.req && !this.manual) { if (this.slow > 0 && /^ble st/.test(l)) this.slow--; else if (!this.slow) this.runReq(); }   // (the step runs right after the console)
             outp += "\r\n" + reply + "> ";
         }
         if (this.mute) return Promise.resolve();
@@ -247,13 +305,16 @@ const rejects = async (p, re) => { try { await p; } catch (e) { return re.test(e
     else {
         const sram = Uint8Array.from({ length: 0x20000 }, (_, i) => (i * 7 + (i >> 8)) & 0xFF);
         const sim = new Sim(sram, [0, 1, 2].map(b => Uint8Array.from({ length: 100 * (b + 1) }, (_, j) => (b * 31 + j) & 0xFF)));
+        Object.assign(sim, { manual: true, nkit: 3, kitBank: [34, 35, 36], capFixed: 0x1DFE0 });
         let bad = 0, n = 0, cmd = null;
         for (const l of readFileSync(V, "utf8").split("\n")) {
             if (l === "! started") sim.started = true;
+            else if (l.startsWith("! flash ")) { const [k, cap, used, saved] = l.slice(8).split(" ").map(x => parseInt(x, 16)); Object.assign(sim, { kits: k, capFixed: cap, used, saved: !!saved }); }
+            else if (l.startsWith("! done ")) { sim.req = 0; sim.res = parseInt(l.slice(7), 16); }
             else if (l.startsWith("> ")) cmd = l.slice(2);
             else if (l.startsWith("< ")) { n++; if (sim.exec(cmd) !== l.slice(2)) { bad++; console.log(`   ${cmd} -> ${sim.exec(cmd)}, the firmware: ${l.slice(2)}`); } }
         }
-        ok(n > 40 && bad === 0, `the simulated FM-1 answers ${n} commands as the firmware does`);
+        ok(n > 90 && bad === 0, `the simulated FM-1 answers ${n} commands as the firmware does`);
     }
 }
 
@@ -264,7 +325,7 @@ await (async () => {
     let sim = simWith(base);
     await sim.link.sync();
     const info = await sim.link.info();
-    ok(info.version === 1 && info.started && !info.held && info.banks === 2, "info");
+    ok(info.version === 2 && info.started && !info.held && info.banks === 2 && info.nkit === 0, "info");
     ok(await rejects(sim.link.read(0, 4), /hold/), "a read without hold is refused by the device");
     await sim.link.hold();
     ok(eq(await sim.link.read(0x8000, 1000), base.subarray(0x8000, 0x8000 + 1000)), "1000 bytes read in pieces of 256");
@@ -308,7 +369,7 @@ await (async () => {
     const upFile = fs.buildSongFile(src, 0, [kit, plain]);
     const crcs = await ln.bankCrcs(sim.link, 14);
     ok(crcs.length === 14 && crcs[8] === fs.crc32(kit), "the bank CRCs of the device");
-    const slot = await ln.uploadSong(sim.link, upFile, crcs);
+    const { slot } = await ln.uploadSong(sim.link, upFile);
     const expect = fs.importSong(base, fs.parseSongFile(upFile), [8, 9]).sav;
     ok(slot === 0 && eq(sim.sram.subarray(0x8000), expect.subarray(0x8000)) && eq(sim.sram.subarray(0, 0x8000), base.subarray(0, 0x8000)), "an upload: the device's file system is the imported one, the edited song untouched");
     ok(sim.resets === 1 && !sim.held, "... and LSDj starts again");
@@ -316,20 +377,20 @@ await (async () => {
 
     /* Review Focus 1: a failing write leaves the block table alone */
     sim = withKits(); sim.failFrom = 5;
-    ok(await rejects(ln.uploadSong(sim.link, upFile, crcs), /crc/) && eq(sim.sram.subarray(fs.ACTIVE, fs.BLOCKS), base.subarray(fs.ACTIVE, fs.BLOCKS)) && !sim.held && sim.resets === 0, "a failing write leaves the block table alone; no restart");
+    ok(await rejects(ln.uploadSong(sim.link, upFile), /crc/) && eq(sim.sram.subarray(fs.ACTIVE, fs.BLOCKS), base.subarray(fs.ACTIVE, fs.BLOCKS)) && !sim.held && sim.resets === 0, "a failing write leaves the block table alone; no restart");
 
     /* Review Focus 3: a damaged file sends nothing */
     sim = withKits();
-    ok(await rejects(Promise.resolve().then(() => ln.uploadSong(sim.link, base.subarray(0, 0x20000), crcs)), /song/) && sim.writes === 0 && !sim.held, "a damaged file sends nothing (a .sav dropped as a song)");
-    ok(await rejects(Promise.resolve().then(() => ln.uploadSong(sim.link, new Uint8Array(100), crcs)), /too short/), "... nor a short file");
+    ok(await rejects(Promise.resolve().then(() => ln.uploadSong(sim.link, base.subarray(0, 0x20000))), /song/) && sim.writes === 0 && !sim.held, "a damaged file sends nothing (a .sav dropped as a song)");
+    ok(await rejects(Promise.resolve().then(() => ln.uploadSong(sim.link, new Uint8Array(100))), /too short/), "... nor a short file");
     const alien = fs.buildSongFile(src, 0, [kitBankData(99), plain]);
-    ok(await rejects(Promise.resolve().then(() => ln.uploadSong(sim.link, alien, crcs)), /1 kit/) && sim.writes === 0, "a kit the FM-1 does not have: refused with the count, nothing sent");
+    ok(await rejects(Promise.resolve().then(() => ln.uploadSong(sim.link, alien)), /1 kit/) && sim.writes === 0 && !sim.held, "a kit the FM-1 does not have and no kit bank for it: refused with the count, nothing written");
 
     /* Review Focus 4: an upload reads the header again */
     sim = withKits();
     await ln.listSongs(sim.link);
     sim.onHold = () => { sim.onHold = null; addPacked(sim.sram, 0, testSong(6), "LATER", 1); };   // saved in LSDj meanwhile
-    ok((await ln.uploadSong(sim.link, upFile, crcs)) === 1 && fs.songs(sim.sram).map(s => s.name).join() === "LATER,UP,DEVSONG" && eq(fs.unpackSong(sim.sram, 0), testSong(6)), "an upload reads the header again: a song saved meanwhile is kept");
+    ok((await ln.uploadSong(sim.link, upFile)).slot === 1 && fs.songs(sim.sram).map(s => s.name).join() === "LATER,UP,DEVSONG" && eq(fs.unpackSong(sim.sram, 0), testSong(6)), "an upload reads the header again: a song saved meanwhile is kept");
 
     sim = withKits();
     await ln.deleteSong(sim.link, 2);
@@ -391,6 +452,74 @@ await (async () => {
     ok(eq(sim.sram, other) && sim.log.some(inHead) && sim.log.findIndex(inHead) > sim.log.findLastIndex(a => !inHead(a)), "a restore writes the names and the block table after everything else");
     sim = withKits(); sim.failFrom = 3;
     ok(await rejects(ln.uploadSav(sim.link, other), /incomplete: restore it again/) && !sim.held && sim.resets === 0 && eq(sim.sram.subarray(0x8000, fs.BLOCKS), base.subarray(0x8000, fs.BLOCKS)), "a restore that stops says the save is incomplete; the names and block table are still the old ones");
+
+    /* ---- saving to flash and kit banks (protocol 2) ---- */
+    const flashSim = (k = 0) => {                       // 40 ROM banks: kits in 8 and 9, the free kit banks 34..36
+        const s = simWith(base, Array.from({ length: 40 }, (_, b) => (b === 8 ? [...kit] : b === 9 ? [...plain] : b >= 34 ? [] : [b + 1])));
+        Object.assign(s, { nkit: 3, kitBank: [34, 35, 36], kits: k });
+        return s;
+    };
+    sim = flashSim();
+    const inf = await sim.link.info();
+    ok(inf.version === 2 && inf.kits === 0 && inf.nkit === 3 && inf.cap === 30 * 4096 - 32 && inf.used === 0 && !inf.saved && inf.flash, "info: the flash store");
+    await ln.saveToFlash(sim.link);
+    ok(sim.saved && sim.saves === 1 && eq(sim.flashImage, sim.sram) && !sim.held, "save now");
+    sim.slow = 3;
+    await ln.saveToFlash(sim.link);
+    ok(sim.saves === 2, "a save that takes a while is waited for");
+    sim.fullOver = 10;
+    ok(await rejects(ln.saveToFlash(sim.link), /does not fit/) && sim.saves === 2, "a save that does not fit is said so");
+
+    /* every change the page makes is saved to flash */
+    sim = flashSim();
+    const up2 = await ln.uploadSong(sim.link, upFile);
+    ok(up2.slot === 0 && up2.unsaved === null && sim.saves === 1 && eq(sim.flashImage, sim.sram) && sim.resets === 1, "an upload is saved to flash");
+    await ln.deleteSong(sim.link, 0);
+    ok(sim.saves === 2 && fs.songs(sim.flashImage).length === 1, "a delete is saved to flash");
+    await ln.uploadSav(sim.link, other);
+    ok(sim.saves === 3 && eq(sim.flashImage, other), "a restore is saved to flash");
+    sim = flashSim(); sim.fullOver = 10;
+    const up3 = await ln.uploadSong(sim.link, upFile);
+    ok(up3.slot === 0 && /does not fit/.test(up3.unsaved) && fs.songs(sim.sram).length === 2 && sim.resets === 1 && !sim.saved, "an upload that cannot be saved is still there, and said to be unsaved");
+
+    /* a song's kits travel into flash kit banks */
+    const kitA = kitBankData(0x41), kitB = kitBankData(0x42);   // not on the device
+    kitA.set([0x4B, 0x49, 0x54, 0x2D, 0x41, 0x20], 0x52);       // its name: "KIT-A "
+    const custom = fs.buildSongFile(src, 0, [kitA, plain]);     // the song's kits 3 and 5: kitA, and one the ROM has
+    sim = flashSim(1);                                          // one flash kit bank, free
+    const up4 = await ln.uploadSong(sim.link, custom);
+    ok(eq(sim.banks[34], kitA) && sim.kits === 1, "a kit the FM-1 lacks goes into a free flash kit bank");
+    const got4 = fs.unpackSong(sim.sram, up4.slot);
+    ok(got4[0x3082] === (0x80 | fs.bankKit(34)) && got4[0x3089] === fs.bankKit(9), "... and the song names it there");
+    ok(sim.saves === 1 && sim.resets === 1 && !sim.held && up4.unsaved === null, "... saved, and LSDj started again");
+    const again4 = await ln.uploadSong(sim.link, custom);
+    ok(again4.slot !== up4.slot && sim.kits === 1 && eq(sim.banks[34], kitA), "the same kit again is found there, not stored twice");
+    const kl = await ln.listKits(sim.link);
+    ok(kl.length === 1 && kl[0].j === 0 && kl[0].bank === 34 && kl[0].name === "KIT-A" && !kl[0].free, "the kit list: the bank and the kit's name");
+
+    sim = flashSim(0);                                          // no kit bank yet: one more, after a backup
+    ok(await rejects(ln.uploadSong(sim.link, custom), /kit bank/) && sim.kits === 0 && fs.songs(sim.sram).length === 1 && !sim.held && sim.resets === 0, "no free kit bank and no backup taken: refused, nothing changed");
+    let backup = null;
+    const up5 = await ln.uploadSong(sim.link, custom, undefined, { backup: b => { backup = b; } });
+    ok(backup && backup.length === fs.SAV_SIZE && eq(backup, base) && sim.kits === 1 && eq(sim.banks[34], kitA) && up5.unsaved === null, "one more kit bank: the save goes to the computer first");
+    sim = flashSim(3); sim.banks[34] = kitBankData(1); sim.banks[35] = kitBankData(2); sim.banks[36] = kitBankData(3);
+    ok(await rejects(ln.uploadSong(sim.link, custom, undefined, { backup: () => {} }), /no room for another kit/) && fs.songs(sim.sram).length === 1, "every kit bank taken: refused");
+    const twoKits = fs.buildSongFile(src, 0, [kitA, kitB]);
+    sim = flashSim(1);
+    ok(await rejects(ln.uploadSong(sim.link, twoKits), /kit bank/) && sim.banks[34].length === 0, "two kits, one free bank, no backup: nothing is written");
+
+    sim = flashSim(2); sim.banks[34] = kitA.slice();
+    await ln.removeKit(sim.link, 0);
+    ok(sim.banks[34].length === 0 && sim.resets === 1 && (await ln.listKits(sim.link))[0].free, "a kit is removed: its bank is free");
+    backup = null;
+    await ln.setKitBanks(sim.link, 0, b => { backup = b; });
+    ok(sim.kits === 0 && backup && backup.length === fs.SAV_SIZE && sim.resets === 2, "unused kit banks go back to the save, after a backup");
+
+    /* an FM-1 with the firmware before saving (protocol 1): everything but flash still works */
+    sim = withKits(); sim.v1 = true;
+    const inf1 = await sim.link.info();
+    const up6 = await ln.uploadSong(sim.link, upFile);
+    ok(inf1.version === 1 && !inf1.flash && up6.slot === 0 && /cannot save/.test(up6.unsaved) && sim.saves === 0 && sim.resets === 1, "the firmware before saving: uploads work, and unsaved is said");
 })();
 
 /* ---- the page, inlined as web/make_site.py does: one script that compiles ---- */
