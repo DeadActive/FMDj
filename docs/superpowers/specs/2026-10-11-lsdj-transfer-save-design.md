@@ -37,7 +37,8 @@ Not in this version:
 
 Defaults chosen by Claude, to confirm at review:
 
-- the save key is **SEQ held 1 s** (ENV and SEQ are the only free panel buttons);
+- the save key is **REC held 1 s** (first SEQ; SEQ became SELECT in the owner's controls of 2026-10-12, see
+  `docs/lsdj/CONTROLS.md`; plan B, `docs/superpowers/plans/2026-10-12-lsdj-save-b.md`, lists the other changes to Part 2);
 - the layout below (kit banks at the top of the area, two save slots sharing the rest).
 
 ## Hard rules
