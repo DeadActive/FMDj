@@ -278,6 +278,7 @@ run "BLE central state machine, UUID match, monitor text" sh -c 'cc -Wall -O1 -o
 run "BLE stored RF calibration (config store)" sh -c 'cc -Wall -O1 -o build/tests/ble_vm_test tests/ble/ble_vm_test.c && build/tests/ble_vm_test'
 run "BLE OS layer (host back end)" sh -c 'cc -Wall -O1 -Wno-deprecated-declarations -Ifirmware/src/ble -o build/tests/ble_os_test tests/ble/ble_os_test.c && build/tests/ble_os_test'
 run "LSDj unit: ROM banks, keys, screen spans, 1.5x scaler, audio ring, save unpacker" sh -c 'cc -Wall -O1 -Ifirmware/src -o build/tests/lsdj_gb_test tests/lsdj/lsdj_gb_test.c && build/tests/lsdj_gb_test'
+run "LSDj transfer commands (the console's ble WORDS): hold, save RAM read / write, ROM banks" sh -c 'cc -Wall -Wno-unused-function -O1 -Ifirmware/src -o build/tests/lsdj_xfer_test tests/lsdj/lsdj_xfer_test.c && build/tests/lsdj_xfer_test'
 # (with the owner's ROM only: build/lsdj/lsdj_rom.h from FELUCCA_LSDJ=1 LSDJ_ROM=... ./build.sh; never committed)
 run "LSDj sound: minigb_apu zombie mode (NRx2 writes while a channel plays) as the hardware" sh -c 'cc -O1 -w -Ifirmware/src/lsdj -o build/tests/lsdj_apu_test tests/lsdj/lsdj_apu_test.c && build/tests/lsdj_apu_test'
 run "LSDj speed options: the same sound and save in every mode (skipped without LSDJ_ROM)" python3 tests/lsdj/lsdj_modes_test.py
