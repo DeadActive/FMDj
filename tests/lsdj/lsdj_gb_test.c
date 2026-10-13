@@ -71,12 +71,15 @@ static void test_knobs(void)
     lsdj_knobs_add(&k, LSDJ_AX_UD, -1);
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_UP && lsdj_knobs_frame(&k) == 0);
     /* the screen shortcut: SELECT one frame before the direction (LSDj needs that) and one after */
-    lsdj_knobs_add(&k, LSDJ_AX_NAV_LR, 1);
-    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    lsdj_knobs_add(&k, LSDJ_AX_NAV_LR, 1);                            /* SELECT down two frames before the direction: */
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == JOYPAD_SELECT);   /* (LSDj's PROJECT screen) */
+    CHECK(lsdj_knobs_busy(&k));
     CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_RIGHT));
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
+    CHECK(!lsdj_knobs_busy(&k));
     lsdj_knobs_add(&k, LSDJ_AX_NAV_UD, -1);
-    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    CHECK(lsdj_knobs_busy(&k));
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == JOYPAD_SELECT);
     CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_UP));
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
     lsdj_knobs_add(&k, LSDJ_AX_LR, 3);                                /* turned back before it was sent: nothing */
@@ -90,9 +93,68 @@ static void test_knobs(void)
     lsdj_knobs_add(&k, LSDJ_AX_LR, 2);
     lsdj_knobs_add(&k, LSDJ_AX_NAV_UD, 1);
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0);
-    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_DOWN));
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_DOWN));
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0 && lsdj_knobs_frame(&k) == 0);
+}
+
+/* LSDj's screen map as the host walk found it (lsdj_gb.c). Which of the top three UP lands on is LSDj's choice in
+ * places, so the way is tried against every choice: it must arrive, in at most 9 presses, never with LEFT on SONG
+ * (LIVE mode) or LEFT on PROJECT, and it goes sideways in the top row only right above the column it came up from. */
+static int map_walk(uint32_t row, uint32_t col, uint32_t here, uint32_t page, uint32_t left)
+{
+    static const uint8_t UNDER[3] = {0, 2, 4};
+    uint8_t k = lsdj_page_key(row, col, here, page);
+    uint32_t c, ok = 1;
+    if (!k)
+        return here == page;
+    if (!left || (k == JOYPAD_LEFT && (row == 1u ? col == 0u : here == LSDJ_PG_PROJECT)) || (row == 2u && k != JOYPAD_UP && k != JOYPAD_DOWN))
+        return 0;
+    if (row == 1u && (k == JOYPAD_LEFT || k == JOYPAD_RIGHT)) {
+        col = k == JOYPAD_RIGHT ? (col < 4u ? col + 1u : 4u) : col - 1u;
+        return map_walk(1, col, col, page, left - 1u);
+    }
+    if (row == 0u && (k == JOYPAD_LEFT || k == JOYPAD_RIGHT)) {   /* sideways in the top row: only above its column */
+        if (page < LSDJ_PG_PROJECT || page > LSDJ_PG_WAVE || col != UNDER[page - LSDJ_PG_PROJECT])
+            return 0;
+        here = k == JOYPAD_RIGHT ? (here < LSDJ_PG_WAVE ? here + 1u : here) : here - 1u;
+        return map_walk(0, col, here, page, left - 1u);
+    }
+    if (k == JOYPAD_UP && row == 2u)
+        return map_walk(1, col, col, page, left - 1u);
+    if (k == JOYPAD_DOWN && row == 1u)
+        return map_walk(2, col, LSDJ_PG_GROOVE, page, left - 1u);
+    if (k == JOYPAD_DOWN && row == 0u)                 /* off the top row: the column it left */
+        return map_walk(1, col, col, page, left - 1u);
+    if (k == JOYPAD_UP && row == 1u) {                 /* onto the top row: any of its three */
+        for (c = LSDJ_PG_PROJECT; c <= LSDJ_PG_WAVE; c++)
+            ok &= (uint32_t)map_walk(0, col, c, page, left - 1u);
+        return (int)ok;
+    }
+    return 0;                                          /* (UP on the top row, DOWN below: no such press) */
+}
+
+static void test_pages(void)
+{
+    uint32_t c, p, h;
+    for (p = 0; p < LSDJ_NPG; p++)
+        for (c = 0; c < 5u; c++) {
+            CHECK(map_walk(1, c, c, p, 9));                           /* from every screen of the middle row, */
+            CHECK(map_walk(2, c, LSDJ_PG_GROOVE, p, 9));              /* from GROOVE below any column, */
+            for (h = LSDJ_PG_PROJECT; h <= LSDJ_PG_WAVE; h++)
+                CHECK(map_walk(0, c, h, p, 9));                       /* from each of the top three, above any column */
+        }
+    CHECK(lsdj_page_key(1, 0, LSDJ_PG_SONG, LSDJ_PG_SONG) == 0 && lsdj_page_key(1, 2, LSDJ_PG_PHRASE, LSDJ_PG_SONG) == JOYPAD_LEFT);
+    CHECK(lsdj_page_key(1, 0, LSDJ_PG_SONG, LSDJ_PG_WAVE) == JOYPAD_RIGHT);    /* WAVE: up from TABLE, not sideways from PROJECT */
+    CHECK(lsdj_page_key(1, 4, LSDJ_PG_TABLE, LSDJ_PG_WAVE) == JOYPAD_UP && lsdj_page_key(1, 3, LSDJ_PG_INSTR, LSDJ_PG_SYNTH) == JOYPAD_LEFT);
+    CHECK(lsdj_page_key(0, 0, LSDJ_PG_PROJECT, LSDJ_PG_SYNTH) == JOYPAD_DOWN); /* (LSDj takes no RIGHT on the PROJECT above SONG) */
+    CHECK(lsdj_page_key(0, 3, LSDJ_PG_WAVE, LSDJ_PG_WAVE) == 0 && lsdj_page_key(0, 3, LSDJ_PG_WAVE, LSDJ_PG_SYNTH) == JOYPAD_DOWN);
+    CHECK(lsdj_page_key(0, 2, LSDJ_PG_WAVE, LSDJ_PG_SYNTH) == JOYPAD_LEFT);    /* up from PHRASE and LSDj landed on WAVE: sideways */
+    CHECK(lsdj_page_key(1, 0, LSDJ_NPG, LSDJ_PG_SONG) == 0);          /* LIVE mode in SONG's place: nothing to press */
+    CHECK(lsdj_page_key(0, 4, LSDJ_NPG, LSDJ_PG_WAVE) == 0);          /* a top screen it does not know: it does not guess */
+    CHECK(lsdj_page_key(3, 0, LSDJ_NPG, LSDJ_PG_SONG) == 0 && lsdj_page_key(1, 5, LSDJ_NPG, LSDJ_PG_SONG) == 0 &&
+          lsdj_page_key(1, 0, LSDJ_PG_SONG, LSDJ_NPG) == 0);          /* not LSDj's values: no key */
 }
 
 static void test_pad_text(void)
@@ -245,6 +307,7 @@ int main(void)
     test_rom();
     test_pad();
     test_knobs();
+    test_pages();
     test_pad_text();
     test_line_and_span();
     test_scale();

@@ -29,6 +29,9 @@ export const GB = {
   [`btn:${B.SEL}`]: '\u25B2', [`btn:${B.SAVE}`]: '\u25BC', [`btn:${B.REC}`]: 'SAVE', [`btn:${B['OCT+']}`]: 'SEL+\u25B2',
   [`btn:${B['OCT-']}`]: 'SEL+\u25BC', [`btn:${B.FX}`]: 'DRAW', [`btn:${B.LFO}`]: 'ROM', [`btn:${B.EDIT}`]: 'WAIT',
   [`btn:${B.ENV}`]: 'SOUND', 'key:24': 'A', 'key:26': 'B',
+  // LSDj's screens on the low keys, laid out as its own map (firmware/src/lsdj/lsdj.c PAGE_KEY)
+  'key:0': 'SONG', 'key:2': 'CHAIN', 'key:4': 'PHRASE', 'key:6': 'INSTR', 'key:7': 'TABLE',
+  'key:1': 'PROJECT', 'key:5': 'SYNTH', 'key:8': 'WAVE', 'key:9': 'GROOVE',
   'enc:0': '\u25C0 \u25B6', 'enc:1': '\u25B2 \u25BC', 'enc:2': 'SEL + \u25C0 \u25B6', 'enc:master': 'VOLUME',
 };
 
@@ -40,9 +43,14 @@ export const KEYBOARD = {
   KeyX: { kind: 'key', id: 24 }, KeyZ: { kind: 'key', id: 26 },
   Enter: { kind: 'btn', id: B.PLAY }, ShiftLeft: { kind: 'btn', id: B.SEQ }, ShiftRight: { kind: 'btn', id: B.SEQ },
   KeyS: { kind: 'btn', id: B.REC },
+  // LSDj's screens: 1 .. 5 the middle row, 6 PROJECT, 7 SYNTH, 8 WAVE, 9 GROOVE
+  Digit1: { kind: 'key', id: 0 }, Digit2: { kind: 'key', id: 2 }, Digit3: { kind: 'key', id: 4 }, Digit4: { kind: 'key', id: 6 },
+  Digit5: { kind: 'key', id: 7 }, Digit6: { kind: 'key', id: 1 }, Digit7: { kind: 'key', id: 5 }, Digit8: { kind: 'key', id: 8 },
+  Digit9: { kind: 'key', id: 9 },
 };
 const SHOWN = { ArrowLeft: '\u2190', ArrowRight: '\u2192', ArrowUp: '\u2191', ArrowDown: '\u2193', KeyX: 'X', KeyZ: 'Z',
-  Enter: 'Enter', ShiftLeft: 'Shift', KeyS: 'S' };
+  Enter: 'Enter', ShiftLeft: 'Shift', KeyS: 'S', Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5', Digit6: '6',
+  Digit7: '7', Digit8: '8', Digit9: '9' };
 export const keyHint = Object.fromEntries(Object.entries(KEYBOARD).filter(([code]) => SHOWN[code])
   .map(([code, c]) => [`${c.kind}:${c.id}`, SHOWN[code]]));
 

@@ -81,7 +81,7 @@ function build() {
   });
   KEYS.forEach(k => {
     const el = document.createElement('div'), ctl = `key:${k.n}`;
-    el.className = `key${k.black ? ' black' : ''}${GB[ctl] ? ' ab' : ' idle'}`;
+    el.className = `key${k.black ? ' black' : ''}${!GB[ctl] ? ' idle' : GB[ctl].length === 1 ? ' ab' : ' page'}`;
     el.dataset.ctl = ctl;
     el.setAttribute('role', 'button');
     el.setAttribute('aria-label', GB[ctl] ? `${k.name}: ${GB[ctl]}` : k.name);

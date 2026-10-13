@@ -27,6 +27,7 @@
  *   key KK [N]         ok | err not started     Game Boy keys KK (1 = down: 01 A, 02 B, 04 SELECT, 08 START, 10 RIGHT,
  *                                               20 LEFT, 40 UP, 80 DOWN) held for the next N frames (1..FF; 4)
  *   mode [M]           ok M                     the emulator's options (lsdj_emu.c emu_mode, 0..F); M sets them
+ *   page N             ok                       go to LSDj's screen N (lsdj_gb.c LSDJ_PG_*: 0 SONG .. 8 GROOVE)
  * Numbers are hex, 1..8 digits, no prefix. CRC16: XMODEM (0x1021, start 0) of the data bytes, 4 digits.
  * Errors: err ? (not a command), err hold, err range, err hex, err crc, err busy (a request waits), err kit (no
  * `k` before). */
@@ -55,6 +56,7 @@ typedef struct {
                                                * one's result (LSDJ_RES_*) */
     uint8_t kit_open;                         /* `k J` began a bank: J + 1 */
     uint8_t key, key_n;                       /* `key`: these keys down for key_n more frames (lsdj.c counts down) */
+    uint8_t page;                             /* `page N`: N + 1 until lsdj.c has taken it */
     uint8_t mode, mode_set;                   /* the emulator's options as lsdj.c gave them; `mode M` changed them */
 } lsdj_xfer_t;
 
@@ -313,6 +315,15 @@ static void lsdj_xfer_cmd(lsdj_xfer_t *x, const char *p, uint32_t now_ms, char *
         }
         x->key = (uint8_t)a;
         x->key_n = (uint8_t)n;
+        xf_puts(out, "ok");
+    } else if (xf_word(&p, "page")) {
+        if (!xf_num(&p, &a) || !xf_end(p))
+            goto unknown;
+        if (a >= LSDJ_NPG) {
+            xf_puts(out, "err range");
+            return;
+        }
+        x->page = (uint8_t)(a + 1u);
         xf_puts(out, "ok");
     } else if (xf_word(&p, "mode")) {
         if (!xf_end(p)) {
