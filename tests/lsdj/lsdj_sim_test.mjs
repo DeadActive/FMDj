@@ -1,0 +1,116 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// LSDj fork: 2026 DEADACTIVE
+// The LSDj simulator's core (web/sim/lsdjsim.c as wasm) through the page's engine (web/sim/engine.js), with a small
+// Game Boy program of our own as the cartridge (no LSDj data): PLAY starts it, it runs at the Game Boy's speed with
+// sound and a picture, REC held saves to the flash the page keeps, and without a cartridge PLAY starts nothing.
+// Needs build/web/sim/lsdjsim.wasm (web/sim/build.sh) and build/web/lsdj_emu.wasm (web/lsdj_wasm.sh); skipped
+// without them.   node tests/lsdj/lsdj_sim_test.mjs
+import fs from "node:fs";
+import { Fm1Sim, FS, SECTOR } from "../../web/sim/engine.js";
+import { BTN, B, ENC, KEYBOARD, GB } from "../../web/sim/controls.js";
+import { LAYOUTS } from "../../web/sim/layout.js";
+import { loadEmu, makeCart } from "../../web/lsdjinstall.js";
+
+let fails = 0;
+const ok = (c, what) => { console.log(`${what.padEnd(78)} ${c ? "ok" : "FAILED"}`); fails += !c; };
+const root = new URL("../../", import.meta.url);
+
+{ // the page's control ids are the firmware's (panel.c), and every control has a place in both layouts
+  const panel = fs.readFileSync(new URL("firmware/src/panel.c", root), "utf8");
+  const en = (first) => panel.slice(panel.indexOf("enum { " + first)).split("}")[0].replace(/enum \{/, "").split(",").map((s) => s.trim());
+  ok(BTN.every((b, i) => en("B_FX")[i] === b.c), "the buttons' ids are panel.c's, in its order");
+  ok(ENC.every((e, i) => en("EN_SELECT")[i] === e.c), "the knobs' ids are panel.c's, in its order");
+  ok(Object.values(LAYOUTS).every((L) => BTN.every((_, i) => L.ctl[`btn:${i}`]) && [...Array(27).keys()].every((n) => L.ctl[`key:${n}`])),
+     "every button and key has a place in both layouts");
+  ok(KEYBOARD.Enter.id === B.PLAY && KEYBOARD.KeyX.id === 24 && KEYBOARD.KeyZ.id === 26 && KEYBOARD.ShiftLeft.id === B.SEQ &&
+     GB[`btn:${B.PLAY}`] === "START" && GB["key:24"] === "A", "the keyboard: Enter START, X A, Z B, Shift SELECT");
+}
+
+const WASM = new URL("build/web/sim/lsdjsim.wasm", root), EMU = new URL("build/web/lsdj_emu.wasm", root);
+if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
+  console.log("the simulator: skipped (build/web/sim/lsdjsim.wasm: web/sim/build.sh; build/web/lsdj_emu.wasm: web/lsdj_wasm.sh)");
+} else {
+  // our own program (as tests/lsdj/lsdj_install_test.py test_rom): a timer interrupt, a note every 64th, one dark row a tile
+  const rom = new Uint8Array(0x8000).fill(0xFF);
+  const at = (a, ...b) => rom.set(b, a);
+  at(0x40, 0xF5, 0x3E, 0x01, 0xEA, 0x01, 0xC1, 0xF1, 0xD9);
+  at(0x50, 0xF5, 0x3E, 0x01, 0xEA, 0x00, 0xC1, 0xF1, 0xD9);
+  at(0x100, 0x00, 0xC3, 0x50, 0x01);
+  rom.fill(0, 0x104, 0x150);
+  rom[0x147] = 0x1B; rom[0x148] = 0; rom[0x149] = 0x04;
+  let x = 0;
+  for (let i = 0x134; i <= 0x14C; i++) x = (x - rom[i] - 1) & 0xFF;
+  rom[0x14D] = x;
+  at(0x150, 0xF3, 0x31, 0xFF, 0xDF, 0x3E, 0x80, 0xE0, 0x26, 0x3E, 0x77, 0xE0, 0x24, 0x3E, 0xFF, 0xE0, 0x25,
+     0x3E, 0xB0, 0xE0, 0x11, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x83, 0xE0, 0x13, 0x3E, 0x49, 0xE0, 0x06, 0xE0, 0x05, 0x3E, 0x06, 0xE0, 0x07,
+     0xAF, 0xE0, 0x0F, 0xEA, 0x00, 0xC1, 0xEA, 0x01, 0xC1, 0xEA, 0x02, 0xC1, 0x21, 0x00, 0x80, 0x3E, 0xFF, 0x22, 0x77,
+     0x3E, 0x05, 0xE0, 0xFF, 0xFB, 0xC3, 0x00, 0x02);
+  at(0x200, 0xAF, 0x21, 0x00, 0xC1, 0xB6, 0xC2, 0x40, 0x02, 0xAF, 0x21, 0x01, 0xC1, 0xB6, 0xCA, 0x00, 0x02);
+  at(0x210, 0xAF, 0xEA, 0x01, 0xC1, 0xC3, 0x00, 0x02);
+  at(0x240, 0xAF, 0xEA, 0x00, 0xC1, 0x21, 0x02, 0xC1, 0x34, 0x7E, 0xE6, 0x3F, 0xC2, 0x00, 0x02, 0x3E, 0xC6, 0xE0, 0x14, 0xC3, 0x00, 0x02);
+  const cart = await makeCart(await loadEmu(fs.readFileSync(EMU)), rom, null, 1 << 20);
+  const wasm = fs.readFileSync(WASM);
+  const run = (sim, seconds) => {                  // as the worklet: 128 frames at a time -> the loudest sample
+    let peak = 0;
+    for (let n = 0; n < seconds * FS; n += 128) {
+      const { left, right } = sim.render(128);
+      for (let i = 0; i < 128; i++) peak = Math.max(peak, Math.abs(left[i]), Math.abs(right[i]));
+    }
+    return peak;
+  };
+  const tap = (sim, label) => { sim.btn(label, true); run(sim, 0.1); sim.btn(label, false); };
+  const colours = (fb, y0, y1) => { const s = new Set(); for (let i = y0 * 240; i < y1 * 240; i++) s.add(fb[i]); return s.size; };
+
+  { // no cartridge: PLAY starts nothing
+    const sim = await Fm1Sim.create(wasm);
+    ok(sim.boot(null, null) === true, "a first visit: no flash kept");
+    run(sim, 0.3);
+    ok(colours(sim.fb(), 90, 230) > 4, "the start screen is drawn (LSDJ, the keys' lines)");
+    tap(sim, B.PLAY);
+    run(sim, 0.5);
+    ok(!sim.playing() && sim.error() === -3 && sim.frames() === 0, "without a cartridge PLAY starts nothing (NO LSDJ ROM)");
+  }
+  let sectors;
+  { // our program as the cartridge
+    const sim = await Fm1Sim.create(wasm);
+    sim.boot(null, cart);
+    run(sim, 0.3);
+    ok(!sim.playing() && sim.frames() === 0, "nothing runs before PLAY");
+    tap(sim, B.PLAY);
+    const f0 = sim.frames(), peak = run(sim, 3);
+    ok(sim.playing() && sim.error() === 0, "PLAY starts the Game Boy");
+    ok(sim.frames() - f0 >= 176 && sim.frames() - f0 <= 183, `it runs at the Game Boy's speed (${sim.frames() - f0} frames in 3 s of sound)`);
+    ok(peak > 0.02 && peak <= 1, `with sound (peak ${peak.toFixed(3)})`);
+    const fb = sim.fb();
+    ok(colours(fb, 4, 220) >= 2 && colours(fb, 222, 240) > 2, "its picture on the screen, the status line under it");
+    sim.enc(0, 3); sim.enc(1, -2); sim.enc(2, 1); sim.key(24, true); sim.master(300);
+    run(sim, 0.5);
+    sim.releaseAll();
+    ok(sim.error() === 0 && sim.takeDirty().length === 0, "knobs and keys are taken; nothing is written to flash by itself");
+    sim.btn(B.REC, true);                          // REC held for a second: the save goes to flash
+    run(sim, 1.5);
+    sim.btn(B.REC, false);
+    run(sim, 0.2);
+    sectors = sim.takeDirty();
+    ok(sectors.length > 0 && sectors.every((s) => s.off >= 0xA0000 && s.off < 0xDC000 && s.bytes.length === SECTOR),
+       `REC held saves: ${sectors.length} sectors of the store's area to keep`);
+  }
+  { // a key down and up again between two passes of the main loop (a quick tap, a script): still a press
+    const sim = await Fm1Sim.create(wasm);
+    sim.boot(null, cart);
+    run(sim, 0.2);
+    sim.btn(B.PLAY, true);
+    sim.btn(B.PLAY, false);
+    run(sim, 0.5);
+    ok(sim.playing(), "a press shorter than a pass of the main loop still counts");
+  }
+  { // the next visit: the kept sectors are the flash again
+    const sim = await Fm1Sim.create(wasm);
+    ok(sim.boot(new Map(sectors.map((s) => [s.off, s.bytes])), cart) === false, "the next visit starts from the kept flash");
+    tap(sim, B.PLAY);
+    run(sim, 1);
+    ok(sim.playing() && sim.error() === 0 && sim.frames() > 50, "... and PLAY loads the save and runs");
+  }
+}
+console.log(fails ? `lsdj_sim_test: ${fails} FAILED` : "lsdj_sim_test: all passed");
+process.exit(fails ? 1 : 0);

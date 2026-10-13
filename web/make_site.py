@@ -124,6 +124,27 @@ def main(pkg, version, out):
         note = f", webapp/lsdj-install (firmware/{bname}, no ROM in it)"
         if base == pkg:                             # a site of the ROM-less firmware: its front door is that page
             first = "webapp/lsdj-install/"
+    # the LSDj simulator (web/sim/): the LSDj unit as WebAssembly behind the FM-1's panel, the user's own ROM chosen
+    # on the page. Its modules are served as they are; it shares the install page's code that makes the cartridge
+    # block (lsdjinstall.js, fm1pkg.js, lsdj_emu.wasm, the demo's keys).
+    simwasm = HERE.parent / "build" / "web" / "sim" / "lsdjsim.wasm"
+    sdir = out / "webapp" / "lsdj-sim"
+    shutil.rmtree(sdir, ignore_errors=True)
+    if pkg.name in ("lsdj-base.fwsc", "lsdj-private.fwsc") and simwasm.exists() and wasm.exists():
+        sys.path.insert(0, str(HERE.parent / "tools"))
+        import lsdj_demo
+        args, end = lsdj_demo.key_args(60)
+        sdir.mkdir(parents=True)
+        for n in ("index.html", "app.js", "sim.css", "engine.js", "worklet.js", "controls.js", "layout.js", "store.js",
+                  "audio.js"):
+            shutil.copy(HERE / "sim" / n, sdir / n)
+        for n in ("lsdjinstall.js", "fm1pkg.js"):
+            shutil.copy(HERE / n, sdir / n)
+        shutil.copy(simwasm, sdir / "lsdjsim.wasm")
+        shutil.copy(wasm, sdir / "lsdj_emu.wasm")
+        (sdir / "demo.json").write_text(json.dumps({
+            "keys": [[int(a), int(b), k] for a, b, k in (x.split(":") for x in args[1::2])], "frames": end + 60}))
+        note += ", webapp/lsdj-sim"
     (out / "index.html").write_text(
         '<!doctype html><meta charset="utf-8"><title>Felucca</title>'
         f'<meta http-equiv="refresh" content="0; url={first}">'
