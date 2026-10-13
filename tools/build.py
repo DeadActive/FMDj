@@ -196,6 +196,8 @@ def build_app():
             raise SystemExit("build: FELUCCA_LSDJ takes the BLE unit's place; build it without FELUCCA_BLE")
         core_ref = True
         flags.append("-DFELUCCA_LSDJ=1")
+        for stale in ("lsdj-base.fwsc", "lsdj-private.fwsc", "lsdj/cart.bin"):   # none of an earlier build's
+            (OUT / stale).unlink(missing_ok=True)                                # survives a build that fails
     if os.environ.get("FELUCCA_BLE") == "1" or core_ref:
         flags += ["-mllvm", "-enable-global-merge=false"]
     if core_ref and "-DFELUCCA_BLE=1" not in flags:
@@ -472,8 +474,6 @@ def main():
             raise SystemExit("build: the app slot's end is not where core_cart_end (core_ble_api.c) reads the block")
     pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
     (OUT / name).write_bytes(pkg)
-    if lsdj:
-        (OUT / "lsdj-private.fwsc").unlink(missing_ok=True)
     if lsdj and os.environ.get("LSDJ_ROM"):
         # private: the owner's own ROM as the cartridge block at the end of the slot (git-ignored build/, never
         # published), made by the same C code the install page runs (tools/lsdj_rom.py, lsdj_cart_tool.c)

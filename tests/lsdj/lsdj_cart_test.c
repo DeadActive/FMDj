@@ -104,6 +104,53 @@ int main(void)
         slot[sizeof slot - 10u] = 65;
         CHECK(lsdj_cart_read(end, sizeof slot, &c) == LSDJ_CART_BAD);
     }
+    {   /* a block whose CRC is right and whose numbers are not (made by other code, or a later version's): each
+         * is refused by its own check, and nothing outside the block is read (the suite builds this test with the
+         * address sanitizer) */
+        static const struct { uint32_t at, len; uint32_t v; } BAD[] = {
+            {2u * NB, 4, 0x7FFFFFF0u},             /* the save's length: past the body, */
+            {2u * NB, 4, 0xFFFFFFFFu},
+            {0, 2, LSDJ_BANK + 1u},                /* a bank longer than a bank, */
+            {2, 2, 4999u},                         /* a bank a byte shorter: the lengths do not add up, */
+            {2u * (NB - 1u), 2, 1u}};              /* the last bank a byte longer than the body has */
+        uint32_t k, b;
+        for (k = 0; k < sizeof BAD / sizeof BAD[0]; k++) {
+            uint8_t *body = slot + sizeof slot - need, *t = slot + sizeof slot - LSDJ_CART_TRAILER;
+            uint32_t crc;
+            place(sizeof blk);
+            for (b = 0; b < BAD[k].len; b++)
+                body[BAD[k].at + b] = (uint8_t)(BAD[k].v >> (8u * b));
+            crc = lsdj_cart_crc(body, need - LSDJ_CART_TRAILER);
+            for (b = 0; b < 4u; b++)
+                t[12u + b] = (uint8_t)(crc >> (8u * b));
+            CHECK(lsdj_cart_read(end, sizeof slot, &c) == LSDJ_CART_BAD);
+        }
+        for (k = 0; k < 2u * NB + 4u; k++) {       /* a body too short for its own table, its CRC right */
+            uint8_t *t = slot + sizeof slot - LSDJ_CART_TRAILER;
+            uint32_t crc;
+            place(sizeof blk);
+            crc = lsdj_cart_crc(t - k, k);
+            for (b = 0; b < 4u; b++) {
+                t[8u + b] = (uint8_t)(k >> (8u * b));
+                t[12u + b] = (uint8_t)(crc >> (8u * b));
+            }
+            CHECK(lsdj_cart_read(end, sizeof slot, &c) == LSDJ_CART_BAD);
+            CHECK(lsdj_cart_read(end, LSDJ_CART_TRAILER + k, &c) == LSDJ_CART_BAD);    /* (with no byte before it) */
+        }
+        for (k = 0; k < 2u * LSDJ_CART_BANKS + 4u; k += 3u) {   /* ... and the same saying it has 64 banks: its
+                                                                 * table would reach past the end of the slot */
+            uint8_t *t = slot + sizeof slot - LSDJ_CART_TRAILER;
+            uint32_t crc;
+            memset(slot, 0, sizeof slot);
+            crc = lsdj_cart_crc(t - k, k);
+            memcpy(t, "LSDC\1\0\100\0", 8);
+            for (b = 0; b < 4u; b++) {
+                t[8u + b] = (uint8_t)(k >> (8u * b));
+                t[12u + b] = (uint8_t)(crc >> (8u * b));
+            }
+            CHECK(lsdj_cart_read(end, sizeof slot, &c) == LSDJ_CART_BAD);
+        }
+    }
     {   /* the room: one byte short is refused and nothing is written past it */
         memset(blk, 0xA5, sizeof blk);
         CHECK(lsdj_cart_make(blk, need - 1u, rom, sizeof rom, save) == LSDJ_CART_FULL);

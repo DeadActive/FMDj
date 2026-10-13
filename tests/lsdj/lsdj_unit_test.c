@@ -4,6 +4,7 @@
  * and the audio ISR do, the core API stubbed with a 240x240 screen in RAM.
  *   lsdj_unit_test none      no cartridge block in the firmware: PLAY says so, nothing runs
  *   lsdj_unit_test damaged   a block with one wrong byte: the same
+ *   lsdj_unit_test own       a block of a small Game Boy program of our own (2 banks; no LSDj data): PLAY runs it
  *   lsdj_unit_test           the rest, with the block made from the owner's ROM (build/lsdj/cart.bin: a build with
  *                            LSDJ_ROM; skipped without it). Writes build/lsdj/unit_screen.ppm.
  *   cc -O1 -w -Ifirmware/src -Ifirmware/src/lsdj -o build/tests/lsdj_unit_test tests/lsdj/lsdj_unit_test.c */
@@ -450,12 +451,78 @@ static int test_no_rom(int damaged)
     return fails != 0;
 }
 
+/* PLAY with a block of our own program (as tests/lsdj/lsdj_install_test.py's test_rom: a timer interrupt, a note every
+ * 64th, a wait loop like LSDj's, one dark row in every tile): it starts and runs, a ROM of 2 banks */
+static int test_own_rom(void)
+{
+    static uint8_t rom[2u * LSDJ_BANK], save[LSDJ_CART_SAVE];
+    static const struct { uint16_t at; uint8_t n; uint8_t b[60]; } P[] = {
+        {0x040, 8, {0xF5, 0x3E, 0x01, 0xEA, 0x01, 0xC1, 0xF1, 0xD9}},
+        {0x050, 8, {0xF5, 0x3E, 0x01, 0xEA, 0x00, 0xC1, 0xF1, 0xD9}},
+        {0x100, 4, {0x00, 0xC3, 0x50, 0x01}},
+        {0x150, 59, {0xF3, 0x31, 0xFF, 0xDF, 0x3E, 0x80, 0xE0, 0x26, 0x3E, 0x77, 0xE0, 0x24, 0x3E, 0xFF, 0xE0, 0x25,
+                     0x3E, 0xB0, 0xE0, 0x11, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x83, 0xE0, 0x13,
+                     0x3E, 0x49, 0xE0, 0x06, 0xE0, 0x05, 0x3E, 0x06, 0xE0, 0x07,
+                     0xAF, 0xE0, 0x0F, 0xEA, 0x00, 0xC1, 0xEA, 0x01, 0xC1, 0xEA, 0x02, 0xC1,
+                     0x21, 0x00, 0x80, 0x3E, 0xFF, 0x22, 0x77, 0x3E, 0x05}},
+        {0x18B, 6, {0xE0, 0xFF, 0xFB, 0xC3, 0x00, 0x02}},
+        {0x200, 16, {0xAF, 0x21, 0x00, 0xC1, 0xB6, 0xC2, 0x40, 0x02, 0xAF, 0x21, 0x01, 0xC1, 0xB6, 0xCA, 0x00, 0x02}},
+        {0x210, 7, {0xAF, 0xEA, 0x01, 0xC1, 0xC3, 0x00, 0x02}},
+        {0x240, 21, {0xAF, 0xEA, 0x00, 0xC1, 0x21, 0x02, 0xC1, 0x34, 0x7E, 0xE6, 0x3F, 0xC2, 0x00, 0x02,
+                     0x3E, 0xC6, 0xE0, 0x14, 0xC3, 0x00, 0x02}}};
+    uint32_t i;
+    uint8_t x = 0;
+    int32_t n;
+    memset(rom, 0xFF, sizeof rom);
+    for (i = 0; i < sizeof P / sizeof P[0]; i++)
+        memcpy(rom + P[i].at, P[i].b, P[i].n);
+    memset(rom + 0x104, 0, 0x4C);
+    rom[0x147] = 0x1B;
+    rom[0x148] = 0x00;
+    rom[0x149] = 0x04;
+    for (i = 0x134; i <= 0x14C; i++)
+        x = (uint8_t)(x - rom[i] - 1u);
+    rom[0x14D] = x;
+    memset(flash_sim, 0xFF, sizeof flash_sim);
+    memset(slot_tail, 0xFF, sizeof slot_tail);
+    n = lsdj_cart_make(slot_tail, sizeof slot_tail, rom, sizeof rom, save);
+    CHECK(n > 0);
+    memmove(slot_tail + SLOT_ROOM - (uint32_t)n, slot_tail, (uint32_t)n);
+    memset(slot_tail, 0xFF, SLOT_ROOM - (uint32_t)n);
+    ble_draw();
+    ble_key(core_play_bit(), 0);              /* PLAY */
+    CHECK(ble_started() && st.error == 0 && cart.nbanks == 2 && nkit == 0);
+    for (i = 0; i < 300; i++)                 /* 6 s */
+        pass();
+    CHECK(st.frames > 300 && emu.errors == 0 && st.gaps == 0);
+    CHECK(emu.skipped > st.frames * 3000u);   /* (its wait loop is found and skipped) */
+    {
+        int32_t o[64], k, loud = 0;
+        for (i = 0; i < 400 && !loud; i++) {  /* a note within 8 s */
+            ble_service();
+            lsdj_audio(o, 32);
+            for (k = 0; k < 64; k++)
+                loud |= o[k] != 0;
+            ms += 20;
+        }
+        CHECK(loud);
+    }
+    console("ble info");
+    CHECK(!strncmp(con_log, "ok v2 started 1 held 0 banks 02 kits 00 00 ", 43));
+    console("ble b 1 0 2");
+    CHECK(!strncmp(con_log, "ok FFFF ", 8));             /* its second bank: empty */
+    console("ble b 2 0 2");
+    CHECK(!strcmp(con_log, "err range\r\n"));           /* no third */
+    printf(fails ? "lsdj_unit_test (our own program): %d FAILED\n" : "lsdj_unit_test (our own program): all passed\n", fails);
+    return fails != 0;
+}
+
 int main(int argc, char **argv)
 {
     uint32_t i, x, y, diff = 0;
     int32_t out[64];
     if (argc > 1)
-        return test_no_rom(!strcmp(argv[1], "damaged"));
+        return !strcmp(argv[1], "own") ? test_own_rom() : test_no_rom(!strcmp(argv[1], "damaged"));
     {   /* the block made from the owner's ROM, at the end of the slot */
         FILE *f = fopen("build/lsdj/cart.bin", "rb");
         long n;

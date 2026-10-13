@@ -3310,7 +3310,11 @@ PGB_HOT void __gb_step_cpu(struct gb_s *gb)
 	default:
 		/* Return address where invalid opcode that was read. */
 		(gb->gb_error)(gb, GB_INVALID_OPCODE, gb->cpu_reg.pc.reg - 1);
-		PGB_UNREACHABLE();
+		/* (LSDj fork, DEADACTIVE) the front end's gb_error counts and returns
+		 * (any file with a cartridge header can be put in): the byte is passed
+		 * over in 4 cycles, so that time goes on and the frame ends. */
+		inst_cycles = 4;
+		break;
 	}
 
 	do

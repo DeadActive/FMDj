@@ -7,7 +7,8 @@
  * ROM into lw_rom().
  *   lw_rom(), lw_sram(), lw_fb(), lw_out()   the buffers: the ROM file (up to 1 MiB), the 128 KiB save, the picture
  *                                            (160 x 144 shades 0..3), the block
- *   lw_check(len)                            is the file an LSDj ROM: lsdj_cart.c's LSDJ_CART_OK / _ROM_*
+ *   lw_check(len)                            the file of len bytes now in lw_rom(): is it an LSDj ROM: lsdj_cart.c's
+ *                                            LSDJ_CART_OK / _ROM_*
  *   lw_start(len)                            the Game Boy from its reset with that ROM and the save in lw_sram():
  *                                            0, or emu_init's error
  *   lw_frames(n, pad)                        n frames with these keys held (Peanut-GB's joypad byte: 0 = down)
@@ -29,7 +30,7 @@
 #include <emscripten.h>
 #define LW EMSCRIPTEN_KEEPALIVE
 #else
-#define LW                                    /* (the host test builds it natively: tests/lsdj/lsdj_wasm_test) */
+#define LW
 #endif
 
 static uint8_t lw_rom_b[LSDJ_CART_BANKS * LSDJ_BANK], lw_sram_b[LSDJ_SRAM], lw_fb_b[LSDJ_H][LSDJ_W];
@@ -42,9 +43,12 @@ LW uint8_t *lw_sram(void) { return lw_sram_b; }
 LW uint8_t *lw_fb(void) { return lw_fb_b[0]; }
 LW uint8_t *lw_out(void) { return lw_out_b; }
 
-LW int lw_check(uint32_t len)
+LW int lw_check(uint32_t len)                  /* (the file is in lw_rom(): from here on lw_need() is this ROM's) */
 {
-    return len > sizeof lw_rom_b ? LSDJ_CART_ROM_SIZE : lsdj_cart_rom_check(lw_rom_b, len);
+    if (len > sizeof lw_rom_b)
+        return LSDJ_CART_ROM_SIZE;
+    lw_len = len;
+    return lsdj_cart_rom_check(lw_rom_b, len);
 }
 
 LW int lw_start(uint32_t len)

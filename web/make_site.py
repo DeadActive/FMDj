@@ -91,11 +91,17 @@ def main(pkg, version, out):
     # the LSDj install page (lsdj_install.html): the user's own ROM goes into the firmware that holds none
     # (lsdj-base.fwsc, next to the package or the package itself), in the browser, with the emulator and the
     # block's maker as WebAssembly (web/lsdj_wasm.sh). Nothing of LSDj is on the site.
+    # Only for an LSDj package (the firmware alone, or the owner's private one next to it), and only a base of the
+    # same identity with our loader in it.
     base = pkg if pkg.name == "lsdj-base.fwsc" else pkg.with_name("lsdj-base.fwsc")
     wasm = HERE.parent / "build" / "web" / "lsdj_emu.wasm"
     for old in fw.glob("lsdj-base-*.fwsc"):
         old.unlink()
-    if base.exists() and wasm.exists():
+    shutil.rmtree(out / "webapp" / "lsdj-install", ignore_errors=True)
+    if pkg.name in ("lsdj-base.fwsc", "lsdj-private.fwsc") and base.exists() and wasm.exists():
+        braw = base.read_bytes()
+        if product_of(braw) != product or b"FELUCCA-LOADER-1" not in braw:
+            raise SystemExit(f"{base}: not this build's firmware without a ROM ({product_of(braw)!r})")
         sys.path.insert(0, str(HERE.parent / "tools"))
         import lsdj_demo
         args, end = lsdj_demo.key_args(60)

@@ -300,8 +300,24 @@ static void test_wait_calls(void)
     CHECK(emu.errors == 0);
 }
 
+/* a ROM of bytes that are no instruction of the Game Boy's (anyone's file can be put into the firmware): every
+ * frame still ends, and the errors are counted (peanut_gb.h: the byte is passed over) */
+static void test_no_instructions(void)
+{
+    uint32_t f;
+    make_rom(1);
+    memset(rom + 0x150, 0xD3, sizeof rom - 0x150);
+    emu_mode = EMU_FAST_ROM | EMU_WAIT_SKIP | EMU_SND_FINE;
+    memset(sram, 0, sizeof sram);
+    CHECK(emu_init(banks, 2, sram, fb) == 0);
+    for (f = 0; f < 120; f++)
+        emu_frame(0xFF);
+    CHECK(emu.errors > 1000u);
+}
+
 int main(void)
 {
+    test_no_instructions();
     test_sound_timing();
     test_wait_skip();
     test_wait_calls();

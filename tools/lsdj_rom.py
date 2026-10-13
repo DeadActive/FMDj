@@ -69,9 +69,11 @@ def main(rom_path, out, room):
     tool.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["cc", "-O2", "-Wall", "-Wno-unused-function", f"-I{SRC / 'firmware/src'}", "-o", tool,
                     SRC / "tools" / "lsdj_cart_tool.c"], check=True)
-    blank = out.parent / "blank.sav"                 # the ROM's own checks first: a block from an empty save
-    blank.write_bytes(bytes(128 * 1024))
-    r = subprocess.run([tool, rom_path, blank, out, str(1 << 21)], capture_output=True, text=True)
+    out.unlink(missing_ok=True)                      # (no block of an earlier ROM survives a refusal)
+    blank, probe = out.parent / "blank.sav", out.parent / "probe.bin"
+    blank.write_bytes(bytes(128 * 1024))             # the ROM's own checks first: a block from an empty save
+    r = subprocess.run([tool, rom_path, blank, probe, str(1 << 21)], capture_output=True, text=True)
+    probe.unlink(missing_ok=True)
     if r.returncode:
         raise SystemExit(r.stderr.strip() or "lsdj_rom: lsdj_cart_tool failed")
     sav = boot_save(rom_path, out.parent)
