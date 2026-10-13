@@ -40,6 +40,10 @@ int core_flash_read(uint32_t off, void *buf, uint32_t n)    /* plain flash only 
  * and fm1_flash.h are not changed, and the routines keep their own range check (FL_RANGE_OK) under this one. */
 #define CORE_STORE_LO 0xA0000u                /* Felucca's user-sample slots: SMP_USER_BASE .. + 3 x 80 KiB */
 #define CORE_STORE_HI 0xDC000u
+/* the app's flash slot: app.bin's offset 0 is flash 0x4120, the slot is 0x8DFBC long (app.ld XIP; tools/build.py
+ * checks the two against this). Read only, through the XIP window like every constant of the firmware */
+const uint8_t *core_cart_end(void) { return fm1_xip_ptr(0x920DCu); }
+uint32_t core_cart_room(void) { return (uint32_t)(core_cart_end() - (const uint8_t *)_etext); }
 const uint8_t *core_flash_ptr(uint32_t off)
 {
 #if FELUCCA_FLASH && FELUCCA_LSDJ

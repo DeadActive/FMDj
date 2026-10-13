@@ -19,9 +19,10 @@
  * happen in lsdj_step, which the core reaches only through its pointer: no flash write is reachable from boot
  * (gate 4). Custom kits live there too, and show in the ROM's free kit banks (rom_tab).
  *
- * build/lsdj/lsdj_rom.h (tools/lsdj_rom.py): the owner's own LSDj ROM and the start-up save. A private build only:
- * LSDj's licence forbids distributing it, so that header, and every firmware built with it, stays in build/
- * (git-ignored) and is never published. */
+ * This firmware holds nothing of LSDj. The user's own ROM and its start-up save are the cartridge block
+ * (lsdj_cart.c) at the end of the app's flash slot, put there by the install page or the Mac build and read on
+ * PLAY; without one PLAY says so and nothing runs. A firmware with a block in it holds that user's ROM: LSDj's
+ * licence forbids distributing it, so it is never published (build/ is git-ignored). */
 #include "ble/ble_core.h"
 #ifndef LSDJ_POOL
 #define LSDJ_POOL __attribute__((section(".pool")))   /* big zero-initialised buffers (app.ld POOL) */
@@ -31,7 +32,8 @@
 #include "lsdj/lsdj_xfer.c"
 #define LSDJ_STORE_FN static __attribute__((noinline))   /* gate 4 finds the flash writers by name */
 #include "lsdj/lsdj_store.c"
-#include "lsdj_rom.h"
+#include "lsdj/lsdj_cart.c"
+#define LSDJ_ROM_BANKS LSDJ_CART_BANKS        /* the most a ROM has; the block says how many this one has */
 
 #define RING_N 4096u                          /* stereo frames: 93 ms, 5.5 Game Boy frames */
 #define RING_LOW (RING_N / 2u)                /* under this the step runs a second Game Boy frame in its pass */
@@ -67,7 +69,8 @@ static const lsdj_flash_t flash = {core_flash_ptr, core_flash_erase, core_flash_
 static const lsdj_flash_t flash_ro = {core_flash_ptr, 0, 0};   /* PLAY's: it reads, and has nothing to write with */
 static lsdj_store_t store;                    /* what the flash holds (lsdj_store.c), scanned by lsdj_start */
 static uint8_t flash_on;                      /* the core has flash for us */
-static lsdj_bank_t rom_tab[LSDJ_ROM_BANKS];   /* the Game Boy's ROM: lsdj_rom, the flash kit banks in its free ones */
+static lsdj_cart_t cart;                      /* the cartridge block: the ROM's banks and the start-up save */
+static lsdj_bank_t rom_tab[LSDJ_ROM_BANKS];   /* the Game Boy's ROM: the block's, the flash kit banks in its free ones */
 static uint8_t kit_bank[LSDJ_ST_KMAX], nkit;  /* the ROM's free kit banks in order: flash kit bank j shows as kit_bank[j] */
 static uint8_t kit_buf[LSDJ_BANK] LSDJ_POOL;  /* a kit bank on its way from the console to flash */
 
@@ -202,9 +205,9 @@ static void lsdj_xfer_flash(void)              /* what `ble info` and the kit co
 static void lsdj_banks(void)                   /* rom_tab: the ROM, and the K flash kit banks where it has none */
 {
     uint32_t b, j;
-    memcpy(rom_tab, lsdj_rom, sizeof rom_tab);
-    for (b = 8, nkit = 0; b < LSDJ_ROM_BANKS && nkit < LSDJ_ST_KMAX; b++)   /* kits: banks 8..26 and 32.. */
-        if ((b <= 26u || b >= 32u) && !lsdj_rom[b].n)
+    memcpy(rom_tab, cart.bank, sizeof rom_tab);
+    for (b = 8, nkit = 0; b < cart.nbanks && nkit < LSDJ_ST_KMAX; b++)      /* kits: banks 8..26 and 32.. */
+        if ((b <= 26u || b >= 32u) && !cart.bank[b].n)
             kit_bank[nkit++] = (uint8_t)b;
     for (j = 0; j < store.k && j < nkit; j++) {   /* (store.k is the flash layout's: never changed here, even if a
                                                    * store made with another ROM has more banks than this one shows) */
@@ -260,7 +263,7 @@ static void lsdj_flash_req(void)               /* the console queued it (lsdj_xf
 
 static void lsdj_restart(void)                 /* `ble go reset`: the Game Boy from its reset, the save RAM kept */
 {
-    emu_init(rom_tab, LSDJ_ROM_BANKS, sram, fb);      /* (it ran before: the cartridge is LSDj) */
+    emu_init(rom_tab, cart.nbanks, sram, fb);         /* (it ran before: the cartridge is LSDj) */
     emu.dirty = dirty;
     memset(shown, 0xFF, sizeof shown);        /* every line pair is sent again */
     memset(dirty, 1, sizeof dirty);
@@ -398,7 +401,17 @@ static void lsdj_push(void)
 
 static __attribute__((noinline)) void lsdj_start(void)
 {
-    int r = -1;
+    int r = lsdj_cart_read(core_cart_end(), core_cart_room(), &cart);
+    if (r) {                                  /* no ROM in this firmware (or not a whole one): nothing runs */
+        st.error = r == LSDJ_CART_NONE ? -3 : -4;
+        core_fill(0, 0, 240, 240, CORE_BG);
+        core_text(0, 100, 240, CORE_FONT_M, r == LSDJ_CART_NONE ? "NO LSDJ ROM" : "LSDJ ROM DAMAGED", CORE_TEXT,
+                  CORE_BG, 1);
+        core_text(0, 126, 240, CORE_FONT_S, r == LSDJ_CART_NONE ? "PUT YOURS IN WITH THE INSTALL PAGE" :
+                  "INSTALL IT AGAIN", CORE_MID, CORE_BG, 1);
+        return;
+    }
+    r = -1;
     flash_on = core_flash_ptr(LSDJ_ST_BASE) != 0;
     if (flash_on) {                           /* (reading only: flash is written on REC or a console request) */
         lsdj_store_scan(&flash_ro, &store);
@@ -406,7 +419,7 @@ static __attribute__((noinline)) void lsdj_start(void)
             r = lsdj_store_load(&flash_ro, &store, sram, LSDJ_SRAM);
     }
     if (r)                                    /* no save in flash: the start-up save, as built */
-        r = lsdj_unpack(sram, LSDJ_SRAM, lsdj_boot_save, sizeof lsdj_boot_save);
+        r = lsdj_unpack(sram, LSDJ_SRAM, cart.save, cart.save_len);
     lsdj_banks();
     core_fill(0, 0, 240, 240, CORE_BG);
     if (r) {
@@ -418,7 +431,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     memset(shown, 0xFF, sizeof shown);        /* no shade: every line pair is sent once */
     memset(dirty, 1, sizeof dirty);
     lsdj_ring_init(&ring, ring_buf, RING_N);
-    r = emu_init(rom_tab, LSDJ_ROM_BANKS, sram, fb);
+    r = emu_init(rom_tab, cart.nbanks, sram, fb);
     emu.dirty = dirty;
     if (r) {
         st.error = r;
@@ -502,8 +515,8 @@ static void lsdj_console(const char *args)     /* the words after `ble` on the c
 {
     xfer.sram = sram;
     xfer.size = LSDJ_SRAM;
-    xfer.rom = run ? rom_tab : lsdj_rom;    /* (the flash kit banks are in it once PLAY has read the store) */
-    xfer.nbanks = LSDJ_ROM_BANKS;
+    xfer.rom = rom_tab;                     /* (PLAY reads the block and the store: no bank before it) */
+    xfer.nbanks = run ? cart.nbanks : 0;
     xfer.mode = (uint8_t)emu_mode;
     lsdj_xfer_cmd(&xfer, args, core_ms(), xfer_out);
     if (xfer.mode_set) {                      /* `ble mode M`: as the option buttons */

@@ -187,17 +187,14 @@ def build_app():
     # BLE builds (and the gate-2 reference core, FELUCCA_CORE_REF=1): no global merging in the core's unit, so the
     # update path's variable offsets do not move with the BLE wrappers (tools/check_update_path.py compares them)
     core_ref = os.environ.get("FELUCCA_CORE_REF") == "1"     # gate 2's reference: the BLE build's core unit, no BLE
-    # LSDj (FELUCCA_LSDJ=1, a private build with the owner's ROM, LSDJ_ROM): the core's unit as in the reference,
-    # with the LSDj unit (firmware/src/lsdj/lsdj.c) in place of the empty BLE entry points
+    # LSDj (FELUCCA_LSDJ=1): the core's unit as in the reference, with the LSDj unit (firmware/src/lsdj/lsdj.c) in
+    # place of the empty BLE entry points. The firmware holds nothing of LSDj (lsdj-base.fwsc); with LSDJ_ROM, the
+    # owner's ROM goes into a second, private package as the cartridge block (main, below)
     lsdj = os.environ.get("FELUCCA_LSDJ") == "1"
     if lsdj:
         if os.environ.get("FELUCCA_BLE") == "1":
             raise SystemExit("build: FELUCCA_LSDJ takes the BLE unit's place; build it without FELUCCA_BLE")
         core_ref = True
-        rom = os.environ.get("LSDJ_ROM")
-        if not rom:
-            raise SystemExit("build: FELUCCA_LSDJ=1 needs LSDJ_ROM=<your own LSDj .gb> (never committed)")
-        subprocess.run([sys.executable, SRC / "tools" / "lsdj_rom.py", rom, OUT / "lsdj" / "lsdj_rom.h"], check=True)
         flags.append("-DFELUCCA_LSDJ=1")
     if os.environ.get("FELUCCA_BLE") == "1" or core_ref:
         flags += ["-mllvm", "-enable-global-merge=false"]
@@ -250,7 +247,7 @@ def build_app():
     elf = OUT / "felucca.elf"
     extra = []
     if lsdj:                        # the LSDj unit, its own object: no static data shared with the core's unit
-        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-Ibuild/lsdj", "-Ifirmware/src/lsdj", "-c",
+        tc("cc", *[f for f in flags if f != "-Ibuild/gen"], "-Ifirmware/src/lsdj", "-c",
            FW / "src" / "lsdj" / "lsdj.c", "-o", OUT / "lsdj.o")
         extra = [OUT / "lsdj.o"]
     elif core_ref and not ble:      # the reference: empty BLE entry points instead of the BLE unit and the libraries
@@ -406,7 +403,7 @@ def mmio_check():
         regs |= more
     errors = []
     ble_src = [f for f in (FW / "src" / "ble").glob("*.[ch]") if f.name != "ble_rf_tables.c"]   # (SDK data table)
-    lsdj_src = [FW / "src" / "lsdj" / n for n in ("lsdj.c", "lsdj_gb.c", "lsdj_emu.c")]   # (not Peanut-GB's)
+    lsdj_src = [FW / "src" / "lsdj" / n for n in ("lsdj.c", "lsdj_gb.c", "lsdj_emu.c", "lsdj_cart.c")]   # (not Peanut-GB's)
     for f in sorted([*(FW / "src").glob("*.[ch]"), *ble_src, *lsdj_src, *(FW / "loader").glob("*.c")]):
         for no, ln in enumerate(strip(f.read_text()).splitlines(), 1):
             where = f"{f.relative_to(FW)}:{no}"
@@ -466,10 +463,29 @@ def main():
         print("  FAIL ", e)
     if errors:
         raise SystemExit("build: checks failed")
-    if lsdj:                        # private: it holds the owner's LSDj ROM (git-ignored build/, never published)
-        name = "lsdj-private.fwsc"
+    if lsdj:                        # the firmware alone: nothing of LSDj in it (the install page adds the user's ROM)
+        name = "lsdj-base.fwsc"
+        # its end mark: "LSDE" and the image's length with the mark, the last bytes that are not 0xFF. The install
+        # page finds by it how much of the slot is free (web/lsdjinstall.js baseInfo), and that this is an LSDj base
+        img = img + b"LSDE" + (len(img) + 8).to_bytes(4, "little")
+        if APP_XIP - 0x02000000 + 0x4000 + APP_SLOT != 0x920DC:
+            raise SystemExit("build: the app slot's end is not where core_cart_end (core_ble_api.c) reads the block")
     pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
     (OUT / name).write_bytes(pkg)
+    if lsdj:
+        (OUT / "lsdj-private.fwsc").unlink(missing_ok=True)
+    if lsdj and os.environ.get("LSDJ_ROM"):
+        # private: the owner's own ROM as the cartridge block at the end of the slot (git-ignored build/, never
+        # published), made by the same C code the install page runs (tools/lsdj_rom.py, lsdj_cart_tool.c)
+        cart = OUT / "lsdj" / "cart.bin"
+        subprocess.run([sys.executable, SRC / "tools" / "lsdj_rom.py", os.environ["LSDJ_ROM"], cart,
+                        str(APP_SLOT - len(img))], check=True)
+        blk = cart.read_bytes()
+        full = img + b"\xFF" * (APP_SLOT - len(img) - len(blk)) + blk
+        priv = fm1pkg_make.ufw(fm1pkg_make.flash_image(full, fm1pkg_make.KEY), ota, PRODUCT)
+        (OUT / "lsdj-private.fwsc").write_bytes(priv)
+        print(f"private  {OUT / 'lsdj-private.fwsc'}  {len(priv)} B: the firmware and {len(blk)} B of your ROM "
+              f"({APP_SLOT - len(img) - len(blk)} B of the slot free)")
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"
     if att.exists():
         shutil.copy(att, OUT / "ATTRIBUTION.txt")

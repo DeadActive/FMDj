@@ -26,6 +26,10 @@ int core_flash_read(uint32_t off, void *buf, uint32_t n);
  * memory (0 outside it, or without flash). erase: one 4 KiB sector; prog: any length, from RAM. Both 0 = done; they
  * run with interrupts off through the driver's RAM routines, as the core's own storage does. */
 const uint8_t *core_flash_ptr(uint32_t off);
+/* the LSDj build's cartridge block (lsdj/lsdj_cart.c) lies at the end of the app's flash slot: one past the slot's
+ * last byte as the CPU reads it, and how many bytes before that are not the firmware's own code and constants */
+const uint8_t *core_cart_end(void);
+uint32_t core_cart_room(void);
 int core_flash_erase(uint32_t off);
 int core_flash_prog(uint32_t off, const void *src, uint32_t n);
 /* screen: colours and fonts by name */

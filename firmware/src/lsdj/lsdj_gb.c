@@ -270,6 +270,16 @@ static void lsdj_ring_pull(lsdj_ring_t *r, int32_t *out, uint32_t n)        /* Q
     r->rd = rd;
 }
 
+static uint32_t lsdj_crc32_add(uint32_t c, uint8_t b)  /* zlib CRC-32, 4 bits a step: start ~0, the CRC is ~c */
+{
+    static const uint32_t T[16] = {
+        0x00000000u, 0x1DB71064u, 0x3B6E20C8u, 0x26D930ACu, 0x76DC4190u, 0x6B6B51F4u, 0x4DB26158u, 0x5005713Cu,
+        0xEDB88320u, 0xF00F9344u, 0xD6D6A3E8u, 0xCB61B38Cu, 0x9B64C2B0u, 0x86D3D2D4u, 0xA00AE278u, 0xBDBDF21Cu};
+    c ^= b;
+    c = (c >> 4) ^ T[c & 15u];
+    return (c >> 4) ^ T[c & 15u];
+}
+
 /* PackBits: c < 128 -> c + 1 literal bytes follow; c >= 128 -> (c & 127) + 1 copies of the next byte.
  * 0 = exactly n bytes written */
 static int lsdj_unpack(uint8_t *dst, uint32_t n, const uint8_t *src, uint32_t len)

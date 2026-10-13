@@ -1,9 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * LSDj fork: 2026 DEADACTIVE */
 /* Host test of the LSDj unit (firmware/src/lsdj/lsdj.c) as the core drives it: its hooks called like the main loop
- * and the audio ISR do, the core API stubbed with a 240x240 screen in RAM. Needs the private header made from the
- * owner's ROM (build/lsdj/lsdj_rom.h, tools/lsdj_rom.py); skipped without it. Writes build/lsdj/unit_screen.ppm.
- *   cc -O1 -w -Ifirmware/src -Ifirmware/src/lsdj -Ibuild/lsdj -o build/host/lsdj_unit_test tests/lsdj/lsdj_unit_test.c */
+ * and the audio ISR do, the core API stubbed with a 240x240 screen in RAM.
+ *   lsdj_unit_test none      no cartridge block in the firmware: PLAY says so, nothing runs
+ *   lsdj_unit_test damaged   a block with one wrong byte: the same
+ *   lsdj_unit_test           the rest, with the block made from the owner's ROM (build/lsdj/cart.bin: a build with
+ *                            LSDJ_ROM; skipped without it). Writes build/lsdj/unit_screen.ppm.
+ *   cc -O1 -w -Ifirmware/src -Ifirmware/src/lsdj -o build/tests/lsdj_unit_test tests/lsdj/lsdj_unit_test.c */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -20,6 +23,10 @@ static uint16_t last_copy[240 * 240];
 static uint32_t last_n, last_h;
 static int lcd_idle = 1;
 static char keys_text[40];                    /* the right part of the status line, as last drawn */
+static char big_text[40], small_text[48];     /* the last text in each font drawn in the middle of the screen */
+/* the app's flash slot after the firmware: empty (0xFF), or with a cartridge block at its end */
+#define SLOT_ROOM (512u * 1024u)
+static uint8_t slot_tail[SLOT_ROOM];
 
 #include "ble/ble_core.h"
 uint32_t core_ms(void) { return ms; }
@@ -51,12 +58,16 @@ void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px)
 void core_fill(int x, int y, int w, int h, int colour) { (void)x; (void)y; (void)w; (void)h; (void)colour; dma_check(); }
 void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int c)
 {
-    (void)y; (void)w; (void)font; (void)fg; (void)bg; (void)c;
+    (void)w; (void)fg; (void)bg; (void)c;
     dma_check();
     texts++;
     if (x == 112 && strlen(s) < sizeof keys_text)
         strcpy(keys_text, s);
+    if (x == 0 && y >= 90 && y < 140 && strlen(s) < sizeof big_text)
+        strcpy(font == CORE_FONT_M ? big_text : small_text, s);
 }
+const uint8_t *core_cart_end(void) { return slot_tail + SLOT_ROOM; }
+uint32_t core_cart_room(void) { return SLOT_ROOM; }
 static int32_t pot = 1023;
 int core_lcd_idle(void) { return lcd_idle; }
 int32_t core_master_pot(void) { return pot; }
@@ -112,7 +123,7 @@ int core_flash_prog(uint32_t off, const void *p, uint32_t n)
     return 0;
 }
 
-#if __has_include("lsdj_rom.h")
+#define LSDJ_CART_MAKE 1                      /* (the damaged block is made here) */
 #include "lsdj/lsdj.c"
 
 static int fails;
@@ -391,10 +402,77 @@ static void test_console(void)                /* after PLAY: `ble ...` holds and
     CHECK(xfer.held == 0 && st.frames > f);
 }
 
-int main(void)
+/* PLAY with no cartridge block, or a damaged one: a message, and nothing runs, whatever is pressed after */
+static int test_no_rom(int damaged)
+{
+    static uint8_t rom[2u * LSDJ_BANK], save[LSDJ_CART_SAVE];
+    uint32_t i;
+    memset(flash_sim, 0xFF, sizeof flash_sim);
+    memset(slot_tail, 0xFF, sizeof slot_tail);
+    if (damaged) {                            /* a whole block of a made-up ROM, then one bit of it wrong */
+        uint8_t x = 0;
+        int32_t n;
+        for (i = 0; i < sizeof rom; i++)
+            rom[i] = (uint8_t)(i * 7u);
+        rom[0x147] = 0x1B;
+        rom[0x149] = 0x04;
+        for (i = 0x134; i <= 0x14C; i++)
+            x = (uint8_t)(x - rom[i] - 1u);
+        rom[0x14D] = x;
+        n = lsdj_cart_make(slot_tail, sizeof slot_tail, rom, sizeof rom, save);
+        CHECK(n > 0);
+        memmove(slot_tail + SLOT_ROOM - (uint32_t)n, slot_tail, (uint32_t)n);
+        memset(slot_tail, 0xFF, SLOT_ROOM - (uint32_t)n);
+        slot_tail[SLOT_ROOM - 4000u] ^= 0x10;
+    }
+    ble_draw();
+    for (i = 0; i < 10; i++)
+        pass();
+    console("ble info");
+    CHECK(!strncmp(con_log, "ok v2 started 0 held 0 banks 00 ", 32));
+    ble_key(core_play_bit(), 0);              /* PLAY */
+    CHECK(!ble_started() && st.error == (damaged ? -4 : -3));
+    CHECK(!strcmp(big_text, damaged ? "LSDJ ROM DAMAGED" : "NO LSDJ ROM"));
+    CHECK(!strcmp(small_text, damaged ? "INSTALL IT AGAIN" : "PUT YOURS IN WITH THE INSTALL PAGE"));
+    for (i = 0; i < 50; i++) {
+        ble_key(i == 20 ? core_play_bit() : 0, 1);     /* PLAY again, a knob: still nothing */
+        pass();
+    }
+    CHECK(!ble_started() && st.frames == 0 && flash_erases == 0 && flash_progs == 0);
+    console("ble hold");
+    CHECK(!strcmp(con_log, "err not started\r\n"));
+    console("ble b 0 0 4");
+    CHECK(!strcmp(con_log, "err range\r\n"));         /* no bank to read */
+    console("ble");
+    CHECK(strstr(con_log, damaged ? "lsdj stopped error -4" : "lsdj stopped error -3") != 0);
+    printf(fails ? "lsdj_unit_test (%s): %d FAILED\n" : "lsdj_unit_test (%s): all passed\n",
+           damaged ? "a damaged block" : "no block", fails);
+    return fails != 0;
+}
+
+int main(int argc, char **argv)
 {
     uint32_t i, x, y, diff = 0;
     int32_t out[64];
+    if (argc > 1)
+        return test_no_rom(!strcmp(argv[1], "damaged"));
+    {   /* the block made from the owner's ROM, at the end of the slot */
+        FILE *f = fopen("build/lsdj/cart.bin", "rb");
+        long n;
+        if (!f) {
+            printf("lsdj_unit_test: skipped (no build/lsdj/cart.bin: build with FELUCCA_LSDJ=1 LSDJ_ROM=your ROM)\n");
+            return 0;
+        }
+        memset(slot_tail, 0xFF, sizeof slot_tail);
+        fseek(f, 0, SEEK_END);
+        n = ftell(f);
+        rewind(f);
+        if (n <= 0 || n > (long)SLOT_ROOM || fread(slot_tail + SLOT_ROOM - (size_t)n, 1, (size_t)n, f) != (size_t)n) {
+            printf("lsdj_unit_test: FAILED: build/lsdj/cart.bin\n");
+            return 1;
+        }
+        fclose(f);
+    }
     memset(flash_sim, 0xFF, sizeof flash_sim);   /* an empty store */
     ble_draw();                               /* the splash, before PLAY */
     CHECK(texts == 5 && !ble_started());
@@ -533,10 +611,3 @@ int main(void)
            fails ? (unsigned)fails : blits);
     return fails != 0;
 }
-#else
-int main(void)
-{
-    printf("lsdj_unit_test: skipped (no build/lsdj/lsdj_rom.h: tools/lsdj_rom.py with your own ROM)\n");
-    return 0;
-}
-#endif
