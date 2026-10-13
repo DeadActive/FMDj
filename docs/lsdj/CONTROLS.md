@@ -19,10 +19,26 @@ Shortcuts for LSDj's screens:
 
 Editing as in LSDj: hold A (the top F) and turn SELECT to change a value by one, ALGORITHM by an octave or 0x10.
 
-The FM-1's own: MASTER is the volume; FX switches drawing every frame / every second frame, LFO the fast / slow
-ROM read (both shown on the status line); OCT- and OCT+ held together for 5 s enter UBOOT.
+The FM-1's own: MASTER is the volume; OCT- and OCT+ held together for 5 s enter UBOOT.
+
+## The status line
+
+Left: **SPD** is LSDj's speed against a Game Boy (100 % = real time). **LOAD** is how much of its time the FM-1
+needs for the Game Boy: under 100 % it keeps up, and the lower the more is spare.
+
+Right, with no key held: **GAPS** counts the seconds so far in which the sound ran dry, because the FM-1 was too
+slow just then. A gap is heard as a short stutter. While the number stands still, nothing was lost.
+
+Four switches for comparing; each is named on the status line only while it is off:
+
+| Button | Off | What it is |
+|---|---|---|
+| FX | FULL | every frame drawn, not every second one: a smoother screen, a higher LOAD |
+| LFO | SLOW | the plain ROM read |
+| EDIT | SPIN | LSDj's wait loop is run instruction by instruction: the LOAD without the saving |
+| ENV | OLD | the sound made once per Game Boy frame, as before: notes up to 17 ms off their beat |
 
 **REC held for a second saves to the FM-1's flash** (the status line: SAVING, then SAVED and the size; SAVE FULL if
-it does not fit). PLAY after power-on loads that save. GLO, EDIT and ENV do nothing.
+it does not fit). PLAY after power-on loads that save. GLO does nothing.
 
 A knob turned fast is followed at up to 30 presses a second; no more than 16 steps wait.

@@ -125,6 +125,15 @@ void minigb_apu_audio_callback(struct minigb_apu_ctx *ctx,
 		audio_sample_t *stream);
 
 /**
+ * (LSDj fork, DEADACTIVE) Fill "stream" with the next "frames" stereo frames
+ * (2 * frames samples): a part of a Game Boy frame's sound, as the registers
+ * are now. AUDIO_SAMPLES frames in any pieces are the samples of one
+ * audio_callback().
+ */
+void minigb_apu_audio_render(struct minigb_apu_ctx *ctx,
+		audio_sample_t *stream, const unsigned frames);
+
+/**
  * Read audio register at given address "addr".
  * \param ctx Library context. Must be initialised with audio_init().
  * \param addr Address of registers to read. Must be within 0xFF10 and 0xFF3F,

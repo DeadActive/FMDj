@@ -12,7 +12,7 @@ import sys
 
 START = {"ble_start", "btstack_init", "btctrler_task_init", "bt_ble_init", "bt_master_ble_init"}
 LSDJ_START = {"lsdj_start", "lsdj_step", "lsdj_push", "emu_init", "emu_frame", "gb_init", "gb_run_frame",
-              "__gb_step_cpu"}
+              "__gb_step_cpu", "emu_wait"}
 ALLOWED = {"ble_key"}                  # ble_ui.c: the PLAY handler; the only way in
 # the LSDj build's flash writers (core_ble_api.c, lsdj/lsdj_store.c): not reachable from boot at all, not even
 # through the key handler: lsdj_step calls them, and the core reaches that only through its pointer

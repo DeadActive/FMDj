@@ -3,8 +3,9 @@
 /* Host harness of the LSDj unit's emulator (firmware/src/lsdj/lsdj_emu.c): runs the owner's own ROM, never stored
  * in this repo, for some frames with the keys held as given, and writes the save RAM, a screenshot and the sound.
  *   lsdj_host ROM FRAMES [-s SAVE_IN] [-o SAVE_OUT] [-p SHOT.pgm] [-w SOUND.wav] [-m MODE] [-k FROM:TO:KEYS]...
- * MODE: lsdj_emu.c's emu_mode bits (1 inline ROM read, the default; 2 frame skip). Prints a hash of every frame's
- * sound and the final save RAM: the speed options must not change it.
+ * MODE: lsdj_emu.c's emu_mode bits (1 inline ROM read, 2 frame skip, 4 the wait loop skipped, 8 sound within the
+ * frame; all on by default). Prints a hash of every frame's sound and machine (registers, counters, memory) and the
+ * final save RAM: the speed options (1, 2, 4) must not change it.
  * KEYS: letters of l r u d a b s(elect) t(start). Exit 0 = the ROM ran, no emulator errors, the screen not blank.
  * tools/lsdj_rom.py runs it to make the start-up save (LSDj past its first-start check). */
 #include <stdio.h>
@@ -42,6 +43,33 @@ static const char *opt(int argc, char **argv, const char *o)
         if (!strcmp(argv[i], o))
             return argv[i + 1];
     return 0;
+}
+
+static uint32_t fnv(uint32_t h, const void *p, size_t n)
+{
+    const uint8_t *b = p;
+    while (n--)
+        h = (h ^ *b++) * 16777619u;
+    return h;
+}
+
+/* what the next frame depends on (not the picture: frame skip). all: the memories too (every 64th frame: they are
+ * 24 KiB, and a difference in them stays or shows in the registers) */
+static uint32_t machine(uint32_t h, int all)
+{
+    const struct gb_s *g = &emu.gb;
+    uint32_t r[] = {g->cpu_reg.a, g->cpu_reg.f.reg, g->cpu_reg.bc.reg, g->cpu_reg.de.reg, g->cpu_reg.hl.reg,
+                    g->cpu_reg.sp.reg, g->cpu_reg.pc.reg, g->gb_halt, g->gb_ime,
+                    (uint32_t)g->counter.lcd_count, (uint32_t)g->counter.div_count, (uint32_t)g->counter.tima_count,
+                    (uint32_t)g->counter.serial_count, (uint32_t)g->counter.lcd_off_count};
+    h = fnv(h, r, sizeof r);
+    h = fnv(h, g->hram_io, sizeof g->hram_io);
+    h = fnv(h, &emu_apu, sizeof emu_apu);
+    if (!all)
+        return h;
+    h = fnv(h, g->wram, sizeof g->wram);
+    h = fnv(h, g->vram, sizeof g->vram);
+    return fnv(h, g->oam, sizeof g->oam);
 }
 
 static void wav_u32(FILE *f, uint32_t v) { fputc(v, f); fputc(v >> 8, f); fputc(v >> 16, f); fputc(v >> 24, f); }
@@ -94,6 +122,7 @@ int main(int argc, char **argv)
         emu_frame(keys_at(i, argc, argv));
         for (s = 0; s < AUDIO_SAMPLES_TOTAL; s++)
             hash = (hash ^ (uint16_t)emu.snd[s]) * 16777619u;
+        hash = machine(hash, i % 64u == 63u || i + 1u == frames);
         for (s = 0; s < AUDIO_SAMPLES_TOTAL; s++) {
             uint32_t a = (uint32_t)(emu.snd[s] < 0 ? -emu.snd[s] : emu.snd[s]);
             peak = a > peak ? a : peak;
@@ -125,8 +154,9 @@ int main(int argc, char **argv)
         double us = (double)(clock() - t0) * 1e6 / CLOCKS_PER_SEC / (frames ? frames : 1);
         for (i = 0; i < LSDJ_SRAM; i++)
             hash = (hash ^ sram[i]) * 16777619u;
-        printf("frames %u, emulator errors %u, ink %u px, audio peak %u, %u banks, mode %u, hash %08x, %.1f us/frame\n",
-               frames, emu.errors, ink, peak, nb, emu_mode, hash, us);
+        printf("frames %u, emulator errors %u, ink %u px, audio peak %u, %u banks, mode %u, hash %08x, %.1f us/frame, "
+               "wait loop: %u instructions a frame skipped\n",
+               frames, emu.errors, ink, peak, nb, emu_mode, hash, us, frames ? emu.skipped / frames : 0);
     }
     return emu.errors || !ink;
 }

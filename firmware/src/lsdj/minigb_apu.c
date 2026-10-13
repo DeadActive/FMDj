@@ -121,7 +121,7 @@ static void update_sweep(struct chan *c)
 }
 
 static void update_square(struct minigb_apu_ctx *ctx, audio_sample_t *samples,
-		const bool ch2)
+		const uint_fast16_t nsamples, const bool ch2)
 {
 	struct chan *c = &ctx->chans[ch2];
 
@@ -130,7 +130,7 @@ static void update_square(struct minigb_apu_ctx *ctx, audio_sample_t *samples,
 
 	set_note_freq(c);
 
-	for (uint_fast16_t i = 0; i < AUDIO_NSAMPLES; i += 2) {
+	for (uint_fast16_t i = 0; i < nsamples; i += 2) {
 		update_len(ctx, c);
 		if (!c->enabled)
 			return;
@@ -178,7 +178,8 @@ static uint8_t wave_sample(struct minigb_apu_ctx *ctx,
 	return volume ? (sample >> (volume - 1)) : 0;
 }
 
-static void update_wave(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
+static void update_wave(struct minigb_apu_ctx *ctx, audio_sample_t *samples,
+		const uint_fast16_t nsamples)
 {
 	struct chan *c = &ctx->chans[2];
 
@@ -188,7 +189,7 @@ static void update_wave(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
 	set_note_freq(c);
 	c->freq_inc *= 2;
 
-	for (uint_fast16_t i = 0; i < AUDIO_NSAMPLES; i += 2) {
+	for (uint_fast16_t i = 0; i < nsamples; i += 2) {
 		update_len(ctx, c);
 		if (!c->enabled)
 			return;
@@ -222,7 +223,8 @@ static void update_wave(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
 	}
 }
 
-static void update_noise(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
+static void update_noise(struct minigb_apu_ctx *ctx, audio_sample_t *samples,
+		const uint_fast16_t nsamples)
 {
 	struct chan *c = &ctx->chans[3];
 
@@ -242,7 +244,7 @@ static void update_noise(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
 		c->freq_inc = freq * (uint32_t)(FREQ_INC_REF / AUDIO_SAMPLE_RATE);
 	}
 
-	for (uint_fast16_t i = 0; i < AUDIO_NSAMPLES; i += 2) {
+	for (uint_fast16_t i = 0; i < nsamples; i += 2) {
 		update_len(ctx, c);
 		if (!c->enabled)
 			return;
@@ -285,16 +287,33 @@ static void update_noise(struct minigb_apu_ctx *ctx, audio_sample_t *samples)
 }
 
 /**
+ * (LSDj fork, DEADACTIVE) The next "frames" stereo frames of sound, as the
+ * registers are now: a Game Boy frame's sound can be made in pieces, each
+ * register write taking effect where it happened. The pieces of a frame are
+ * the same samples as minigb_apu_audio_callback() gives for it at once.
+ */
+void minigb_apu_audio_render(struct minigb_apu_ctx *ctx,
+		audio_sample_t *stream, const unsigned frames)
+{
+	const uint_fast16_t nsamples = (uint_fast16_t)(frames * 2);
+
+	if (!frames)
+		return;
+
+	memset(stream, 0, nsamples * sizeof(audio_sample_t));
+	update_square(ctx, stream, nsamples, 0);
+	update_square(ctx, stream, nsamples, 1);
+	update_wave(ctx, stream, nsamples);
+	update_noise(ctx, stream, nsamples);
+}
+
+/**
  * SDL2 style audio callback function.
  */
 void minigb_apu_audio_callback(struct minigb_apu_ctx *ctx,
 		audio_sample_t *stream)
 {
-	memset(stream, 0, AUDIO_SAMPLES_TOTAL * sizeof(audio_sample_t));
-	update_square(ctx, stream, 0);
-	update_square(ctx, stream, 1);
-	update_wave(ctx, stream);
-	update_noise(ctx, stream);
+	minigb_apu_audio_render(ctx, stream, AUDIO_SAMPLES);
 }
 
 static void chan_trigger(struct minigb_apu_ctx *ctx, uint_fast8_t i)

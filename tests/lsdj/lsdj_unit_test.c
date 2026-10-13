@@ -19,6 +19,7 @@ static int last_px_busy;                      /* the stub's "DMA": px must not c
 static uint16_t last_copy[240 * 240];
 static uint32_t last_n, last_h;
 static int lcd_idle = 1;
+static char keys_text[40];                    /* the right part of the status line, as last drawn */
 
 #include "ble/ble_core.h"
 uint32_t core_ms(void) { return ms; }
@@ -50,10 +51,11 @@ void core_lcd_blit(int x, int y, int w, int h, const uint16_t *px)
 void core_fill(int x, int y, int w, int h, int colour) { (void)x; (void)y; (void)w; (void)h; (void)colour; dma_check(); }
 void core_text(int x, int y, int w, int font, const char *s, int fg, int bg, int c)
 {
-    (void)x; (void)y; (void)w; (void)font; (void)fg; (void)bg; (void)c;
+    (void)y; (void)w; (void)font; (void)fg; (void)bg; (void)c;
     dma_check();
     texts++;
-    (void)s;
+    if (x == 112 && strlen(s) < sizeof keys_text)
+        strcpy(keys_text, s);
 }
 static int32_t pot = 1023;
 int core_lcd_idle(void) { return lcd_idle; }
@@ -268,6 +270,41 @@ static void test_flash(void)                  /* REC held 1 s saves; PLAY after 
     CHECK(flash_bad == 0);
 }
 
+/* GAPS on the status line: the seconds in which the sound ran dry (the FM-1 too slow), but not those the host held
+ * the Game Boy in. pass() gives 882 samples' time to one Game Boy frame of 738: too slow, on purpose */
+static void test_gaps(void)
+{
+    uint32_t i, g;
+    char b[24];
+    for (i = 0; i < 60; i++) {                /* two frames a pass: sound enough */
+        ble_service();
+        pass();
+    }
+    g = st.gaps;
+    for (i = 0; i < 150; i++) {               /* 3 s */
+        ble_service();
+        pass();
+    }
+    CHECK(st.gaps == g);
+    for (i = 0; i < 150; i++)                 /* 3 s too slow */
+        pass();
+    CHECK(st.gaps >= g + 2u && st.gaps <= g + 3u);
+    sprintf(b, "GAPS %u", (unsigned)st.gaps);
+    CHECK(!strcmp(keys_text, b));
+    console("ble hold");
+    g = st.gaps;
+    for (i = 0; i < 100; i++)                 /* held 2 s: silence, and no gap of the FM-1's */
+        pass();
+    console("ble go");
+    for (i = 0; i < 100; i++) {
+        ble_service();
+        pass();
+    }
+    CHECK(st.gaps == g);
+    console("ble");
+    CHECK(strstr(con_log, "gap seconds ") != 0 && strstr(con_log, "wait skipped ") != 0);
+}
+
 static void test_console(void)                /* after PLAY: `ble ...` holds and restarts the Game Boy */
 {
     static const uint8_t d[4] = {0xDE, 0xAD, 0xBE, 0xEF};
@@ -322,6 +359,11 @@ int main(void)
     ble_key(buttons, 0);                      /* PLAY: start */
     buttons = 0;
     CHECK(ble_started() && st.error == 0);
+    for (i = 0; i < 55; i++) {                /* 1.1 s with sound enough (two Game Boy frames to a 20 ms pass): */
+        ble_service();
+        pass();
+    }
+    CHECK(st.gaps == 0 && !strcmp(keys_text, "GAPS 0"));   /* no gap: the empty ring at the start is not one */
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
     CHECK(st.frames > 250 && emu.errors == 0);
@@ -362,16 +404,35 @@ int main(void)
         buttons = core_button_bit(CORE_BTN_OCTDN) | core_button_bit(CORE_BTN_OCTUP); /* the UBOOT pair: no key */
         pass();
         CHECK(st.pad == 0xFF);
-        CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP));                          /* both options on at start */
+        CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE));   /* all on at start */
+        buttons = 0;
+        pass();
+        CHECK(!strncmp(keys_text, "GAPS ", 5) && !strchr(keys_text + 5, ' '));       /* ... and then not named */
         ble_key(core_button_bit(CORE_BTN_FX), 0);                                    /* FX: frame skip off */
-        CHECK(emu_mode == EMU_FAST_ROM);
-        ble_key(core_button_bit(CORE_BTN_LFO), 0);                                   /* LFO: fast ROM read off */
-        CHECK(emu_mode == 0);
+        CHECK(emu_mode == (EMU_FAST_ROM | EMU_WAIT_SKIP | EMU_SND_FINE));
         t = texts;
         pass();
-        CHECK(texts > t);                                                            /* the options redrawn */
+        CHECK(texts > t && strstr(keys_text, " FULL") && !strstr(keys_text, "SLOW"));   /* the options redrawn */
+        ble_key(core_button_bit(CORE_BTN_LFO), 0);                                   /* LFO: fast ROM read off */
+        CHECK(emu_mode == (EMU_WAIT_SKIP | EMU_SND_FINE));
+        ble_key(core_button_bit(CORE_BTN_EDIT), 0);                                  /* EDIT: the wait loop run */
+        CHECK(emu_mode == EMU_SND_FINE);
+        ble_key(core_button_bit(CORE_BTN_ENV), 0);                                   /* ENV: the sound per frame */
+        CHECK(emu_mode == 0);
+        pass();
+        CHECK(strstr(keys_text, " SLOW FULL SPIN OLD") != 0);
+        {
+            uint32_t f = st.frames, k0 = emu.skipped;
+            for (i = 0; i < 20; i++)
+                pass();
+            CHECK(st.frames == f + 20 && emu.skipped == k0 && emu.errors == 0);     /* LSDj runs so too */
+            ble_key(core_button_bit(CORE_BTN_EDIT) | core_button_bit(CORE_BTN_ENV), 0);
+            for (i = 0; i < 20; i++)
+                pass();
+            CHECK(emu.skipped > k0 + 20u * 1500u && emu.errors == 0);               /* the wait loop skipped again */
+        }
         ble_key(core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO), 0);
-        CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP));
+        CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE));
         buttons = 0;
         pass();
         pass();
@@ -416,6 +477,7 @@ int main(void)
             fclose(f);
         }
     }
+    test_gaps();
     test_console();
     test_knobs_and_shortcuts();
     test_flash();

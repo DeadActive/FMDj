@@ -7,7 +7,8 @@
  *
  * Nothing runs at boot: PLAY starts the Game Boy (ble_key). From then on, each main-loop pass runs one Game Boy
  * frame when the audio ring has room for its sound (the audio ISR plays the ring: lsdj_audio), then sends a few
- * changed line pairs to the screen (1.5x: 240 x 216). The emulator is reached only through function pointers set
+ * changed line pairs to the screen (1.5x: 240 x 216). The status line tells how it keeps up: SPD, LOAD, and GAPS,
+ * the seconds in which the ring ran dry. The emulator is reached only through function pointers set
  * by lsdj_start (gate 4, tools/check_ble_boot.py --lsdj, walks the direct calls from boot).
  *
  * Songs move over the console: `ble WORDS` is a transfer command (lsdj_xfer.c; web/lsdj.html drives it). The host
@@ -86,6 +87,9 @@ static struct {
     char note[12];                            /* shown there instead for 2 s: SAVING, SAVED nnK, SAVE FULL, SAVE FAILED */
     uint32_t note_ms, rec_ms;                 /* since the note; since REC went down (| 1: 0 = up) */
     uint8_t rec_done;                         /* this REC press has saved */
+    uint32_t sec_skipped, last_skipped;       /* LSDj's wait loop: instructions not run, a frame (console `ble`) */
+    uint32_t gaps;                            /* seconds in which the sound ran dry (the status line's GAPS) */
+    uint8_t gap_off;                          /* ... but not this one: the Game Boy was held, started or saved in it */
     int error;
 } st;
 
@@ -150,17 +154,27 @@ static void status_line(void)
     core_text(0, (int)STATUS_Y, 112, CORE_FONT_S, b, CORE_MID, CORE_BG, 0);
 }
 
-/* right: USB while the host holds the Game Boy; else the Game Boy keys held, or with none the speed options (FAST /
- * SLOW ROM read, SKIP / FULL drawing) */
+/* right: USB while the host holds the Game Boy; else the Game Boy keys held, or with none GAPS: the seconds so far
+ * in which the sound ran dry (the FM-1 was too slow: a gap is heard), and each option that is switched off:
+ * SLOW (the ROM read, LFO), FULL (every frame drawn, FX), SPIN (LSDj's wait loop run, EDIT), OLD (the sound per
+ * frame, ENV) */
 static void keys_line(void)
 {
-    char b[24];
+    char b[40], *p;
     if (st.note[0]) {
         put_s(b, st.note);
     } else if (xfer.held) {
         put_s(b, "USB");
     } else if (st.pad == 0xFFu) {
-        put_s(put_s(b, emu_mode & EMU_FAST_ROM ? "FAST " : "SLOW "), emu_mode & EMU_FRAME_SKIP ? "SKIP" : "FULL");
+        p = put_u(put_s(b, "GAPS "), st.gaps);
+        if (!(emu_mode & EMU_FAST_ROM))
+            p = put_s(p, " SLOW");
+        if (!(emu_mode & EMU_FRAME_SKIP))
+            p = put_s(p, " FULL");
+        if (!(emu_mode & EMU_WAIT_SKIP))
+            p = put_s(p, " SPIN");
+        if (!(emu_mode & EMU_SND_FINE))
+            put_s(p, " OLD");
     } else {
         lsdj_pad_text(b, st.pad);
     }
@@ -209,6 +223,7 @@ static int lsdj_save(void)                     /* the save RAM into flash: a sec
 {
     char b[12];
     int r;
+    st.gap_off = 1;                           /* (silence, but not a gap of the Game Boy's) */
     lsdj_note("SAVING");
     r = flash_on ? lsdj_store_save(&flash, &store, sram, LSDJ_SRAM) : LSDJ_ST_FAIL;
     if (r == LSDJ_ST_OK) {
@@ -224,6 +239,7 @@ static int lsdj_save(void)                     /* the save RAM into flash: a sec
 static void lsdj_flash_req(void)               /* the console queued it (lsdj_xfer.c): flash is written only here */
 {
     int r = LSDJ_ST_FAIL;
+    st.gap_off = 1;
     if (xfer.req == LSDJ_REQ_SAVE)
         r = lsdj_save();
     else if (!flash_on)
@@ -256,7 +272,14 @@ static void lsdj_step(void)
         st.sec_frames = st.frames;
         st.last_under = ring.under - st.sec_under;
         st.sec_under = ring.under;
+        if (st.last_under && !st.gap_off) {   /* the sound ran dry in this second, and nobody stopped the Game Boy */
+            st.gaps++;
+            st.pad_shown = (uint8_t)~st.pad;  /* redraw GAPS */
+        }
+        st.gap_off = 0;
         st.last_load = st.last_fps ? st.sec_us / st.last_fps * 100u / 16742u : 0;
+        st.last_skipped = st.last_fps && emu.skipped >= st.sec_skipped ? (emu.skipped - st.sec_skipped) / st.last_fps : 0;
+        st.sec_skipped = emu.skipped;         /* (it starts again with the Game Boy: `ble go reset`) */
         st.sec_us = 0;
         if (st.sec_ms - st.win_ms >= 4000u) {
             st.last_speed = lsdj_speed(st.frames - st.win_frames, st.sec_ms - st.win_ms);
@@ -283,8 +306,10 @@ static void lsdj_step(void)
         st.rec_done = 1;
         lsdj_save();
     }
-    if (xfer.held)
+    if (xfer.held) {
+        st.gap_off = 1;
         return;                               /* the host reads or writes the save: no Game Boy frame */
+    }
     if (xfer.reset_req) {                     /* the save changed under LSDj: it starts again and reads it */
         xfer.reset_req = 0;
         lsdj_restart();
@@ -379,6 +404,8 @@ static __attribute__((noinline)) void lsdj_start(void)
     st.start_ms = st.sec_ms = st.win_ms = core_ms();
     st.pad = 0xFF;
     st.pad_shown = 0;                         /* draw the keys part once */
+    st.gaps = 0;
+    st.gap_off = 1;                           /* (the ring is empty until the first frame: not a gap) */
     draw = lsdj_push;
     run = lsdj_step;
     xfer.started = 1;
@@ -404,11 +431,16 @@ void ble_key(uint32_t pressed_buttons, int32_t select_steps)
         if (pressed_buttons & core_button_bit(CORE_BTN_OCTDN))
             lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, 1);
     }
-    if (pressed_buttons & core_button_bit(CORE_BTN_FX))           /* the speed options, switched while running */
+    if (pressed_buttons & core_button_bit(CORE_BTN_FX))           /* the options, switched while running */
         emu_mode ^= EMU_FRAME_SKIP;
     if (pressed_buttons & core_button_bit(CORE_BTN_LFO))
         emu_mode ^= EMU_FAST_ROM;
-    if (pressed_buttons & (core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO)))
+    if (pressed_buttons & core_button_bit(CORE_BTN_EDIT))         /* (LOAD shows what the wait loop costs) */
+        emu_mode ^= EMU_WAIT_SKIP;
+    if (pressed_buttons & core_button_bit(CORE_BTN_ENV))          /* (to hear the sound per frame against it) */
+        emu_mode ^= EMU_SND_FINE;
+    if (pressed_buttons & (core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO) |
+                           core_button_bit(CORE_BTN_EDIT) | core_button_bit(CORE_BTN_ENV)))
         st.pad_shown = (uint8_t)~st.pad;     /* redraw the options */
 }
 
@@ -508,8 +540,14 @@ void ble_status(void)                          /* the console's `ble`: the statu
     core_con_puts(b);
     p = put_s(b, "mode ");
     p = put_u(p, emu_mode);
-    p = put_s(p, " (1 fast rom, 2 frame skip) load% ");
+    p = put_s(p, " (1 fast rom, 2 frame skip, 4 wait skip, 8 fine sound) load% ");
     p = put_u(p, st.last_load);
+    put_s(p, "\r\n");
+    core_con_puts(b);
+    p = put_s(b, "gap seconds ");
+    p = put_u(p, st.gaps);
+    p = put_s(p, " wait skipped ");                   /* instructions of LSDj's wait loop not run, a frame */
+    p = put_u(p, st.last_skipped);
     put_s(p, "\r\n");
     core_con_puts(b);
     p = put_s(b, "audio gaps ");
