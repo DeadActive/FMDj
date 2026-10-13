@@ -86,11 +86,44 @@ def main(pkg, version, out):
         strip_module((HERE / "lsdjlink.js").read_text(encoding="utf-8"))
     (out / "webapp" / "lsdj").mkdir(parents=True, exist_ok=True)
     (out / "webapp" / "lsdj" / "index.html").write_text(page.replace("/*LIB*/", songs_lib), encoding="utf-8")
+    first = "webapp/installer/"
+    note = ""
+    # the LSDj install page (lsdj_install.html): the user's own ROM goes into the firmware that holds none
+    # (lsdj-base.fwsc, next to the package or the package itself), in the browser, with the emulator and the
+    # block's maker as WebAssembly (web/lsdj_wasm.sh). Nothing of LSDj is on the site.
+    base = pkg if pkg.name == "lsdj-base.fwsc" else pkg.with_name("lsdj-base.fwsc")
+    wasm = HERE.parent / "build" / "web" / "lsdj_emu.wasm"
+    for old in fw.glob("lsdj-base-*.fwsc"):
+        old.unlink()
+    if base.exists() and wasm.exists():
+        sys.path.insert(0, str(HERE.parent / "tools"))
+        import lsdj_demo
+        args, end = lsdj_demo.key_args(60)
+        keys = [[int(a), int(b), k] for a, b, k in (x.split(":") for x in args[1::2])]
+        bname = f"lsdj-base-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
+        ipage = (HERE / "lsdj_install.html").read_text(encoding="utf-8")
+        for mark in ("/*LIB*/", "/*META*/"):
+            if ipage.count(mark) != 1:
+                raise SystemExit(f"lsdj_install.html must contain {mark} once; update make_site.py")
+        ilib = "\n".join(strip_module((HERE / n).read_text(encoding="utf-8"))
+                         for n in ("fm1pkg.js", "fm1ota.js", "lsdjinstall.js"))
+        imeta = json.dumps({"version": version, "product": product_of(base.read_bytes()),
+                            "pkg": "../../firmware/" + bname, "wasm": "lsdj_emu.wasm",
+                            "demo": {"keys": keys, "frames": end + 60}})
+        idir = out / "webapp" / "lsdj-install"
+        idir.mkdir(parents=True, exist_ok=True)
+        (idir / "index.html").write_text(ipage.replace("/*LIB*/", ilib).replace("/*META*/", imeta), encoding="utf-8")
+        shutil.copy(wasm, idir / "lsdj_emu.wasm")
+        shutil.copy(base, fw / bname)
+        note = f", webapp/lsdj-install (firmware/{bname}, no ROM in it)"
+        if base == pkg:                             # a site of the ROM-less firmware: its front door is that page
+            first = "webapp/lsdj-install/"
     (out / "index.html").write_text(
         '<!doctype html><meta charset="utf-8"><title>Felucca</title>'
-        '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
-        '<a href="webapp/installer/">Felucca installer</a>\n', encoding="utf-8")
-    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})")
+        f'<meta http-equiv="refresh" content="0; url={first}">'
+        f'<a href="{first}">Felucca installer</a>\n', encoding="utf-8")
+    print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})"
+          + note)
 
 
 if __name__ == "__main__":

@@ -280,11 +280,12 @@ run "BLE OS layer (host back end)" sh -c 'cc -Wall -O1 -Wno-deprecated-declarati
 run "LSDj unit: ROM banks, keys, screen spans, 1.5x scaler, audio ring, save unpacker" sh -c 'cc -Wall -O1 -Ifirmware/src -o build/tests/lsdj_gb_test tests/lsdj/lsdj_gb_test.c && build/tests/lsdj_gb_test'
 run "LSDj transfer commands (the console's ble WORDS): hold, save RAM read / write, ROM banks" sh -c 'cc -Wall -Wno-unused-function -O1 -Ifirmware/src -o build/tests/lsdj_xfer_test tests/lsdj/lsdj_xfer_test.c && build/tests/lsdj_xfer_test'
 run "LSDj flash store: two slots, a power cut at every flash operation, kit banks, Hortator's sample headers" sh -c 'cc -Wall -Wno-unused-function -O1 -Ifirmware/src -o build/tests/lsdj_store_test tests/lsdj/lsdj_store_test.c && build/tests/lsdj_store_test'
-# (with the owner's ROM only: build/lsdj/lsdj_rom.h from FELUCCA_LSDJ=1 LSDJ_ROM=... ./build.sh; never committed)
+# (with the owner's ROM only: build/lsdj/cart.bin from FELUCCA_LSDJ=1 LSDJ_ROM=... ./build.sh; never committed)
 run "LSDj sound: minigb_apu zombie mode (NRx2 writes while a channel plays) as the hardware" sh -c 'cc -O1 -w -Ifirmware/src/lsdj -o build/tests/lsdj_apu_test tests/lsdj/lsdj_apu_test.c && build/tests/lsdj_apu_test'
 run "LSDj emulator on our own test program: notes start where they were written, the wait loop skipped with the machine unchanged" sh -c 'cc -O1 -w -Ifirmware/src -Ifirmware/src/lsdj -o build/tests/lsdj_emu_test tests/lsdj/lsdj_emu_test.c && build/tests/lsdj_emu_test'
 run "LSDj speed options: the same sound, machine and save with every combination (skipped without LSDJ_ROM)" python3 tests/lsdj/lsdj_modes_test.py
-run "LSDj unit against a simulated core (skipped without your ROM's private header)" sh -c 'cc -O1 -w -Ifirmware/src -Ifirmware/src/lsdj -Ibuild/lsdj -o build/tests/lsdj_unit_test tests/lsdj/lsdj_unit_test.c && build/tests/lsdj_unit_test'
+run "LSDj cartridge block: made from a ROM and a save, read back; damaged ones and files that are no LSDj ROM refused" sh -c 'cc -Wall -Wno-unused-function -O1 -Ifirmware/src -o build/tests/lsdj_cart_test tests/lsdj/lsdj_cart_test.c && build/tests/lsdj_cart_test'
+run "LSDj unit against a simulated core: no ROM in the firmware, a damaged one; with your ROM's block the rest (skipped without it)" sh -c 'cc -O1 -w -Ifirmware/src -Ifirmware/src/lsdj -o build/tests/lsdj_unit_test tests/lsdj/lsdj_unit_test.c && build/tests/lsdj_unit_test none && build/tests/lsdj_unit_test damaged && build/tests/lsdj_unit_test'
 
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
 
@@ -293,6 +294,7 @@ if command -v node >/dev/null 2>&1; then
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
     run "LSDj songs: the save's file system, song files, the console link, the page's flows" node web/test_lsdj.mjs
     run "LSDj songs with the real ROM: LSDj loads what the page writes (skipped without LSDJ_ROM)" node tests/lsdj/lsdj_song_test.mjs
+    run "LSDj install page: its block and package are the Mac build's byte for byte; what it refuses (skipped without the WebAssembly)" python3 tests/lsdj/lsdj_install_test.py
 else
     echo "== skip web tests (no node)"
 fi
