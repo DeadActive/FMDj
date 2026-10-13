@@ -159,3 +159,5 @@ canvas.lcd { image-rendering: pixelated; image-rendering: crisp-edges; border-ra
 .key.page > span:first-child { writing-mode: vertical-rl; margin-top: 10px; font: 700 11px/1 var(--print); letter-spacing: .08em; color: var(--navy); }
 .key.page.black > span:first-child { color: #e8e6df; }
 .device.phone .key.page > span:first-child { font-size: 8px; margin-top: 5px; letter-spacing: 0; }
+.key.page .hint { color: var(--navy); }
+.key.page.black .hint { color: #e8e6df; }
