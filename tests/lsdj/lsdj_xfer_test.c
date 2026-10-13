@@ -283,6 +283,24 @@ static void test_go_and_idle(void)
     CHECK(is("go reset", "ok") && x.reset_req == 0);    /* nothing to restart before PLAY */
 }
 
+static void test_bench(void)                  /* the test bench's commands (the page does not use them: no vectors) */
+{
+    x.started = 0;
+    x.held = 0;
+    CHECK(is("key 08", "err not started"));
+    x.started = 1;
+    CHECK(is("key 08", "ok") && x.key == 0x08 && x.key_n == 4);         /* START down for 4 Game Boy frames */
+    CHECK(is("key 14 20", "ok") && x.key == 0x14 && x.key_n == 0x20);   /* SELECT + RIGHT for 32 */
+    CHECK(is("key 100", "err range") && is("key 08 0", "err range") && is("key 08 100", "err range"));
+    CHECK(x.key == 0x14 && x.key_n == 0x20);                            /* an error changes nothing */
+    CHECK(is("key", "err ?") && is("key 08 4 4", "err ?"));
+    x.mode = 15;
+    CHECK(is("mode", "ok F") && !x.mode_set);
+    CHECK(is("mode 7", "ok 7") && x.mode == 7 && x.mode_set);
+    x.mode_set = 0;
+    CHECK(is("mode 10", "err range") && x.mode == 7 && !x.mode_set);
+}
+
 int main(void)
 {
     vec = fopen("build/tests/lsdj_xfer_vectors.txt", "w");
@@ -297,6 +315,8 @@ int main(void)
     if (vec)
         fclose(vec);
     CHECK(vec != 0);
+    vec = 0;
+    test_bench();
     printf(fails ? "lsdj_xfer_test: %d FAILED\n" : "lsdj_xfer_test: all passed\n", fails);
     return fails != 0;
 }

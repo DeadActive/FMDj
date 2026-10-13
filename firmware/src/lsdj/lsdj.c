@@ -34,6 +34,7 @@
 #include "lsdj_rom.h"
 
 #define RING_N 4096u                          /* stereo frames: 93 ms, 5.5 Game Boy frames */
+#define RING_LOW (RING_N / 2u)                /* under this the step runs a second Game Boy frame in its pass */
 #define Y0 4u                                 /* the picture: rows 4 .. 219; the status line below */
 #define GROUPS (LSDJ_H / 2u)                  /* line pairs: 3 screen rows each */
 #define PUSH_MAX 8u                           /* line pairs merged into one transfer (24 rows, <= 11.5 KB) */
@@ -76,7 +77,7 @@ static uint8_t kit_buf[LSDJ_BANK] LSDJ_POOL;  /* a kit bank on its way from the 
 static const uint16_t PAL[4] = {RGB(232, 232, 224), RGB(160, 160, 152), RGB(88, 88, 84), RGB(16, 16, 16)};
 
 static struct {
-    uint32_t frames, waits, frame_max_us, frame_us_sum, pushes, start_ms, push_ticks, push_calls;
+    uint32_t frames, waits, doubles, frame_max_us, frame_us_sum, pushes, start_ms, push_ticks, push_calls;
     uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under, sec_us, last_load;
     uint32_t win_ms, win_frames, last_speed;  /* SPD: over 4 s windows (whole frames in 1 s jitter by 1.7 %) */
     uint32_t buttons, notes;                  /* as read for the last frame (console `ble`) */
@@ -88,6 +89,8 @@ static struct {
     uint32_t note_ms, rec_ms;                 /* since the note; since REC went down (| 1: 0 = up) */
     uint8_t rec_done;                         /* this REC press has saved */
     uint32_t sec_skipped, last_skipped;       /* LSDj's wait loop: instructions not run, a frame (console `ble`) */
+    uint32_t step_ticks, sec_frame_max, sec_pass_max, last_frame_max, last_pass_max;   /* the last second's longest
+                                               * frame and longest time between two steps, us (console `ble`) */
     uint32_t gaps;                            /* seconds in which the sound ran dry (the status line's GAPS) */
     uint8_t gap_off;                          /* ... but not this one: the Game Boy was held, started or saved in it */
     int error;
@@ -265,7 +268,12 @@ static void lsdj_restart(void)                 /* `ble go reset`: the Game Boy f
 
 static void lsdj_step(void)
 {
-    uint32_t t0, us;
+    uint32_t t0, us, n;
+    t0 = core_ticks();                        /* the longest time from one step to the next, in each second */
+    us = (t0 - st.step_ticks) / CORE_TICKS_PER_US;
+    st.step_ticks = t0;
+    if (us > st.sec_pass_max)
+        st.sec_pass_max = us;
     if (core_ms() - st.sec_ms >= 1000u) {
         st.sec_ms += 1000u;
         st.last_fps = st.frames - st.sec_frames;
@@ -280,6 +288,9 @@ static void lsdj_step(void)
         st.last_load = st.last_fps ? st.sec_us / st.last_fps * 100u / 16742u : 0;
         st.last_skipped = st.last_fps && emu.skipped >= st.sec_skipped ? (emu.skipped - st.sec_skipped) / st.last_fps : 0;
         st.sec_skipped = emu.skipped;         /* (it starts again with the Game Boy: `ble go reset`) */
+        st.last_frame_max = st.sec_frame_max;
+        st.last_pass_max = st.sec_pass_max;
+        st.sec_frame_max = st.sec_pass_max = 0;
         st.sec_us = 0;
         if (st.sec_ms - st.win_ms >= 4000u) {
             st.last_speed = lsdj_speed(st.frames - st.win_frames, st.sec_ms - st.win_ms);
@@ -320,18 +331,33 @@ static void lsdj_step(void)
     }
     st.pot = core_master_pot();
     st.master_q12 = lsdj_master(&st.knob, st.pot);
-    t0 = core_ticks();
-    st.buttons = core_buttons();
-    st.notes = core_notes();
-    st.pad = lsdj_pad(st.buttons, st.notes, pad_map) & (uint8_t)~lsdj_knobs_frame(&knobs);
-    emu_frame(st.pad);
-    lsdj_ring_push(&ring, emu.snd, LSDJ_FRAME_SAMPLES);
-    us = (core_ticks() - t0) / CORE_TICKS_PER_US;
-    st.frames++;
-    st.frame_us_sum += us;
-    st.sec_us += us;
-    if (us > st.frame_max_us)
-        st.frame_max_us = us;
+    /* A pass of the core's main loop lasts 15 ms or more (core_main.c), and a Game Boy frame is 16.7 ms of sound:
+     * one frame a pass makes at most 12 % more sound than is played, and after a slow pass the ring would stay
+     * low for a long time. So with the ring under half, a second frame runs in the same pass. (Measured on the
+     * FM-1, 2026-10-13: 67 passes a second with nothing playing.) */
+    for (n = 0; n < 2u; n++) {
+        t0 = core_ticks();
+        st.buttons = core_buttons();
+        st.notes = core_notes();
+        st.pad = lsdj_pad(st.buttons, st.notes, pad_map) & (uint8_t)~lsdj_knobs_frame(&knobs);
+        if (xfer.key_n) {                     /* the console's `ble key` */
+            xfer.key_n--;
+            st.pad &= (uint8_t)~xfer.key;
+        }
+        emu_frame(st.pad);
+        lsdj_ring_push(&ring, emu.snd, LSDJ_FRAME_SAMPLES);
+        us = (core_ticks() - t0) / CORE_TICKS_PER_US;
+        st.frames++;
+        st.frame_us_sum += us;
+        st.sec_us += us;
+        if (us > st.frame_max_us)
+            st.frame_max_us = us;
+        if (us > st.sec_frame_max)
+            st.sec_frame_max = us;
+        if (lsdj_ring_fill(&ring) >= RING_LOW)
+            break;
+        st.doubles += n == 0;
+    }
 }
 
 /* changed line pairs to the screen, round robin, never waiting: while the last transfer runs, nothing; else one
@@ -402,6 +428,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     for (r = 0; r < 8; r++)
         pad_map[r] = KEYS[r] < 0 ? 0 : core_button_bit(KEYS[r]);
     st.start_ms = st.sec_ms = st.win_ms = core_ms();
+    st.step_ticks = core_ticks();
     st.pad = 0xFF;
     st.pad_shown = 0;                         /* draw the keys part once */
     st.gaps = 0;
@@ -477,14 +504,20 @@ static void lsdj_console(const char *args)     /* the words after `ble` on the c
     xfer.size = LSDJ_SRAM;
     xfer.rom = run ? rom_tab : lsdj_rom;    /* (the flash kit banks are in it once PLAY has read the store) */
     xfer.nbanks = LSDJ_ROM_BANKS;
+    xfer.mode = (uint8_t)emu_mode;
     lsdj_xfer_cmd(&xfer, args, core_ms(), xfer_out);
+    if (xfer.mode_set) {                      /* `ble mode M`: as the option buttons */
+        xfer.mode_set = 0;
+        emu_mode = xfer.mode;
+        st.pad_shown = (uint8_t)~st.pad;
+    }
     core_con_puts(xfer_out);
     core_con_puts("\r\n");
 }
 
 void ble_status(void)                          /* the console's `ble`: the status; `ble WORDS`: a transfer command */
 {
-    char b[96], *p = b;
+    char b[128], *p = b;
     const char *a = core_con_line();          /* (console.c is not ours to change: gate 2b; it calls this for `ble`) */
     while (*a == ' ')
         a++;
@@ -518,6 +551,8 @@ void ble_status(void)                          /* the console's `ble`: the statu
     p = put_u(p, st.last_fps);
     p = put_s(p, " waits ");
     p = put_u(p, st.waits);
+    p = put_s(p, " doubles ");                        /* passes with a second frame */
+    p = put_u(p, st.doubles);
     put_s(p, "\r\n");
     core_con_puts(b);
     p = put_s(b, "keys buttons 0x");
@@ -548,6 +583,10 @@ void ble_status(void)                          /* the console's `ble`: the statu
     p = put_u(p, st.gaps);
     p = put_s(p, " wait skipped ");                   /* instructions of LSDj's wait loop not run, a frame */
     p = put_u(p, st.last_skipped);
+    p = put_s(p, " sec_frame_max_us ");
+    p = put_u(p, st.last_frame_max);
+    p = put_s(p, " sec_pass_max_us ");
+    p = put_u(p, st.last_pass_max);
     put_s(p, "\r\n");
     core_con_puts(b);
     p = put_s(b, "audio gaps ");

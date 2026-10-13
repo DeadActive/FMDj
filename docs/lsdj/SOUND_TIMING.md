@@ -40,6 +40,19 @@ are the same as when the loop is run (`tests/lsdj/lsdj_emu_test.c`, `tests/lsdj/
 
 How much `LOAD` falls on the FM-1 is to be read from its status line (`docs/lsdj/DEVICE_STEPS_SOUND.md`).
 
+## 3. One Game Boy frame per pass of the main loop
+
+Measured on the FM-1 (2026-10-13, `ble` on the console): a pass of the core's main loop lasts 15 ms or more
+(`core_main.c`), so with one Game Boy frame (16.7 ms of sound) per pass the FM-1 made at most 12 % more sound than
+it played, however fast the emulator. After one slow pass the sound buffer stayed low for a long time.
+
+Now, when the buffer is under half, a second frame runs in the same pass (`lsdj.c`, `RING_LOW`); the console's
+`doubles` counts them. With nothing playing the FM-1 ran 59.7 frames a second at `LOAD 20%` with no under-run in
+4 minutes.
+
+For tests from the Mac, the console takes `ble key KK [N]` (Game Boy keys held for N frames) and `ble mode [M]` (the
+four switches), and `ble` alone also prints the last second's longest frame and longest pass.
+
 ## What is not changed
 
 - Peanut-GB's CPU and screen timing, and minigb_apu's sound generation, are as before.

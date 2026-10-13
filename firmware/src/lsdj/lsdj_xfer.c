@@ -23,6 +23,10 @@
  *   kits K             ok                       K kit banks from now on (the save is written again); needs hold
  *   st                 ok busy | ok R           the last request: 0 done, 1 the save does not fit, 2 the flash
  *                                               did not take it, 3 no such kit bank
+ * The test bench (not the page): what a hand at the FM-1 would do, from the console:
+ *   key KK [N]         ok | err not started     Game Boy keys KK (1 = down: 01 A, 02 B, 04 SELECT, 08 START, 10 RIGHT,
+ *                                               20 LEFT, 40 UP, 80 DOWN) held for the next N frames (1..FF; 4)
+ *   mode [M]           ok M                     the emulator's options (lsdj_emu.c emu_mode, 0..F); M sets them
  * Numbers are hex, 1..8 digits, no prefix. CRC16: XMODEM (0x1021, start 0) of the data bytes, 4 digits.
  * Errors: err ? (not a command), err hold, err range, err hex, err crc, err busy (a request waits), err kit (no
  * `k` before). */
@@ -50,6 +54,8 @@ typedef struct {
     uint8_t req, req_arg, res;                /* the request waiting for lsdj.c (LSDJ_REQ_*), its number; the last
                                                * one's result (LSDJ_RES_*) */
     uint8_t kit_open;                         /* `k J` began a bank: J + 1 */
+    uint8_t key, key_n;                       /* `key`: these keys down for key_n more frames (lsdj.c counts down) */
+    uint8_t mode, mode_set;                   /* the emulator's options as lsdj.c gave them; `mode M` changed them */
 } lsdj_xfer_t;
 
 static uint16_t lsdj_crc16(const uint8_t *p, uint32_t n)
@@ -301,6 +307,35 @@ static void lsdj_xfer_cmd(lsdj_xfer_t *x, const char *p, uint32_t now_ms, char *
         x->req_arg = (uint8_t)(x->kit_open - 1u);
         x->kit_open = 0;
         xf_puts(out, "ok");
+    } else if (xf_word(&p, "key")) {
+        if (!xf_num(&p, &a))
+            goto unknown;
+        n = 4;
+        if (!xf_end(p) && (!xf_num(&p, &n) || !xf_end(p)))
+            goto unknown;
+        if (!x->started) {
+            xf_puts(out, "err not started");
+            return;
+        }
+        if (a > 0xFFu || !n || n > 0xFFu) {
+            xf_puts(out, "err range");
+            return;
+        }
+        x->key = (uint8_t)a;
+        x->key_n = (uint8_t)n;
+        xf_puts(out, "ok");
+    } else if (xf_word(&p, "mode")) {
+        if (!xf_end(p)) {
+            if (!xf_num(&p, &a) || !xf_end(p))
+                goto unknown;
+            if (a > 0xFu) {
+                xf_puts(out, "err range");
+                return;
+            }
+            x->mode = (uint8_t)a;
+            x->mode_set = 1;
+        }
+        xf_hex(xf_puts(out, "ok "), x->mode, 1);
     } else if (xf_word(&p, "hold")) {
         if (!xf_end(p))
             goto unknown;

@@ -118,16 +118,17 @@ int core_flash_prog(uint32_t off, const void *p, uint32_t n)
 static int fails;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); fails++; } } while (0)
 
-static void pass(void)                        /* one main-loop pass, then 20 ms of the audio ISR */
+static void pass_ms(uint32_t t)               /* one main-loop pass, then t ms of the audio ISR */
 {
     static int32_t out[2 * 32];
     uint32_t i;
     ble_service();
     ble_draw();
-    for (i = 0; i < 882u; i += 32u)           /* 20 ms at 44.1 kHz in blocks of 32 (as CTL) */
+    for (i = 0; i < t * 441u / 10u; i += 32u) /* at 44.1 kHz in blocks of 32 (as CTL) */
         lsdj_audio(out, 32);
-    ms += 20;
+    ms += t;
 }
+static void pass(void) { pass_ms(20); }       /* (the core's pass is 15 ms or more; a Game Boy frame is 16.7 ms) */
 
 static void console(const char *line)         /* as the core does: the line `ble ...`, then the unit's ble_status */
 {
@@ -137,12 +138,15 @@ static void console(const char *line)         /* as the core does: the line `ble
     con_line[0] = 0;
 }
 
-static uint32_t pad_presses(uint8_t key, uint8_t with, uint32_t passes)   /* times `key` goes down (with `with` down) */
+/* times `key` goes down (with `with` down). Passes of 15 ms with the ring filled: no more than one Game Boy frame
+ * a pass, so st.pad after a pass is that frame's keys */
+static uint32_t pad_presses(uint8_t key, uint8_t with, uint32_t passes)
 {
     uint32_t n = 0, was = 0, i, f;
     for (i = 0; i < passes; i++) {
         f = st.frames;
-        pass();
+        pass_ms(15);
+        CHECK(st.frames - f <= 1u);
         if (st.frames != f) {                         /* a Game Boy frame ran: its keys */
             uint32_t now = !(st.pad & key);
             if (now && !was) {
@@ -157,6 +161,9 @@ static uint32_t pad_presses(uint8_t key, uint8_t with, uint32_t passes)   /* tim
 
 static void test_knobs_and_shortcuts(void)    /* the knobs are the cursor; PRESETS and OCT- / OCT+ change LSDj's screen */
 {
+    uint32_t i;
+    for (i = 0; i < 200; i++)                         /* (the ring filled: see pad_presses) */
+        pass_ms(15);
     CHECK(st.pad == 0xFF);
     ble_key(0, 3);                                    /* SELECT knob, 3 steps clockwise */
     CHECK(pad_presses(JOYPAD_RIGHT, 0, 40) == 3);
@@ -190,7 +197,10 @@ static void test_knobs_and_shortcuts(void)    /* the knobs are the cursor; PRESE
     console("ble go");
     ble_key(0, 0);
     CHECK(enc_algo == 0 && enc_preset == 0);
-    CHECK(pad_presses(JOYPAD_RIGHT, 0, 12) == 0 && st.pad == 0xFF);
+    for (i = 0; i < 12; i++) {                        /* (the ring is low after the hold: any frame's keys) */
+        pass();
+        CHECK(st.pad == 0xFF);
+    }
 }
 
 static void test_flash(void)                  /* REC held 1 s saves; PLAY after power-on loads it; a kit bank */
@@ -270,25 +280,37 @@ static void test_flash(void)                  /* REC held 1 s saves; PLAY after 
     CHECK(flash_bad == 0);
 }
 
-/* GAPS on the status line: the seconds in which the sound ran dry (the FM-1 too slow), but not those the host held
- * the Game Boy in. pass() gives 882 samples' time to one Game Boy frame of 738: too slow, on purpose */
+/* A pass of the core lasts 15 ms or more and a Game Boy frame is 16.7 ms of sound: one frame a pass makes little
+ * more sound than is played, and nothing after a slow pass. So when the ring is under half, the step runs a second
+ * frame in the same pass. GAPS on the status line: the seconds in which the sound ran dry all the same (the FM-1
+ * too slow), but not those the host held the Game Boy in. */
 static void test_gaps(void)
 {
-    uint32_t i, g;
+    uint32_t i, g, f, d;
     char b[24];
-    for (i = 0; i < 60; i++) {                /* two frames a pass: sound enough */
-        ble_service();
+    for (i = 0; i < 100; i++)                 /* passes of 20 ms: 882 samples played, a frame makes 738 */
         pass();
-    }
     g = st.gaps;
-    for (i = 0; i < 150; i++) {               /* 3 s */
-        ble_service();
+    f = st.frames;
+    for (i = 0; i < 150; i++)                 /* 3 s: a second frame now and then keeps up */
         pass();
-    }
     CHECK(st.gaps == g);
-    for (i = 0; i < 150; i++)                 /* 3 s too slow */
-        pass();
+    CHECK(st.frames >= f + 180u && st.frames <= f + 184u);       /* (150 passes play 150 x 896 samples: 182 frames) */
+    CHECK(lsdj_ring_fill(&ring) >= 700u);                        /* and the ring not near empty */
+    for (i = 0; i < 100; i++)                 /* passes of 15 ms: one frame each is enough, the ring fills */
+        pass_ms(15);
+    f = st.frames;
+    d = st.doubles;
+    for (i = 0; i < 200; i++)
+        pass_ms(15);
+    CHECK(st.gaps == g && lsdj_ring_fill(&ring) > RING_N / 2u);
+    CHECK(st.doubles == d);                                      /* ... and no second frame is run */
+    CHECK(st.frames >= f + 180u && st.frames <= f + 184u);       /* (200 passes play 200 x 672 samples: 182 frames) */
+    for (i = 0; i < 75; i++)                  /* 3 s of passes of 40 ms: two frames a pass are not enough */
+        pass_ms(40);
     CHECK(st.gaps >= g + 2u && st.gaps <= g + 3u);
+    for (i = 0; i < 60; i++)
+        pass();
     sprintf(b, "GAPS %u", (unsigned)st.gaps);
     CHECK(!strcmp(keys_text, b));
     console("ble hold");
@@ -296,13 +318,39 @@ static void test_gaps(void)
     for (i = 0; i < 100; i++)                 /* held 2 s: silence, and no gap of the FM-1's */
         pass();
     console("ble go");
-    for (i = 0; i < 100; i++) {
-        ble_service();
+    for (i = 0; i < 100; i++)
         pass();
-    }
     CHECK(st.gaps == g);
     console("ble");
     CHECK(strstr(con_log, "gap seconds ") != 0 && strstr(con_log, "wait skipped ") != 0);
+    CHECK(strstr(con_log, "sec_frame_max_us ") != 0 && strstr(con_log, "sec_pass_max_us ") != 0);
+}
+
+static void test_bench(void)                  /* `ble key`, `ble mode`: the keys and options from the console */
+{
+    uint32_t i, f, down = 0;
+    for (i = 0; i < 200; i++)                 /* (the ring filled: one frame a pass) */
+        pass_ms(15);
+    CHECK(st.pad == 0xFF);
+    console("ble key 14 3");                  /* SELECT + RIGHT for 3 frames */
+    CHECK(!strcmp(con_log, "ok\r\n"));
+    for (i = 0, f = st.frames; i < 12; i++) {
+        uint32_t f0 = st.frames;
+        pass_ms(15);
+        if (st.frames != f0 && st.pad != 0xFF) {
+            CHECK(st.pad == (uint8_t)~(JOYPAD_SELECT | JOYPAD_RIGHT));
+            down++;
+        }
+    }
+    CHECK(down == 3 && st.pad == 0xFF && st.frames > f + 6);
+    console("ble mode");
+    CHECK(!strcmp(con_log, "ok F\r\n"));
+    console("ble mode 7");
+    CHECK(!strcmp(con_log, "ok 7\r\n") && emu_mode == 7);
+    pass_ms(15);
+    CHECK(strstr(keys_text, " OLD") != 0);    /* ... and the status line says so */
+    console("ble mode F");
+    CHECK(emu_mode == 15);
 }
 
 static void test_console(void)                /* after PLAY: `ble ...` holds and restarts the Game Boy */
@@ -359,10 +407,8 @@ int main(void)
     ble_key(buttons, 0);                      /* PLAY: start */
     buttons = 0;
     CHECK(ble_started() && st.error == 0);
-    for (i = 0; i < 55; i++) {                /* 1.1 s with sound enough (two Game Boy frames to a 20 ms pass): */
-        ble_service();
+    for (i = 0; i < 150; i++)                 /* 3 s */
         pass();
-    }
     CHECK(st.gaps == 0 && !strcmp(keys_text, "GAPS 0"));   /* no gap: the empty ring at the start is not one */
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
@@ -425,7 +471,7 @@ int main(void)
             uint32_t f = st.frames, k0 = emu.skipped;
             for (i = 0; i < 20; i++)
                 pass();
-            CHECK(st.frames == f + 20 && emu.skipped == k0 && emu.errors == 0);     /* LSDj runs so too */
+            CHECK(st.frames >= f + 20 && emu.skipped == k0 && emu.errors == 0);     /* LSDj runs so too */
             ble_key(core_button_bit(CORE_BTN_EDIT) | core_button_bit(CORE_BTN_ENV), 0);
             for (i = 0; i < 20; i++)
                 pass();
@@ -478,6 +524,7 @@ int main(void)
         }
     }
     test_gaps();
+    test_bench();
     test_console();
     test_knobs_and_shortcuts();
     test_flash();
