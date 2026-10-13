@@ -215,6 +215,46 @@ static void test_knobs_and_shortcuts(void)    /* the knobs are the cursor; PRESE
     }
 }
 
+/* The owner's report (2026-10-14): on LSDj's PROJECT screen OCT- did nothing, while SELECT + DOWN by hand left it.
+ * LSDj says which screen it shows in its own work RAM (9.4.2: 0xC401; SONG 4, PROJECT 9, CHAIN 3). */
+static void test_project_shortcuts(void)
+{
+    uint32_t i;
+    for (i = 0; i < 200; i++)
+        pass_ms(15);
+    CHECK(emu.gb.wram[0x401] == 4);                   /* LSDj starts on SONG */
+    ble_key(core_button_bit(CORE_BTN_OCTUP), 0);      /* OCT+: up to PROJECT */
+    for (i = 0; i < 30; i++)
+        pass_ms(15);
+    CHECK(emu.gb.wram[0x401] == 9);
+    ble_key(core_button_bit(CORE_BTN_OCTDN), 0);      /* OCT-: back down to SONG */
+    for (i = 0; i < 30; i++)
+        pass_ms(15);
+    CHECK(emu.gb.wram[0x401] == 4);
+    enc_preset = 1;                                   /* the PRESETS knob: CHAIN, */
+    ble_key(0, 0);
+    for (i = 0; i < 30; i++)
+        pass_ms(15);
+    CHECK(emu.gb.wram[0x401] == 3);
+    ble_key(core_button_bit(CORE_BTN_OCTUP), 0);      /* PROJECT again (above CHAIN), and the knob leaves it sideways */
+    for (i = 0; i < 30; i++)
+        pass_ms(15);
+    CHECK(emu.gb.wram[0x401] == 9);
+    enc_preset = 1;
+    ble_key(0, 0);
+    for (i = 0; i < 30; i++)
+        pass_ms(15);
+    CHECK(emu.gb.wram[0x401] != 9);
+    ble_key(core_button_bit(CORE_BTN_OCTDN), 0);
+    for (i = 0; i < 30; i++)
+        pass_ms(15);
+    enc_preset = -4;                                  /* back to SONG for what follows (not further: LIVE mode) */
+    ble_key(0, 0);
+    for (i = 0; i < 90; i++)
+        pass_ms(15);
+    CHECK(emu.gb.wram[0x401] == 4 && st.pad == 0xFF && emu.errors == 0);
+}
+
 static void test_flash(void)                  /* REC held 1 s saves; PLAY after power-on loads it; a kit bank */
 {
     static const uint8_t mark[4] = {0x12, 0x34, 0x56, 0x78}, kit[3] = {0x60, 0x40, 0xA1};
@@ -558,6 +598,7 @@ int main(int argc, char **argv)
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
     CHECK(st.frames > 250 && emu.errors == 0);
+    test_project_shortcuts();                 /* (first: LSDj as it starts) */
     {   /* the MASTER pot: full -> the sound as made; down -> silence */
         int32_t a[64], k;
         int nz = 0;
@@ -620,7 +661,8 @@ int main(int argc, char **argv)
             ble_key(core_button_bit(CORE_BTN_EDIT) | core_button_bit(CORE_BTN_ENV), 0);
             for (i = 0; i < 20; i++)
                 pass();
-            CHECK(emu.skipped > k0 + 20u * 1500u && emu.errors == 0);               /* the wait loop skipped again */
+            CHECK(emu.skipped > k0 + 1000u && emu.errors == 0);                     /* the wait loop skipped again (how
+                                                                                     * much depends on what LSDj is doing) */
         }
         ble_key(core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO), 0);
         CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE));

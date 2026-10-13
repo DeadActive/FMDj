@@ -71,12 +71,12 @@ static void test_knobs(void)
     lsdj_knobs_add(&k, LSDJ_AX_UD, -1);
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_UP && lsdj_knobs_frame(&k) == 0);
     /* the screen shortcut: SELECT one frame before the direction (LSDj needs that) and one after */
-    lsdj_knobs_add(&k, LSDJ_AX_NAV_LR, 1);
-    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    lsdj_knobs_add(&k, LSDJ_AX_NAV_LR, 1);                            /* SELECT down two frames before the direction: */
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == JOYPAD_SELECT);   /* (LSDj's PROJECT screen) */
     CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_RIGHT));
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
     lsdj_knobs_add(&k, LSDJ_AX_NAV_UD, -1);
-    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == JOYPAD_SELECT);
     CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_UP));
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
     lsdj_knobs_add(&k, LSDJ_AX_LR, 3);                                /* turned back before it was sent: nothing */
@@ -90,7 +90,8 @@ static void test_knobs(void)
     lsdj_knobs_add(&k, LSDJ_AX_LR, 2);
     lsdj_knobs_add(&k, LSDJ_AX_NAV_UD, 1);
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0);
-    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_DOWN));
+    CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == JOYPAD_SELECT);
+    CHECK(lsdj_knobs_frame(&k) == (JOYPAD_SELECT | JOYPAD_DOWN));
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_SELECT && lsdj_knobs_frame(&k) == 0);
     CHECK(lsdj_knobs_frame(&k) == JOYPAD_RIGHT && lsdj_knobs_frame(&k) == 0 && lsdj_knobs_frame(&k) == 0);
 }

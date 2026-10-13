@@ -59,13 +59,14 @@ static uint8_t lsdj_pad(uint32_t buttons, uint32_t notes, const uint32_t map[8])
 
 /* Knob steps -> short presses, one Game Boy frame at a time. LSDj reads its keys once a frame; measured on 9.4.2
  * (the host harness, 2026-10-12): a direction down one frame and up one frame is exactly one press, and SELECT +
- * direction moves one screen only if SELECT is down a frame before the direction.
+ * direction moves one screen only if SELECT is down before the direction: two frames before, because the
+ * PROJECT screen does not take it after one and could not be left (the owner's FM-1 and the host, 2026-10-14).
  * Axes: + = right / down; the NAV ones press SELECT with the direction (LSDj's screen map). */
 enum { LSDJ_AX_LR, LSDJ_AX_UD, LSDJ_AX_NAV_LR, LSDJ_AX_NAV_UD, LSDJ_NAX };
 #define LSDJ_KNOB_MAX 16                      /* steps kept waiting per axis: a spun knob does not run on */
 typedef struct {
     int8_t want[LSDJ_NAX];                    /* steps not yet sent */
-    uint8_t seq[4], n, i;                     /* the press being sent: keys down (JOYPAD bits) per frame */
+    uint8_t seq[5], n, i;                     /* the press being sent: keys down (JOYPAD bits) per frame */
     uint8_t next;                             /* the axis looked at first: the knobs take turns */
 } lsdj_knobs_t;
 
@@ -91,10 +92,11 @@ static uint8_t lsdj_knobs_frame(lsdj_knobs_t *k)       /* the keys down (1 = dow
         k->next = (uint8_t)((a + 1u) % LSDJ_NAX);
         if (a >= LSDJ_AX_NAV_LR) {
             k->seq[0] = JOYPAD_SELECT;
-            k->seq[1] = JOYPAD_SELECT | key;
-            k->seq[2] = JOYPAD_SELECT;
-            k->seq[3] = 0;
-            k->n = 4;
+            k->seq[1] = JOYPAD_SELECT;
+            k->seq[2] = JOYPAD_SELECT | key;
+            k->seq[3] = JOYPAD_SELECT;
+            k->seq[4] = 0;
+            k->n = 5;
         } else {
             k->seq[0] = key;
             k->seq[1] = 0;

@@ -41,4 +41,5 @@ Four switches for comparing; each is named on the status line only while it is o
 **REC held for a second saves to the FM-1's flash** (the status line: SAVING, then SAVED and the size; SAVE FULL if
 it does not fit). PLAY after power-on loads that save. GLO does nothing.
 
-A knob turned fast is followed at up to 30 presses a second; no more than 16 steps wait.
+A knob turned fast is followed at up to 30 presses a second; no more than 16 steps wait. A screen shortcut (the
+PRESETS knob, OCT- / OCT+) holds SELECT two frames before its direction: LSDj's PROJECT screen takes nothing less.
