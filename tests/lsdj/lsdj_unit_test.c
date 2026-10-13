@@ -244,15 +244,17 @@ static void test_project_shortcuts(void)
     ble_key(0, 0);
     for (i = 0; i < 30; i++)
         pass_ms(15);
-    CHECK(emu.gb.wram[0x401] != 9);
-    ble_key(core_button_bit(CORE_BTN_OCTDN), 0);
+    CHECK(emu.gb.wram[0x401] == 10);                  /* (SYNTH, next to it) */
+    ble_key(core_button_bit(CORE_BTN_OCTDN), 0);      /* down: PHRASE, under SYNTH */
     for (i = 0; i < 30; i++)
         pass_ms(15);
-    enc_preset = -4;                                  /* back to SONG for what follows (not further: LIVE mode) */
+    CHECK(emu.gb.wram[0x401] == 1);
+    enc_preset = -2;                                  /* two to the left: SONG again, for what follows (one more
+                                                       * would switch LSDj to LIVE mode) */
     ble_key(0, 0);
-    for (i = 0; i < 90; i++)
+    for (i = 0; i < 60; i++)
         pass_ms(15);
-    CHECK(emu.gb.wram[0x401] == 4 && st.pad == 0xFF && emu.errors == 0);
+    CHECK(emu.gb.wram[0x401] == 4 && emu.gb.wram[0x8FF] == 0 && st.pad == 0xFF && emu.errors == 0);
 }
 
 static void test_flash(void)                  /* REC held 1 s saves; PLAY after power-on loads it; a kit bank */
@@ -661,8 +663,7 @@ int main(int argc, char **argv)
             ble_key(core_button_bit(CORE_BTN_EDIT) | core_button_bit(CORE_BTN_ENV), 0);
             for (i = 0; i < 20; i++)
                 pass();
-            CHECK(emu.skipped > k0 + 1000u && emu.errors == 0);                     /* the wait loop skipped again (how
-                                                                                     * much depends on what LSDj is doing) */
+            CHECK(emu.skipped > k0 + 20u * 1500u && emu.errors == 0);               /* the wait loop skipped again */
         }
         ble_key(core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO), 0);
         CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE));
