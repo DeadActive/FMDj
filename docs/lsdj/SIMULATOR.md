@@ -23,9 +23,18 @@ panel drawn in the original Game Boy's colours. It is built after Hortator's sim
 
 - `LOAD` on the status line is 0 %: the page does not model the FM-1's processor, so it says nothing about speed on
   the device.
-- No USB: the song page cannot connect to it, and there is no console.
+- No USB. The firmware's console is there all the same (`sim_con`), and the page uses it: see below.
 - The four knobs on the right, GLO and the keys other than the top F and G do nothing in the LSDj build, as on the
   device; they are drawn dimmed.
+
+## Songs and saves
+
+Under the device, once the power is on: load a project or song file (.lsdprj, .lsdsng), restore or download the whole
+save (.sav), download or delete a song of LSDj's list, Save now. This is the song page's own code (`web/lsdjlink.js`,
+`web/lsdjfs.js`): `web/sim/simlink.js` hands its console lines (`ble hold`, `ble w ...`) to the simulated firmware,
+which answers as an FM-1 does over USB. A project's kits go into the simulated flash's kit banks. As on the FM-1, a
+loaded project is opened in LSDj itself (PROJECT, LOAD/SAVE SONG, LOAD), and everything is kept by saving to flash,
+which here is the browser's storage.
 
 ## Build and test
 

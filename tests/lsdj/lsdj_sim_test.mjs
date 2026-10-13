@@ -3,6 +3,7 @@
 // The LSDj simulator's core (web/sim/lsdjsim.c as wasm) through the page's engine (web/sim/engine.js), with a small
 // Game Boy program of our own as the cartridge (no LSDj data): PLAY starts it, it runs at the Game Boy's speed with
 // sound and a picture, REC held saves to the flash the page keeps, and without a cartridge PLAY starts nothing.
+// The firmware's console is there too (`ble ...`), so the song page's own code moves saves in and out of it.
 // Needs build/web/sim/lsdjsim.wasm (web/sim/build.sh) and build/web/lsdj_emu.wasm (web/lsdj_wasm.sh); skipped
 // without them.   node tests/lsdj/lsdj_sim_test.mjs
 import fs from "node:fs";
@@ -10,6 +11,8 @@ import { Fm1Sim, FS, SECTOR } from "../../web/sim/engine.js";
 import { BTN, B, ENC, KEYBOARD, GB } from "../../web/sim/controls.js";
 import { LAYOUTS } from "../../web/sim/layout.js";
 import { loadEmu, makeCart } from "../../web/lsdjinstall.js";
+import { simLink } from "../../web/sim/simlink.js";
+import { Link, listSongs, downloadSav, uploadSav, saveToFlash } from "../../web/lsdjlink.js";
 
 let fails = 0;
 const ok = (c, what) => { console.log(`${what.padEnd(78)} ${c ? "ok" : "FAILED"}`); fails += !c; };
@@ -103,6 +106,32 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     sim.btn(B.PLAY, false);
     run(sim, 0.5);
     ok(sim.playing(), "a press shorter than a pass of the main loop still counts");
+  }
+  { // the console: the song page's code (web/lsdjlink.js) against the simulator, as against an FM-1 on USB
+    const sim = await Fm1Sim.create(wasm);
+    sim.boot(null, cart);
+    run(sim, 0.2);
+    ok(sim.console("ble").includes("lsdj stopped"), "the console answers `ble` with the unit's status");
+    ok(sim.console("ble hold") === "err not started\r\n", "... and a transfer command with its reply");
+    tap(sim, B.PLAY);
+    run(sim, 0.5);
+    const link = simLink(Link, async (line) => { const t = sim.console(line); run(sim, 0.02); return t; });   // (time goes on)
+    const inf = await link.info();
+    ok(inf.started && inf.version === 2 && inf.flash && inf.banks === 2, "info: started, with flash, our program's 2 banks");
+    const sav = new Uint8Array(0x20000);             // an LSDj save with an empty file system, and a mark of ours
+    sav[0x813E] = 0x6A; sav[0x813F] = 0x6B; sav[0x8140] = 0xFF;
+    sav.fill(0xFF, 0x8141, 0x8200);
+    sav.set([0xDE, 0xAD, 0xBE, 0xEF], 0x1F000);
+    const f0 = sim.frames(), up = await uploadSav(link, sav);
+    ok(up.unsaved === null && sim.takeDirty().length > 0, "a whole save goes in, and into the flash the page keeps");
+    run(sim, 0.5);
+    ok(sim.frames() > f0 && sim.playing(), "... the Game Boy restarted with it and runs");
+    const got = await downloadSav(link);
+    ok(got.length === 0x20000 && got[0x1F000] === 0xDE && got[0x1F003] === 0xEF && got[0x813E] === 0x6A, "the save comes out again, with what went in");
+    const l = await listSongs(link);
+    ok(l.list.length === 0 && l.free === 191, "its song list is read (empty: 191 free blocks)");
+    await saveToFlash(link);
+    ok(true, "Save now is carried out");
   }
   { // the next visit: the kept sectors are the flash again
     const sim = await Fm1Sim.create(wasm);

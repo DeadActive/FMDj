@@ -29,6 +29,24 @@
       <label class="link"><input id="hints" type="checkbox" checked> show the keyboard keys</label></p>
   </section>
 
+  <section id="songs" class="songs" hidden>
+    <h2>Songs and saves</h2>
+    <p id="songs-line" role="status"></p>
+    <progress id="songs-bar" max="100" value="0" hidden></progress>
+    <p>
+      <label class="act">Load a project or song (.lsdprj, .lsdsng)<input id="song-files" type="file" accept=".lsdprj,.lsdsng" multiple hidden></label>
+      <label class="act">Restore a save (.sav)<input id="sav-file" type="file" accept=".sav" hidden></label>
+      <button id="sav-get" class="act">Download the save (.sav)</button>
+      <button id="save-now" class="act">Save now</button>
+      <button id="songs-refresh" class="act">Refresh</button>
+    </p>
+    <table id="songs-table"><tbody></tbody></table>
+    <p class="small">A loaded project goes into LSDj's song list and LSDj starts again; open it there: PROJECT,
+      LOAD/SAVE SONG, LOAD. Its kits come with it. The song you are editing is in the list only after you save it
+      in LSDj (PROJECT, LOAD/SAVE SONG, SAVE). A .sav is the whole memory: every song and the one being edited.
+      Everything is kept in this browser, as REC held does.</p>
+  </section>
+
   <section class="help">
     <h2>Controls</h2>
     <table>

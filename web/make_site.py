@@ -136,9 +136,9 @@ def main(pkg, version, out):
         args, end = lsdj_demo.key_args(60)
         sdir.mkdir(parents=True)
         for n in ("index.html", "app.js", "sim.css", "engine.js", "worklet.js", "controls.js", "layout.js", "store.js",
-                  "audio.js"):
+                  "audio.js", "simlink.js", "songs.js"):
             shutil.copy(HERE / "sim" / n, sdir / n)
-        for n in ("lsdjinstall.js", "fm1pkg.js"):
+        for n in ("lsdjinstall.js", "fm1pkg.js", "lsdjlink.js", "lsdjfs.js"):
             shutil.copy(HERE / n, sdir / n)
         shutil.copy(simwasm, sdir / "lsdjsim.wasm")
         shutil.copy(wasm, sdir / "lsdj_emu.wasm")

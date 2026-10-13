@@ -9,6 +9,7 @@
  *   the sound      lsdj_audio pulled in blocks of 128 frames, as the audio interrupt does
  *   time           counted in sound: sim_render is the clock; the main loop's pass every 15 ms of it
  *   the flash      1 MiB in memory with a map of written sectors (the page keeps them in the browser)
+ *   the console    `ble ...` lines, as over USB (sim_con): the song page's code moves songs and saves with them
  *   the cartridge  the user's own ROM as a cartridge block (lsdj_cart.c) at the end of sim_cart(): the page puts it
  *                  there before sim_init. Nothing of LSDj is in this file or in the wasm.
  * One instance = one power-on. Built by web/sim/build.sh (Emscripten) to build/web/sim/lsdjsim.wasm. */
@@ -74,8 +75,17 @@ static int32_t sim_take(uint32_t k)
 }
 int32_t core_enc_steps(int knob) { return sim_take(knob == CORE_ENC_PRESET ? 2u : 1u); }
 int core_lcd_idle(void) { return 1; }
-void core_con_puts(const char *s) { (void)s; }           /* (no USB console here) */
-const char *core_con_line(void) { return ""; }
+/* the console (console.c on the device, over USB): the page writes a line into sim_con_in() and calls sim_con(),
+ * which carries out its `ble ...` as the console does and gives what the unit printed */
+static char sim_con_line[64], sim_con_out[2048];
+static uint32_t sim_con_n;
+void core_con_puts(const char *s)
+{
+    while (*s && sim_con_n + 1u < sizeof sim_con_out)
+        sim_con_out[sim_con_n++] = *s++;
+    sim_con_out[sim_con_n] = 0;
+}
+const char *core_con_line(void) { return sim_con_line; }
 
 static uint16_t core_colour(int c)             /* (core_ble_api.c) */
 {
@@ -234,5 +244,14 @@ SIM void sim_flash_clean(void) { memset(sim_dirty, 0, sizeof sim_dirty); }
 SIM uint8_t *sim_cart(void) { return sim_cart_b; }         /* the block goes at its end: sim_cart() + sim_cart_max() - size */
 SIM uint32_t sim_cart_max(void) { return SIM_CART_MAX; }
 SIM void sim_cart_clear(void) { memset(sim_cart_b, 0xFF, sizeof sim_cart_b); }
+SIM char *sim_con_in(void) { return sim_con_line; }        /* the line: up to 63 characters and a 0 */
+SIM const char *sim_con(void)                              /* -> its output (the console's own prompt is the page's) */
+{
+    sim_con_line[sizeof sim_con_line - 1u] = 0;
+    sim_con_n = 0;
+    sim_con_out[0] = 0;
+    ble_status();
+    return sim_con_out;
+}
 SIM uint32_t sim_frames(void) { return st.frames; }        /* Game Boy frames run (tests) */
 SIM int32_t sim_error(void) { return st.error; }           /* the unit's: -3 no ROM, -4 a damaged one */

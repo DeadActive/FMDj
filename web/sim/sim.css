@@ -21,6 +21,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
 main { max-width: 1040px; margin: 0 auto; padding: 28px 16px 48px; }
 h1 { font: italic 700 30px/1.1 var(--print); margin: 0 0 6px; letter-spacing: .01em; }
@@ -140,3 +141,15 @@ canvas.lcd { image-rendering: pixelated; image-rendering: crisp-edges; border-ra
 @keyframes nudge { 50% { box-shadow: 0 2px 2px rgba(0, 0, 0, .45) inset, 0 0 0 4px rgba(154, 34, 87, .45); } }
 @media (prefers-reduced-motion: reduce) { .power.ready { animation: none; } }
 .device :focus-visible { outline: 2px dashed var(--navy); outline-offset: 3px; }
+
+/* ---- songs and saves (the song page's code against the simulator: songs.js) */
+.songs p { margin: 0 0 10px; }
+.act { display: inline-block; margin: 0 8px 8px 0; padding: 6px 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--magenta); color: #fbe6ef; font: 600 13px/1.3 var(--print); letter-spacing: .03em; }
+.act:hover { filter: brightness(1.12); }
+.act[disabled], .act.off { opacity: .45; cursor: default; pointer-events: none; }
+#songs-table { max-width: 620px; margin-bottom: 10px; }
+#songs-table td.name { font: 600 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+#songs-table td.do { text-align: right; white-space: nowrap; }
+#songs-table button { background: none; border: 0; padding: 0; margin-left: 14px; font: inherit; color: var(--ink); text-decoration: underline; cursor: pointer; }
+#songs-table button[disabled] { opacity: .45; cursor: default; }

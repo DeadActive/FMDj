@@ -64,6 +64,18 @@ export class Fm1Sim {
     for (let n = 0; n < 27; n++) this.key(n, false);
   }
 
+  // a console line (`ble`, `ble hold`, ...: firmware/src/lsdj/lsdj_xfer.c) -> what the firmware printed for it
+  console(line) {
+    const inp = this.view(Uint8Array, this.x.sim_con_in(), 64);
+    let n = 0;
+    for (; n < 63 && n < line.length; n++) inp[n] = line.charCodeAt(n) & 0x7F;
+    inp[n] = 0;
+    const out = this.view(Uint8Array, this.x.sim_con(), 2048);
+    let s = '';
+    for (let i = 0; i < out.length && out[i]; i++) s += String.fromCharCode(out[i]);
+    return s;
+  }
+
   fb() { return this.view(Uint16Array, this.x.sim_fb(), W * W).slice(); }   // RGB565, row-major
   leds() { return this.x.sim_leds() >>> 0; }      // bit b = button label b
   keyLeds() { return this.x.sim_key_leds() >>> 0; }   // bit n = note key n

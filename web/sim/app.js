@@ -10,6 +10,7 @@ import { FlashStore, openFlashDb, loadCart, saveCart } from './store.js';
 import { needsResume, playbackSession } from './audio.js';
 import { LAYOUTS, DECO_CLASS, blend } from './layout.js';
 import { loadEmu, makeCart } from './lsdjinstall.js';
+import { songsPanel } from './songs.js';
 
 const $ = id => document.getElementById(id);
 const device = $('device'), fit = $('fit'), note = $('note');
@@ -323,6 +324,16 @@ async function chooseRom(file) {
   $('rom').value = '';
 }
 
+// ---- the firmware's console, for songs and saves (songs.js): a line to the worklet, its output back
+const asked = new Map();
+let askId = 0, songs = null, started = false;
+function ask(line) {
+  return new Promise(resolve => {
+    asked.set(++askId, resolve);
+    send({ t: 'con', id: askId, line });
+  });
+}
+
 // ---- flash in IndexedDB (store.js), the audio clock (audio.js)
 const store = new FlashStore(openFlashDb, msg => { note.textContent = msg; });
 let ctx = null, poweredOff = false;
@@ -360,14 +371,21 @@ async function powerOn() {
     const n = new AudioWorkletNode(ctx, 'fm1', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { wasm, sectors, cart } });
     n.port.onmessage = e => {
       const m = e.data;
-      if (m.t === 'frame') frame = m;
+      if (m.t === 'frame') {
+        frame = m;
+        if (m.playing && !started) { started = true; songs?.refresh(); }   // PLAY has started LSDj: its songs
+      }
       else if (m.t === 'flash') store.put(m.sectors);
+      else if (m.t === 'con') { asked.get(m.id)?.(m.text); asked.delete(m.id); }
       else if (m.t === 'error') note.textContent = `The firmware failed to start: ${m.message}`;
     };
     n.connect(ctx.destination);
     await resumed;
     node = n;
     send({ t: 'master', value: masterValue });
+    $('songs').hidden = false;
+    songs = songsPanel($('songs'), ask, () => !!node && !poweredOff && ctx.state === 'running');
+    songs.refresh();
     $('rom-line').textContent = 'Press PLAY (Enter) to start LSDj, and PLAY again to play the song.';
     $('forget-rom').hidden = $('forget-save').hidden = false;
     if (ctx.sampleRate !== 44100) note.textContent = `Audio runs at ${ctx.sampleRate} Hz here, not 44100 Hz: pitch and tempo are off.`;

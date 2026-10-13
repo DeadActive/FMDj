@@ -26,6 +26,7 @@ class Fm1Processor extends AudioWorkletProcessor {
     else if (m.t === 'enc') s.enc(m.id, m.steps);
     else if (m.t === 'master') s.master(m.value);
     else if (m.t === 'release') s.releaseAll();
+    else if (m.t === 'con') this.port.postMessage({ t: 'con', id: m.id, text: s.console(m.line) });
   }
 
   process(inputs, outputs) {
@@ -38,7 +39,7 @@ class Fm1Processor extends AudioWorkletProcessor {
     if (out[1]) out[1].set(right);
     if (uiFrames) {
       const fb = this.sim.fb();
-      this.port.postMessage({ t: 'frame', fb, leds: this.sim.leds(), keyLeds: this.sim.keyLeds() }, [fb.buffer]);
+      this.port.postMessage({ t: 'frame', fb, leds: this.sim.leds(), keyLeds: this.sim.keyLeds(), playing: this.sim.playing() }, [fb.buffer]);
       const dirty = this.sim.takeDirty();
       if (dirty.length) this.port.postMessage({ t: 'flash', sectors: dirty }, dirty.map(d => d.bytes.buffer));
     }
