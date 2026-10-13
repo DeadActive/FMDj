@@ -59,28 +59,12 @@ static char xfer_out[LSDJ_XFER_OUT];
  *   the cursor: the SELECT knob left / right, the ALGORITHM knob up / down (clockwise: right, down), a step = a press
  *   A, B: the top F and G of the keyboard (lsdj_gb.c LSDJ_NOTE_A / _B);  START: PLAY;  SELECT: SEQ
  *   LSDj's screens (SELECT + direction): the PRESETS knob left / right, OCT+ up, OCT- down
- *   LSDj's screens, each on a key of the keyboard (PAGE_KEY: the low keys, laid out as LSDj's map)
  * and, as before, the cursor on buttons too (they can be held): UP SCL, DOWN SAVE, LEFT HOME, RIGHT ARP.
  * The buttons below by label, in JOYPAD bit order: A, B (no button), SELECT, START, RIGHT, LEFT, UP, DOWN.
  * OCT- + OCT+ held 5 s together is still the core's UBOOT. */
 static const int8_t KEYS[8] = {-1, -1, CORE_BTN_SEQ, CORE_BTN_PLAY,
                                CORE_BTN_ARP, CORE_BTN_HOME, CORE_BTN_SCL, CORE_BTN_SAVE};
 static lsdj_knobs_t knobs;                    /* knob steps and shortcuts waiting to be pressed (lsdj_gb.c) */
-
-/* LSDj's screens on the keyboard's low keys, laid out as LSDj's own map: the white keys F3 G3 A3 B3 C4 are the
- * middle row (SONG CHAIN PHRASE INSTR TABLE), the raised keys between them what is above (F#3 PROJECT, A#3 SYNTH,
- * C#4 WAVE), D4 is GROOVE. Index: lsdj_gb.c LSDJ_PG_*; value: the note key (0 = F3). */
-static const uint8_t PAGE_KEY[LSDJ_NPG] = {0, 2, 4, 6, 7, 1, 5, 8, 9};
-/* where LSDj keeps its column, its row and the screen's number (lsdj_gb.c lsdj_page_key), and the number of each
- * screen (LSDJ_PG_* order), per version: found on the host by walking the screens (2026-10-14). sum: the ROM
- * header's global checksum (0x14E). A version not here: the keys do nothing. */
-static const struct { uint16_t sum, col, row, id; uint8_t ids[LSDJ_NPG]; } PAGE_RAM[] = {
-    {0x2D8A, 0xC8FF, 0xC900, 0xC401, {4, 3, 1, 6, 5, 9, 10, 8, 2}}};      /* LSDj 9.4.2 */
-static uint16_t page_col, page_row, page_id;  /* this ROM's (0: not known) */
-static const uint8_t *page_ids;
-static uint32_t page_notes;                   /* the keys as last looked at */
-static uint8_t page_req, page_tries, page_wait;   /* the screen asked for + 1; presses sent for it; frames to wait */
-static uint8_t page_at, page_stuck;           /* row * 8 + column before the last press; presses that changed nothing */
 static const lsdj_flash_t flash = {core_flash_ptr, core_flash_erase, core_flash_prog};
 static const lsdj_flash_t flash_ro = {core_flash_ptr, 0, 0};   /* PLAY's: it reads, and has nothing to write with */
 static lsdj_store_t store;                    /* what the flash holds (lsdj_store.c), scanned by lsdj_start */
@@ -104,8 +88,7 @@ static struct {
     volatile uint32_t master_q12;             /* its gain, applied by the audio ISR */
     uint8_t pad, pad_shown;                   /* the Game Boy keys of the last frame; those on the status line */
     uint8_t held_shown;                       /* "USB" is on the status line */
-    char note[16];                            /* shown there instead for 2 s: SAVING, SAVED nnK, SAVE FULL, SAVE FAILED,
-                                               * CANNOT GO THERE */
+    char note[12];                            /* shown there instead for 2 s: SAVING, SAVED nnK, SAVE FULL, SAVE FAILED */
     uint32_t note_ms, rec_ms;                 /* since the note; since REC went down (| 1: 0 = up) */
     uint8_t rec_done;                         /* this REC press has saved */
     uint32_t sec_skipped, last_skipped;       /* LSDj's wait loop: instructions not run, a frame (console `ble`) */
@@ -286,54 +269,6 @@ static void lsdj_restart(void)                 /* `ble go reset`: the Game Boy f
     memset(dirty, 1, sizeof dirty);
 }
 
-/* once a Game Boy frame: a screen key just pressed (or the console's `ble page`) asks for a screen; then, whenever
- * no press is on its way, LSDj's own row and column say which direction comes next, until it is there. It looks
- * again after every press, so a press LSDj did not take is sent once more; after two presses that change nothing
- * the way ends there, and the status line says so (12 presses at most: 6 are the longest way). */
-static void lsdj_pages(uint32_t notes)
-{
-    uint32_t down = notes & ~page_notes, i, row, col, here;
-    uint8_t key;
-    page_notes = notes;
-    for (i = 0; i < LSDJ_NPG; i++)
-        if (down & (1u << PAGE_KEY[i])) {
-            page_req = (uint8_t)(i + 1u);
-            page_tries = page_stuck = 0;
-            page_at = 0xFF;
-        }
-    if (xfer.page) {
-        page_req = xfer.page;
-        page_tries = page_stuck = 0;
-        page_at = 0xFF;
-        xfer.page = 0;
-    }
-    if (!page_req || !page_col || lsdj_knobs_busy(&knobs)) {
-        if (!page_col)
-            page_req = 0;
-        return;
-    }
-    if (page_wait) {                          /* (LSDj has had the last press: its row and column are the new ones) */
-        page_wait--;
-        return;
-    }
-    row = emu.gb.wram[page_row - WRAM_0_ADDR];
-    col = emu.gb.wram[page_col - WRAM_0_ADDR];
-    for (here = 0; here < LSDJ_NPG && page_ids[here] != emu.gb.wram[page_id - WRAM_0_ADDR]; here++)
-        ;
-    key = lsdj_page_key(row, col, here, page_req - 1u);
-    page_stuck = (uint8_t)(key && page_at == row * 8u + col ? page_stuck + 1u : 0);
-    page_at = (uint8_t)(row * 8u + col);
-    if (!key || page_stuck >= 2u || ++page_tries > 12u) {
-        if (key)
-            lsdj_note("CANNOT GO THERE");     /* (LSDj did not take the press: twice) */
-        page_req = 0;
-        return;
-    }
-    lsdj_knobs_add(&knobs, key & (JOYPAD_LEFT | JOYPAD_RIGHT) ? LSDJ_AX_NAV_LR : LSDJ_AX_NAV_UD,
-                   key & (JOYPAD_RIGHT | JOYPAD_DOWN) ? 1 : -1);
-    page_wait = 2;
-}
-
 static void lsdj_step(void)
 {
     uint32_t t0, us, n;
@@ -407,7 +342,6 @@ static void lsdj_step(void)
         t0 = core_ticks();
         st.buttons = core_buttons();
         st.notes = core_notes();
-        lsdj_pages(st.notes);
         st.pad = lsdj_pad(st.buttons, st.notes, pad_map) & (uint8_t)~lsdj_knobs_frame(&knobs);
         if (xfer.key_n) {                     /* the console's `ble key` */
             xfer.key_n--;
@@ -506,16 +440,6 @@ static __attribute__((noinline)) void lsdj_start(void)
     }
     for (r = 0; r < 8; r++)
         pad_map[r] = KEYS[r] < 0 ? 0 : core_button_bit(KEYS[r]);
-    page_col = page_row = 0;                  /* LSDj's map, if this is a version whose RAM is known */
-    for (r = 0; r < (int)(sizeof PAGE_RAM / sizeof PAGE_RAM[0]); r++)
-        if (PAGE_RAM[r].sum == (lsdj_rom_byte(rom_tab, cart.nbanks, 0x14E) << 8 | lsdj_rom_byte(rom_tab, cart.nbanks, 0x14F))) {
-            page_col = PAGE_RAM[r].col;
-            page_row = PAGE_RAM[r].row;
-            page_id = PAGE_RAM[r].id;
-            page_ids = PAGE_RAM[r].ids;
-        }
-    page_req = 0;
-    page_notes = ~0u;                         /* (a key held at PLAY is not a press) */
     st.start_ms = st.sec_ms = st.win_ms = core_ms();
     st.step_ticks = core_ticks();
     st.pad = 0xFF;

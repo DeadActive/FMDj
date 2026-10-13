@@ -294,9 +294,6 @@ static void test_bench(void)                  /* the test bench's commands (the 
     CHECK(is("key 100", "err range") && is("key 08 0", "err range") && is("key 08 100", "err range"));
     CHECK(x.key == 0x14 && x.key_n == 0x20);                            /* an error changes nothing */
     CHECK(is("key", "err ?") && is("key 08 4 4", "err ?"));
-    CHECK(is("page 0", "ok") && x.page == 1);                           /* LSDj's screen 0 (SONG) .. 8 (GROOVE) */
-    CHECK(is("page 8", "ok") && x.page == 9);
-    CHECK(is("page 9", "err range") && x.page == 9 && is("page", "err ?"));
     x.mode = 15;
     CHECK(is("mode", "ok F") && !x.mode_set);
     CHECK(is("mode 7", "ok 7") && x.mode == 7 && x.mode_set);

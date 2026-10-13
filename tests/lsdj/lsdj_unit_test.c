@@ -215,67 +215,6 @@ static void test_knobs_and_shortcuts(void)    /* the knobs are the cursor; PRESE
     }
 }
 
-/* A key of the keyboard is an LSDj screen: the firmware reads where LSDj is on its map (two bytes of its work RAM,
- * known for LSDj 9.4.2) and presses SELECT + the directions that lead there. The screen's number in LSDj's own RAM
- * (0xC401: SONG 4, CHAIN 3, PHRASE 1, INSTR 6, TABLE 5, PROJECT 9, SYNTH 10, WAVE 8, GROOVE 2) says it arrived. */
-static uint32_t page_after(uint32_t key, const char *line)
-{
-    uint32_t i;
-    if (line)
-        console(line);
-    else
-        notes = 1u << key;
-    for (i = 0; i < 4; i++)                           /* (a key is down for some passes; a Game Boy frame reads it) */
-        pass_ms(15);
-    notes = 0;
-    for (i = 0; i < 90; i++)
-        pass_ms(15);
-    CHECK(st.pad == 0xFF && !lsdj_knobs_busy(&knobs));
-    return emu.gb.wram[0x401];
-}
-
-static void test_pages(void)
-{
-    uint32_t i;
-    for (i = 0; i < 200; i++)
-        pass_ms(15);
-    CHECK(emu.gb.wram[0x900] == 1 && emu.gb.wram[0x8FF] == 0 && emu.gb.wram[0x401] == 4);   /* LSDj starts on SONG */
-    ble_key(core_button_bit(CORE_BTN_OCTUP), 0);      /* OCT+: up to PROJECT ... */
-    for (i = 0; i < 30; i++)
-        pass_ms(15);
-    CHECK(emu.gb.wram[0x401] == 9);
-    ble_key(core_button_bit(CORE_BTN_OCTDN), 0);      /* ... and OCT- leaves it again (SELECT two frames before DOWN) */
-    for (i = 0; i < 30; i++)
-        pass_ms(15);
-    CHECK(emu.gb.wram[0x401] == 4);
-    CHECK(page_after(7, 0) == 5);                     /* C4: TABLE, four screens to the right */
-    CHECK(page_after(8, 0) == 8);                     /* C#4: WAVE, above it */
-    CHECK(page_after(1, 0) == 9);                     /* F#3: PROJECT: down, four to the left, up */
-    CHECK(page_after(5, 0) == 10);                    /* A#3: SYNTH */
-    CHECK(page_after(9, 0) == 2);                     /* D4: GROOVE */
-    CHECK(page_after(2, 0) == 3);                     /* G3: CHAIN */
-    CHECK(page_after(4, 0) == 1);                     /* A3: PHRASE */
-    CHECK(page_after(6, 0) == 6);                     /* B3: INSTR */
-    CHECK(page_after(0, 0) == 4 && emu.gb.wram[0x8FF] == 0);          /* F3: SONG */
-    CHECK(page_after(0, 0) == 4 && emu.gb.wram[0x8FF] == 0);          /* ... again: nothing pressed (not LIVE mode) */
-    CHECK(page_after(0, "ble page 7") == 8);          /* the console's `ble page`: WAVE */
-    CHECK(page_after(0, "ble page 0") == 4);
-    CHECK(page_after(2, 0) == 3);                     /* CHAIN, up to PROJECT (OCT+), then the top row sideways (the */
-    ble_key(core_button_bit(CORE_BTN_OCTUP), 0);      /* PRESETS knob): SYNTH, WAVE, with a column that is not TABLE's */
-    for (i = 0; i < 30; i++)
-        pass_ms(15);
-    enc_preset = 2;
-    ble_key(0, 0);
-    for (i = 0; i < 60; i++)
-        pass_ms(15);
-    CHECK(emu.gb.wram[0x401] == 8 && emu.gb.wram[0x900] == 0 && emu.gb.wram[0x8FF] != 4);
-    CHECK(page_after(8, 0) == 8 && page_tries == 0);  /* WAVE: there already, by the screen: nothing pressed */
-    CHECK(page_after(5, 0) == 10);                    /* SYNTH from there: down, across, up */
-    CHECK(page_after(4, 0) == 1);
-    CHECK(page_after(0, 0) == 4);
-    CHECK(emu.errors == 0);
-}
-
 static void test_flash(void)                  /* REC held 1 s saves; PLAY after power-on loads it; a kit bank */
 {
     static const uint8_t mark[4] = {0x12, 0x34, 0x56, 0x78}, kit[3] = {0x60, 0x40, 0xA1};
@@ -557,33 +496,6 @@ static int test_own_rom(void)
         pass();
     CHECK(st.frames > 300 && emu.errors == 0 && st.gaps == 0);
     CHECK(emu.skipped > st.frames * 3000u);   /* (its wait loop is found and skipped) */
-    notes = 1u << 7;                          /* a screen key with a ROM whose map is not known: nothing is pressed */
-    for (i = 0; i < 40; i++)
-        pass();
-    notes = 0;
-    CHECK(st.pad == 0xFF && !lsdj_knobs_busy(&knobs) && emu.errors == 0);
-    {   /* ... and if the firmware took our program for LSDj: its RAM never moves, so the way to a screen ends after
-         * two presses that change nothing, and the status line says so */
-        static const uint8_t IDS[LSDJ_NPG] = {4, 3, 1, 6, 5, 9, 10, 8, 2};
-        uint32_t sel = 0, was = 0;
-        page_col = 0xC110;                    /* (bytes of its RAM that stay 0: the top row, column 0, no screen) */
-        page_row = 0xC111;
-        page_id = 0xC112;
-        page_ids = IDS;
-        for (i = 0; i < 4; i++)               /* (the key up, as a frame sees it) */
-            pass_ms(15);
-        notes = 1u << 7;
-        for (i = 0; i < 80; i++) {
-            pass_ms(15);
-            if (i == 4)
-                notes = 0;
-            sel += !(st.pad & JOYPAD_DOWN) && !was;
-            was = !(st.pad & JOYPAD_DOWN);
-        }
-        CHECK(page_tries == 2 && page_req == 0 && st.pad == 0xFF && sel >= 1 && sel <= 2);
-        CHECK(!strcmp(st.note, "CANNOT GO THERE") || st.note[0] == 0);   /* (shown for 2 s) */
-        page_col = page_row = page_id = 0;
-    }
     {
         int32_t o[64], k, loud = 0;
         for (i = 0; i < 400 && !loud; i++) {  /* a note within 8 s */
@@ -646,7 +558,6 @@ int main(int argc, char **argv)
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
     CHECK(st.frames > 250 && emu.errors == 0);
-    test_pages();                             /* (first: LSDj as it starts, the demo song under the cursor) */
     {   /* the MASTER pot: full -> the sound as made; down -> silence */
         int32_t a[64], k;
         int nz = 0;

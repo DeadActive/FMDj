@@ -59,14 +59,13 @@ static uint8_t lsdj_pad(uint32_t buttons, uint32_t notes, const uint32_t map[8])
 
 /* Knob steps -> short presses, one Game Boy frame at a time. LSDj reads its keys once a frame; measured on 9.4.2
  * (the host harness, 2026-10-12): a direction down one frame and up one frame is exactly one press, and SELECT +
- * direction moves one screen only if SELECT is down before the direction: two frames before, or the PROJECT
- * screen does not take it and cannot be left (2026-10-14).
+ * direction moves one screen only if SELECT is down a frame before the direction.
  * Axes: + = right / down; the NAV ones press SELECT with the direction (LSDj's screen map). */
 enum { LSDJ_AX_LR, LSDJ_AX_UD, LSDJ_AX_NAV_LR, LSDJ_AX_NAV_UD, LSDJ_NAX };
 #define LSDJ_KNOB_MAX 16                      /* steps kept waiting per axis: a spun knob does not run on */
 typedef struct {
     int8_t want[LSDJ_NAX];                    /* steps not yet sent */
-    uint8_t seq[5], n, i;                     /* the press being sent: keys down (JOYPAD bits) per frame */
+    uint8_t seq[4], n, i;                     /* the press being sent: keys down (JOYPAD bits) per frame */
     uint8_t next;                             /* the axis looked at first: the knobs take turns */
 } lsdj_knobs_t;
 
@@ -92,11 +91,10 @@ static uint8_t lsdj_knobs_frame(lsdj_knobs_t *k)       /* the keys down (1 = dow
         k->next = (uint8_t)((a + 1u) % LSDJ_NAX);
         if (a >= LSDJ_AX_NAV_LR) {
             k->seq[0] = JOYPAD_SELECT;
-            k->seq[1] = JOYPAD_SELECT;
-            k->seq[2] = JOYPAD_SELECT | key;
-            k->seq[3] = JOYPAD_SELECT;
-            k->seq[4] = 0;
-            k->n = 5;
+            k->seq[1] = JOYPAD_SELECT | key;
+            k->seq[2] = JOYPAD_SELECT;
+            k->seq[3] = 0;
+            k->n = 4;
         } else {
             k->seq[0] = key;
             k->seq[1] = 0;
@@ -106,57 +104,6 @@ static uint8_t lsdj_knobs_frame(lsdj_knobs_t *k)       /* the keys down (1 = dow
         return k->seq[0];
     }
     return 0;
-}
-
-static int lsdj_knobs_busy(const lsdj_knobs_t *k)      /* a press is being sent, or one waits */
-{
-    uint32_t a;
-    for (a = 0; a < LSDJ_NAX; a++)
-        if (k->want[a])
-            return 1;
-    return k->i < k->n;
-}
-
-/* LSDj's screens, and the way to one. LSDj lays them out as a map and moves on it with SELECT + a direction
- * (9.4.2, walked on the host, 2026-10-14):
- *     PROJECT       SYNTH        WAVE         the top row
- *     SONG   CHAIN  PHRASE INSTR TABLE        the middle row: columns 0 .. 4
- *     GROOVE                                  below every column
- * UP from SONG gives PROJECT, from PHRASE SYNTH, from TABLE WAVE; DOWN from the top row comes back to the column it
- * left. From CHAIN and INSTR what is above varies, and the top row's own left and right work only in some places
- * (not on the PROJECT above SONG): so the way to a top screen goes up from the column right under it, and tries
- * sideways only if LSDj lands on another one there. SELECT + LEFT on SONG is not a screen (it switches LSDj to
- * LIVE mode) and is never pressed. LSDj keeps its row, its column and the screen's number in work RAM (lsdj.c has
- * where, per LSDj version): the way is steered by them after every press.
- * row: 0 top, 1 middle, 2 below; col: 0 .. 4; here: the screen (LSDJ_PG_*; LSDJ_NPG: none of them).
- * -> the direction (JOYPAD_*) to press with SELECT next on the way to `page`, 0: there, or no way known from here */
-enum { LSDJ_PG_SONG, LSDJ_PG_CHAIN, LSDJ_PG_PHRASE, LSDJ_PG_INSTR, LSDJ_PG_TABLE, LSDJ_PG_PROJECT, LSDJ_PG_SYNTH,
-       LSDJ_PG_WAVE, LSDJ_PG_GROOVE, LSDJ_NPG };
-static uint8_t lsdj_page_key(uint32_t row, uint32_t col, uint32_t here, uint32_t page)
-{
-    static const uint8_t UNDER[3] = {0, 2, 4};             /* the column under PROJECT, SYNTH, WAVE */
-    uint32_t via;
-    if (row > 2u || col > 4u || page >= LSDJ_NPG || here == page)
-        return 0;
-    if (page == LSDJ_PG_GROOVE)
-        return JOYPAD_DOWN;                   /* (from the top row: to the middle row, and down again) */
-    if (page >= LSDJ_PG_PROJECT) {            /* a screen of the top row */
-        via = UNDER[page - LSDJ_PG_PROJECT];
-        if (row == 2u)
-            return JOYPAD_UP;
-        if (row == 1u)
-            return col == via ? JOYPAD_UP : col < via ? JOYPAD_RIGHT : JOYPAD_LEFT;
-        if (col != via)
-            return JOYPAD_DOWN;               /* on another top screen: back down, and up from under the right one */
-        if (here < LSDJ_PG_PROJECT || here > LSDJ_PG_WAVE)
-            return 0;
-        return here < page ? JOYPAD_RIGHT : JOYPAD_LEFT;   /* it came up there and LSDj landed elsewhere: sideways */
-    }
-    if (row != 1u)                            /* a screen of the middle row: to that row, then to its column */
-        return row == 0u ? JOYPAD_DOWN : JOYPAD_UP;
-    if (col == page)
-        return 0;                             /* (its column, another screen in it: LIVE mode in SONG's place) */
-    return col < page ? JOYPAD_RIGHT : JOYPAD_LEFT;
 }
 
 /* the Game Boy keys held in pad (active low) as text, e.g. "START SEL R"; "-" if none (b: >= 22 bytes) */

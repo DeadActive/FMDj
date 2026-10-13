@@ -17,19 +17,6 @@ Shortcuts for LSDj's screens:
 | SELECT + UP | OCT+ |
 | SELECT + DOWN | OCT- |
 
-**A screen directly, on the keyboard's low keys**, laid out as LSDj's own map:
-
-| Key | Screen |
-|---|---|
-| F3, G3, A3, B3, C4 (the first five white keys) | SONG, CHAIN, PHRASE, INSTR, TABLE |
-| F#3, A#3, C#4 (the raised keys above them) | PROJECT, SYNTH, WAVE |
-| D4 | GROOVE |
-
-The firmware reads where LSDj is and presses SELECT + the directions that lead there, so a jump across the whole
-map takes about half a second and LSDj shows the screens it passes. This needs to know where LSDj keeps its
-position, which is known for LSDj 9.4.2 only; with another version these keys do nothing. If LSDj does not take a
-press twice, the jump stops and the status line says `CANNOT GO THERE`.
-
 Editing as in LSDj: hold A (the top F) and turn SELECT to change a value by one, ALGORITHM by an octave or 0x10.
 
 The FM-1's own: MASTER is the volume; OCT- and OCT+ held together for 5 s enter UBOOT.
