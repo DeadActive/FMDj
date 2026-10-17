@@ -3,7 +3,7 @@
 // The FM-1's panel in the Game Boy's colours, as elements: built once (buildPanel), placed per layout (layoutPanel:
 // layout.js's FM-1 landscape, the stacked portrait for phones), and the Game Boy screen's greens. The simulator page
 // (app.js) and the FMDj landing page (web/fmdj/fmdj.js) share it.
-import { BTN, B, ENC, KEYS, GB, keyHint } from './controls.js';
+import { BTN, B, ENC, KEYS, GB, STEP, keyHint } from './controls.js';
 import { LAYOUTS, DECO_CLASS, blend } from './layout.js';
 
 // ---- the Game Boy screen's greens: a grey of the firmware's picture -> a place between the darkest and the lightest
@@ -67,11 +67,11 @@ export function buildPanel(device, lcd) {
   });
   KEYS.forEach(k => {
     const el = document.createElement('div'), ctl = `key:${k.n}`;
-    el.className = `key${k.black ? ' black' : ''}${GB[ctl] ? ' ab' : ' idle'}`;
+    el.className = `key${k.black ? ' black' : ''}${GB[ctl] ? ' ab' : STEP[ctl] ? ' step' : ' idle'}`;
     el.dataset.ctl = ctl;
     el.setAttribute('role', 'button');
-    el.setAttribute('aria-label', GB[ctl] ? `${k.name}: ${GB[ctl]}` : k.name);
-    if (GB[ctl]) el.append(span('', GB[ctl]));
+    el.setAttribute('aria-label', GB[ctl] ? `${k.name}: ${GB[ctl]}` : STEP[ctl] ? `${k.name}: step ${STEP[ctl]}` : k.name);
+    if (GB[ctl] || STEP[ctl]) el.append(span('', GB[ctl] || STEP[ctl]));
     addHint(el, ctl);
     device.append(el);
     els.ctl[ctl] = el;

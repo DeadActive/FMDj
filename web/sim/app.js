@@ -5,11 +5,11 @@
 // (worklet.js runs the firmware), paints the frames it sends back in the Game Boy screen's greens, and keeps what the
 // firmware writes to flash in IndexedDB (store.js). The user's own ROM is made into a cartridge block here
 // (lsdjinstall.js, as the install page does) and kept in this browser.
-import { HeldSet, keyEvent, contextMenuLatches } from './controls.js';
+import { HeldSet, keyEvent, contextMenuLatches, setProgram } from './controls.js';
 import { FlashStore, openFlashDb, loadCart, saveCart } from './store.js';
 import { needsResume, playbackSession } from './audio.js';
 import { buildPanel, layoutPanel, LUT, SHADE } from './panel.js';
-import { loadEmu, makeCart } from './lsdjinstall.js';
+import { loadEmu, makeCart, cartProg } from './lsdjinstall.js';
 import { songsPanel } from './songs.js';
 
 const $ = id => document.getElementById(id);
@@ -186,7 +186,8 @@ async function chooseRom(file) {
   try {
     const [emuWasm, demo] = await Promise.all([fetchBytes('lsdj_emu.wasm'),
       fetch('demo.json').then(r => (r.ok ? r.json() : null), () => null)]);
-    const emu = await loadEmu(emuWasm), parts = { "LSDj's first start": [0, 8], 'typing the demo song': [8, 90], 'playing it': [98, 2] };
+    const emu = await loadEmu(emuWasm), parts = { "LSDj's first start": [0, 8], 'typing the demo song': [8, 90], 'playing it': [98, 2],
+      "DMGo's first start": [0, 40], 'playing a step': [40, 60] };
     const made = await makeCart(emu, new Uint8Array(await file.arrayBuffer()), demo, 1 << 20, (what, done, total) => {
       const [at, share] = parts[what] ?? [0, 100];
       $('rom-bar').value = at + share * done / total;
@@ -194,6 +195,7 @@ async function chooseRom(file) {
       preview(emu.screen());
     }, () => new Promise(r => setTimeout(r)));
     const kept = await saveCart(made);
+    if (kept && cartProg(made) !== program) { location.reload(); return; }   // the other program: its keys on the panel
     cart = made;
     busy = false;
     blank();
@@ -270,7 +272,9 @@ async function powerOn() {
     $('songs').hidden = false;
     songs = songsPanel($('songs'), ask, () => !!node && !poweredOff && ctx.state === 'running');
     songs.refresh();
-    $('rom-line').textContent = 'Press PLAY (Enter) to start LSDj, and PLAY again to play the song.';
+    $('rom-line').textContent = program === 'dmgo' ?
+      'Press PLAY (Enter) to start DMGo: the white keys are its steps, A is D#5 (X), B is F#5 (Z).' :
+      'Press PLAY (Enter) to start LSDj, and PLAY again to play the song.';
     $('forget-rom').hidden = $('forget-save').hidden = false;
     if (ctx.sampleRate !== 44100) note.textContent = `Audio runs at ${ctx.sampleRate} Hz here, not 44100 Hz: pitch and tempo are off.`;
     ctx.addEventListener('statechange', () => {
@@ -284,7 +288,10 @@ async function powerOn() {
   btn.disabled = false;
 }
 
-// ---- start
+// ---- start: the kept cartridge first, as its program decides what the keys are (LSDj's or DMGo's)
+const kept0 = await loadCart().catch(() => null), program = cartProg(kept0);
+const NAME = { lsdj: 'LSDj', dmgo: 'DMGo' };
+setProgram(program);
 els = buildPanel(device, lcd);
 relayout();
 blank();
@@ -295,14 +302,14 @@ els.power.addEventListener('click', powerSwitch);
 $('rom').addEventListener('change', () => chooseRom($('rom').files[0]));
 $('forget-rom').addEventListener('click', async () => { await saveCart(null); location.reload(); });
 $('forget-save').addEventListener('click', async () => {
-  if (!confirm('Forget the song saved in this browser? LSDj starts from the demo song again.')) return;
+  if (!confirm(program === 'dmgo' ? 'Forget the save kept in this browser? DMGo starts empty again.' :
+    'Forget the song saved in this browser? LSDj starts from the demo song again.')) return;
   await store.clear();
   location.reload();
 });
 $('hints').addEventListener('change', () => device.classList.toggle('show-hints', $('hints').checked));
 device.classList.add('show-hints');
 requestAnimationFrame(paint);
-loadCart().then(c => {
-  cart = c;
-  ready(c ? 'Your LSDj ROM is kept in this browser. Switch the power on.' : 'To begin, choose your own LSDj ROM file.');
-});
+cart = kept0;
+ready(cart ? `Your ${NAME[program] || 'ROM'} is kept in this browser. Switch the power on.` :
+  'To begin, choose your own LSDj or DMGo ROM file.');

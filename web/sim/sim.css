@@ -121,6 +121,9 @@ canvas.lcd { image-rendering: pixelated; image-rendering: crisp-edges; border-ra
 .key.ab { background: radial-gradient(circle at 40% 28%, #c2437c, var(--magenta) 62%); box-shadow: 0 2px 0 #5c1233, 0 3px 6px rgba(0, 0, 0, .45);
   display: flex; align-items: center; justify-content: center; font: 700 26px/1 var(--print); color: #f6dbe7; }
 .device.phone .key.ab { font-size: 13px; }
+.key.step { display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12%; box-sizing: border-box;
+  font: 700 14px/1 var(--print); color: #77736b; }                       /* DMGo: the white keys are its steps */
+.device.phone .key.step { font-size: 9px; }
 .key.down { transform: translateY(2px); box-shadow: 0 0 0 #000, 0 1px 2px rgba(0, 0, 0, .5); }
 
 .hint { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; display: none;

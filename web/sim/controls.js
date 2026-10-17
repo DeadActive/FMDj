@@ -43,8 +43,26 @@ export const KEYBOARD = {
 };
 const SHOWN = { ArrowLeft: '\u2190', ArrowRight: '\u2192', ArrowUp: '\u2191', ArrowDown: '\u2193', KeyX: 'X', KeyZ: 'Z',
   Enter: 'Enter', ShiftLeft: 'Shift', KeyS: 'S' };
-export const keyHint = Object.fromEntries(Object.entries(KEYBOARD).filter(([code]) => SHOWN[code])
-  .map(([code, c]) => [`${c.kind}:${c.id}`, SHOWN[code]]));
+export const keyHint = {};
+const hints = () => {
+  for (const k of Object.keys(keyHint)) delete keyHint[k];
+  Object.assign(keyHint, Object.fromEntries(Object.entries(KEYBOARD).filter(([code]) => SHOWN[code])
+    .map(([code, c]) => [`${c.kind}:${c.id}`, SHOWN[code]])));
+};
+hints();
+
+// DMGo! installed (lsdj.c, 2026-10-17): A and B on D#5 and F#5, the 16 white keys its steps 1..16, no screen
+// shortcuts (SELECT + a direction is something else in it). The page calls this before it builds the panel.
+export const STEP = {};
+export function setProgram(prog) {
+  if (prog !== 'dmgo') return;
+  for (const c of ['key:24', 'key:26', `btn:${B['OCT+']}`, `btn:${B['OCT-']}`, 'enc:2']) delete GB[c];
+  Object.assign(GB, { 'key:22': 'A', 'key:25': 'B' });
+  [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26].forEach((n, i) => { STEP[`key:${n}`] = String(i + 1); });
+  KEYBOARD.KeyX = { kind: 'key', id: 22 };
+  KEYBOARD.KeyZ = { kind: 'key', id: 25 };
+  hints();
+}
 
 // a keyboard event -> { ctl: 'key:n' | 'btn:id', down } or null (unmapped, autorepeat, a shortcut with a modifier)
 export function keyEvent(e) {

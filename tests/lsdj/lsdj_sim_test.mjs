@@ -8,9 +8,9 @@
 // without them.   node tests/lsdj/lsdj_sim_test.mjs
 import fs from "node:fs";
 import { Fm1Sim, FS, SECTOR } from "../../web/sim/engine.js";
-import { BTN, B, ENC, KEYBOARD, GB } from "../../web/sim/controls.js";
+import { BTN, B, ENC, KEYBOARD, GB, STEP, setProgram } from "../../web/sim/controls.js";
 import { LAYOUTS } from "../../web/sim/layout.js";
-import { loadEmu, makeCart } from "../../web/lsdjinstall.js";
+import { loadEmu, makeCart, cartProg } from "../../web/lsdjinstall.js";
 import { simLink } from "../../web/sim/simlink.js";
 import { Link, listSongs, downloadSav, uploadSav, saveToFlash } from "../../web/lsdjlink.js";
 
@@ -117,7 +117,7 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     run(sim, 0.5);
     const link = simLink(Link, async (line) => { const t = sim.console(line); run(sim, 0.02); return t; });   // (time goes on)
     const inf = await link.info();
-    ok(inf.started && inf.version === 2 && inf.flash && inf.banks === 2, "info: started, with flash, our program's 2 banks");
+    ok(inf.started && inf.version === 3 && inf.flash && inf.banks === 2 && inf.prog === "lsdj" && inf.size === 0x20000, "info: started, with flash, our program's 2 banks");
     const sav = new Uint8Array(0x20000);             // an LSDj save with an empty file system, and a mark of ours
     sav[0x813E] = 0x6A; sav[0x813F] = 0x6B; sav[0x8140] = 0xFF;
     sav.fill(0xFF, 0x8141, 0x8200);
@@ -140,6 +140,39 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     run(sim, 1);
     ok(sim.playing() && sim.error() === 0 && sim.frames() > 50, "... and PLAY loads the save and runs");
   }
+  ok(cartProg(cart) === "lsdj" && cartProg(null) === null && cartProg(new Uint8Array(40)) === null,
+     "the program of a kept cartridge: LSDj's kind; none without one");
+  const DMGO = process.env.DMGO_ROM;               // the owner's own DMGo (v1), through the firmware's lsdj.c
+  if (!DMGO) console.log("DMGo in the simulator: skipped (DMGO_ROM)");
+  else {
+    const dcart = await makeCart(await loadEmu(fs.readFileSync(EMU)), new Uint8Array(fs.readFileSync(DMGO)), null, 1 << 20);
+    ok(cartProg(dcart) === "dmgo", "the program of a kept cartridge: DMGo");
+    const sim = await Fm1Sim.create(wasm);
+    sim.boot(null, dcart);
+    tap(sim, B.PLAY);                              // the firmware starts the Game Boy
+    run(sim, 1);
+    tap(sim, B.PLAY);                              // START: past DMGo's title, on CH1
+    run(sim, 1);
+    ok(sim.playing() && sim.error() === 0, "DMGo runs in the simulator");
+    const rows = (fb, y0, y1, x1 = 240) => Array.from({ length: y1 - y0 }, (_, k) => [...fb.slice((y0 + k) * 240, (y0 + k) * 240 + x1)]).flat();
+    const same = (a, b) => a.every((v, i) => v === b[i]);
+    // on the screen (1.5x from row 4): DMGo's SEQ row, Game Boy rows 88..95; the top row's left part ("CH1:PULSE";
+    // its right part, the BPM under the cursor, blinks)
+    const SEQ = [4 + 88 * 3 / 2, 4 + 96 * 3 / 2], TOP = [4, 4 + 12, 110];
+    const seq0 = rows(sim.fb(), ...SEQ), top0 = rows(sim.fb(), ...TOP);
+    sim.key(0, true); run(sim, 0.1); sim.key(0, false); run(sim, 0.5);   // F3: step 1
+    ok(!same(seq0, rows(sim.fb(), ...SEQ)) && same(top0, rows(sim.fb(), ...TOP)),
+       "a white key sets its step: the step row changes, the top does not");
+    sim.key(24, true); run(sim, 0.1); sim.key(24, false); run(sim, 0.5);   // F5: LSDj's A, DMGo's step 15
+    ok(same(top0, rows(sim.fb(), ...TOP)), "the top F is a step in DMGo, not A (no menu)");
+    sim.key(22, true); run(sim, 0.1); sim.key(22, false); run(sim, 0.5);   // D#5: DMGo's A opens its menu
+    ok(!same(top0, rows(sim.fb(), ...TOP)), "D#5 is A: DMGo's top menu opens");
+    ok(sim.error() === 0 && sim.playing(), "... and it still runs");
+  }
+  setProgram("dmgo");                              // the page with DMGo kept: its keys on the panel and keyboard
+  ok(GB["key:22"] === "A" && GB["key:25"] === "B" && !GB["key:24"] && !GB["key:26"] && STEP["key:0"] === "1" &&
+     STEP["key:26"] === "16" && Object.keys(STEP).length === 16 && KEYBOARD.KeyX.id === 22 && KEYBOARD.KeyZ.id === 25 &&
+     !GB[`btn:${B["OCT+"]}`] && !GB["enc:2"], "DMGo's panel: A D#5, B F#5, the white keys steps 1..16, no screen shortcuts");
 }
 console.log(fails ? `lsdj_sim_test: ${fails} FAILED` : "lsdj_sim_test: all passed");
 process.exit(fails ? 1 : 0);

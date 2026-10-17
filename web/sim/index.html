@@ -12,7 +12,7 @@
 <main>
   <header>
     <h1><i>FMDj</i> <span>simulator</span></h1>
-    <p class="lead">The FM-1's FMDj firmware, running in this page with your own LSDj ROM.</p>
+    <p class="lead">The FM-1's FMDj firmware, running in this page with your own LSDj or DMGo! ROM.</p>
   </header>
 
   <div class="stage"><div id="fit" class="fit"><div id="device" class="device"></div></div></div>
@@ -20,10 +20,12 @@
 
   <section class="setup">
     <p id="rom-line">Loading…</p>
-    <p id="rom-pick" hidden><label class="file">Choose your LSDj ROM (.gb) <input id="rom" type="file" accept=".gb,.gbc"></label></p>
+    <p id="rom-pick" hidden><label class="file">Choose your LSDj or DMGo ROM (.gb) <input id="rom" type="file" accept=".gb,.gbc"></label></p>
     <progress id="rom-bar" max="100" value="0" hidden></progress>
     <p class="small">The ROM is read by this page only and kept in this browser; it is sent nowhere. LSDj is by Johan
-      Kotlinski and is not part of this page: you need your own copy.</p>
+      Kotlinski, DMGo! by Audiowanderer (free from
+      <a href="https://audiowanderer.com/AW/drum-machina-go-or/" target="_blank" rel="noopener">audiowanderer.com</a>);
+      neither is part of this page: you need your own copy.</p>
     <p class="small"><button id="forget-rom" class="link" hidden>Use another ROM</button>
       <button id="forget-save" class="link" hidden>Forget the save</button>
       <label class="link"><input id="hints" type="checkbox" checked> show the keyboard keys</label></p>

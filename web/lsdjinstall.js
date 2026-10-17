@@ -124,6 +124,21 @@ async function dmgoCart(emu, room, full, say, pause) {
   return cart;
 }
 
+// a cartridge block (lsdj_cart.c's layout) -> the program of the ROM in it: "lsdj", "dmgo" or null (as lsdj_gb.c
+// lsdj_prog: by the header of bank 0)
+export function cartProg(cart) {
+  if (!cart || cart.length < 16) return null;
+  const u16 = (a) => cart[a] | cart[a + 1] << 8, u32 = (a) => (u16(a) | u16(a + 2) << 16) >>> 0;
+  const t = cart.length - 16, n = u16(t + 6), body = t - u32(t + 8);
+  if (String.fromCharCode(...cart.subarray(t, t + 4)) !== "LSDC" || !n || body < 0 || u16(body) < 0x150) return null;
+  const h = body + 2 * n + 4 + u32(body + 2 * n);
+  if (h + 0x150 > t) return null;
+  const type = cart[h + 0x147], ram = cart[h + 0x149];
+  if (type === 0x1B && ram === 0x04) return "lsdj";
+  const title = String.fromCharCode(...cart.subarray(h + 0x134, h + 0x140));
+  return type === 0x1E && ram === 0x03 && title === "DRUMMACHINA\0" ? "dmgo" : null;
+}
+
 const slotOf = (p) => p.dec.subarray(p.appOff, p.appOff + p.app.size);
 
 // pkg: a parsed lsdj-base package. -> { size, appLen, room }: the slot, the firmware's own bytes, what is free.
