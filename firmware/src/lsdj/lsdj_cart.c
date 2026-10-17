@@ -1,13 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * LSDj fork: 2026 DEADACTIVE */
-/* The cartridge block: the user's own LSDj ROM and its start-up save as one piece of data, put after the firmware's
+/* The cartridge block: the user's own LSDj (or DMGo) ROM and its start-up save as one piece of data, put after the firmware's
  * own bytes at the very end of the app's flash slot. The firmware holds nothing of LSDj: the install page
  * (web/lsdj_install.html, this code as WebAssembly) and the Mac build (tools/lsdj_cart_tool.c) make the block from a
  * ROM file, and the LSDj unit reads it on PLAY. Pure (no core, no hardware; tests/lsdj/lsdj_cart_test.c). Include
  * lsdj_gb.c first.
  *
  *   body:    the banks' lengths, 16 bits each (a bank is stored without its trailing 0xFF bytes: lsdj_bank_t)
- *            the packed save's length, 32 bits; the save, PackBits (lsdj_unpack gives its 128 KiB)
+ *            the packed save's length, 32 bits; the save, PackBits (lsdj_unpack gives the size the ROM header
+ *            says: lsdj_prog_save, 128 KiB for LSDj, 32 KiB for DMGo)
  *            the banks' bytes, one after the other
  *   trailer: "LSDC", version (16 bits), banks (16 bits), the body's length, the body's CRC-32: 16 bytes, the last
  *            of the slot
@@ -15,11 +16,11 @@
 #define LSDJ_CART_VERSION 1u
 #define LSDJ_CART_TRAILER 16u
 #define LSDJ_CART_BANKS 64u                   /* 1 MiB: the most a ROM has */
-#define LSDJ_CART_SAVE (128u * 1024u)
+#define LSDJ_CART_SAVE (128u * 1024u)        /* the largest save (LSDj's) */
 enum { LSDJ_CART_OK, LSDJ_CART_NONE = -1,     /* no block here */
        LSDJ_CART_BAD = -2,                    /* a block, but damaged or not for this firmware */
        LSDJ_CART_ROM_SIZE = -3,               /* the file is not 1 .. 64 whole banks */
-       LSDJ_CART_ROM_TYPE = -4,               /* not MBC5 + RAM + battery with a 128 KiB save: not LSDj */
+       LSDJ_CART_ROM_TYPE = -4,               /* neither LSDj's cartridge nor DMGo's (lsdj_prog) */
        LSDJ_CART_ROM_SUM = -5,                /* the header checksum is wrong */
        LSDJ_CART_FULL = -6 };                 /* the block does not fit */
 
@@ -78,14 +79,14 @@ static int lsdj_cart_read(const uint8_t *end, uint32_t room, lsdj_cart_t *c)
 }
 
 #ifdef LSDJ_CART_MAKE                         /* the makers only: the page and the Mac build */
-/* LSDJ_CART_OK, or why the file cannot be an LSDj ROM (as tools/lsdj_rom.py checked it, and emu_init) */
+/* LSDJ_CART_OK, or why the file cannot be an LSDj or DMGo ROM (as tools/lsdj_rom.py checked it, and emu_init) */
 static int lsdj_cart_rom_check(const uint8_t *rom, uint32_t len)
 {
     uint32_t i;
     uint8_t x = 0;
     if (!len || len % LSDJ_BANK || len > LSDJ_CART_BANKS * LSDJ_BANK)
         return LSDJ_CART_ROM_SIZE;
-    if (rom[0x147] != 0x1Bu || rom[0x149] != 0x04u)
+    if (lsdj_prog(rom + 0x134) == LSDJ_PROG_NONE)
         return LSDJ_CART_ROM_TYPE;
     for (i = 0x134; i <= 0x14Cu; i++)
         x = (uint8_t)(x - rom[i] - 1u);
@@ -129,10 +130,16 @@ static uint32_t lsdj_cart_pack(uint8_t *out, const uint8_t *d, uint32_t n)
     return o;
 }
 
-/* the block's size for this ROM (checked: lsdj_cart_rom_check) and save (LSDJ_CART_SAVE bytes) */
+static uint32_t lsdj_cart_save_n(const uint8_t *rom)   /* its save's size (a checked ROM: lsdj_cart_rom_check) */
+{
+    return lsdj_prog_save(lsdj_prog(rom + 0x134));
+}
+
+/* the block's size for this ROM (checked: lsdj_cart_rom_check) and save (lsdj_cart_save_n bytes) */
 static uint32_t lsdj_cart_need(const uint8_t *rom, uint32_t rom_len, const uint8_t *save)
 {
-    uint32_t n = rom_len / LSDJ_BANK, need = 2u * n + 4u + lsdj_cart_pack(0, save, LSDJ_CART_SAVE) + LSDJ_CART_TRAILER, i;
+    uint32_t n = rom_len / LSDJ_BANK, i;
+    uint32_t need = 2u * n + 4u + lsdj_cart_pack(0, save, lsdj_cart_save_n(rom)) + LSDJ_CART_TRAILER;
     for (i = 0; i < n; i++)
         need += lsdj_cart_trim(rom + i * LSDJ_BANK);
     return need;
@@ -155,7 +162,7 @@ static int32_t lsdj_cart_make(uint8_t *out, uint32_t max, const uint8_t *rom, ui
         out[2u * i + 1u] = (uint8_t)(k >> 8);
     }
     at = 2u * n + 4u;
-    k = lsdj_cart_pack(out + at, save, LSDJ_CART_SAVE);
+    k = lsdj_cart_pack(out + at, save, lsdj_cart_save_n(rom));
     for (i = 0; i < 4u; i++)
         out[2u * n + i] = (uint8_t)(k >> (8u * i));
     at += k;

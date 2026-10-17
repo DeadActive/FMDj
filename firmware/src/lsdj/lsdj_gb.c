@@ -37,24 +37,74 @@ static inline uint8_t lsdj_rom_byte(const lsdj_bank_t *t, uint32_t nbanks, uint3
     return t[b].p[i];
 }
 
-/* A and B are the two F and G keys at the top of the keyboard (fm1_in.notes: bit 0 = F3 .. 26 = G5) */
+/* The programs FMDj runs, one at a time, told apart by the installed ROM's header (bytes 0x134..0x14F: h[0] is
+ * 0x134). LSDj: MBC5 + RAM + battery with a 128 KiB save, whatever its title (each version has its own). DMGo!
+ * (Drum Machina Go!, Audiowanderer): its title on MBC5 + rumble + RAM + battery with a 32 KiB save; the step keys
+ * know v1's memory (measured on the host, 2026-10-17), so only v1, by its global checksum, gets them. */
+enum { LSDJ_PROG_NONE = -1, LSDJ_PROG_LSDJ, LSDJ_PROG_DMGO };
+#define LSDJ_HDR 28u                          /* header bytes 0x134..0x14F */
+#define LSDJ_HB(a) ((a) - 0x134u)             /* a header byte's index in h */
+
+static void lsdj_header(const lsdj_bank_t *t, uint32_t nbanks, uint8_t h[LSDJ_HDR])
+{
+    uint32_t i;
+    for (i = 0; i < LSDJ_HDR; i++)
+        h[i] = lsdj_rom_byte(t, nbanks, 0x134u + i);
+}
+
+static int lsdj_prog(const uint8_t *h)
+{
+    static const char DMGO[12] = "DRUMMACHINA";   /* and its NUL */
+    uint32_t i;
+    if (h[LSDJ_HB(0x147)] == 0x1Bu && h[LSDJ_HB(0x149)] == 0x04u)
+        return LSDJ_PROG_LSDJ;
+    if (h[LSDJ_HB(0x147)] != 0x1Eu || h[LSDJ_HB(0x149)] != 0x03u)
+        return LSDJ_PROG_NONE;
+    for (i = 0; i < sizeof DMGO; i++)
+        if (h[i] != (uint8_t)DMGO[i])
+            return LSDJ_PROG_NONE;
+    return LSDJ_PROG_DMGO;
+}
+
+static uint32_t lsdj_prog_save(int prog)       /* its save RAM: the size the ROM header says */
+{
+    return prog == LSDJ_PROG_LSDJ ? 128u * 1024u : prog == LSDJ_PROG_DMGO ? 32u * 1024u : 0;
+}
+
+static int lsdj_prog_steps(const uint8_t *h)   /* 1: DMGo v1, whose memory the step keys know */
+{
+    return lsdj_prog(h) == LSDJ_PROG_DMGO && h[LSDJ_HB(0x14E)] == 0xEEu && h[LSDJ_HB(0x14F)] == 0x3Cu;
+}
+
+/* A and B: in LSDj the two F and G keys at the top of the keyboard (fm1_in.notes: bit 0 = F3 .. 26 = G5); in DMGo
+ * the black keys D#5 and F#5, as the 16 white keys are its steps (the owner's layout, 2026-10-17) */
 #define LSDJ_NOTE_A (1u << 24)                /* F5 */
 #define LSDJ_NOTE_B (1u << 26)                /* G5 */
+#define DMGO_NOTE_A (1u << 22)                /* D#5 */
+#define DMGO_NOTE_B (1u << 25)                /* F#5 */
+static const uint32_t LSDJ_STEP_NOTE[16] = {  /* step 1..16: the white keys F3 .. G5, left to right */
+    1u << 0, 1u << 2, 1u << 4, 1u << 6, 1u << 7, 1u << 9, 1u << 11, 1u << 12,
+    1u << 14, 1u << 16, 1u << 18, 1u << 19, 1u << 21, 1u << 23, 1u << 24, 1u << 26};
 
 /* buttons and note keys held (fm1_in.buttons, .notes) -> the joypad (active low). map: the button bit of each Game
  * Boy key in JOYPAD bit order (A, B, SELECT, START, RIGHT, LEFT, UP, DOWN; 0: no button); lsdj.c fills it from the
- * panel labels */
-static uint8_t lsdj_pad(uint32_t buttons, uint32_t notes, const uint32_t map[8])
+ * panel labels. a, b: the note keys of A and B */
+static uint8_t lsdj_pad_ab(uint32_t buttons, uint32_t notes, const uint32_t map[8], uint32_t a, uint32_t b)
 {
     uint32_t down = 0, i;
     for (i = 0; i < 8u; i++)
         if (buttons & map[i])
             down |= 1u << i;
-    if (notes & LSDJ_NOTE_A)
+    if (notes & a)
         down |= JOYPAD_A;
-    if (notes & LSDJ_NOTE_B)
+    if (notes & b)
         down |= JOYPAD_B;
     return (uint8_t)~down;
+}
+
+static uint8_t lsdj_pad(uint32_t buttons, uint32_t notes, const uint32_t map[8])   /* LSDj's A and B */
+{
+    return lsdj_pad_ab(buttons, notes, map, LSDJ_NOTE_A, LSDJ_NOTE_B);
 }
 
 /* Knob steps -> short presses, one Game Boy frame at a time. LSDj reads its keys once a frame; measured on 9.4.2

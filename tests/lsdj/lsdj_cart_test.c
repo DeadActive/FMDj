@@ -172,6 +172,31 @@ int main(void)
         rom[0x140] ^= 1;
         CHECK(lsdj_cart_rom_check(rom, sizeof rom) == LSDJ_CART_OK);
     }
+    {   /* DMGo's kind: its title, MBC5 + rumble + RAM + battery, a 32 KiB save. The block packs 32 KiB (the save
+         * size is the ROM header's), and the reader is the same */
+        static uint8_t small[32u * 1024u], sback[32u * 1024u];
+        uint32_t k;
+        uint8_t x = 0;
+        memcpy(rom + 0x134, "DRUMMACHINA\0\0\0\0\0", 16);
+        rom[0x147] = 0x1E;
+        rom[0x149] = 0x03;
+        for (k = 0x134; k <= 0x14C; k++)
+            x = (uint8_t)(x - rom[k] - 1u);
+        rom[0x14D] = x;
+        CHECK(lsdj_cart_rom_check(rom, 4u * LSDJ_BANK) == LSDJ_CART_OK);
+        for (k = 0; k < sizeof small; k++)
+            small[k] = (uint8_t)(k / 300u);
+        need = lsdj_cart_need(rom, 4u * LSDJ_BANK, small);
+        n = lsdj_cart_make(blk, sizeof blk, rom, 4u * LSDJ_BANK, small);
+        CHECK(n > 0 && (uint32_t)n == need);
+        memset(slot, 0xFF, sizeof slot);
+        memcpy(slot + sizeof slot - (uint32_t)n, blk, (uint32_t)n);
+        CHECK(lsdj_cart_read(end, sizeof slot, &c) == LSDJ_CART_OK && c.nbanks == 4u);
+        CHECK(lsdj_unpack(sback, sizeof sback, c.save, c.save_len) == 0 && !memcmp(sback, small, sizeof small));
+        CHECK(lsdj_unpack(back, sizeof back, c.save, c.save_len) != 0);   /* it is 32 KiB, not 128 */
+        rom[0x149] = 0x04;                     /* DMGo's title with a 128 KiB save: not DMGo, not LSDj */
+        CHECK(lsdj_cart_rom_check(rom, 4u * LSDJ_BANK) == LSDJ_CART_ROM_TYPE);
+    }
     printf(fails ? "lsdj_cart_test: %d FAILED\n" : "lsdj_cart_test: all passed\n", fails);
     return fails != 0;
 }

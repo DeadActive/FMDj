@@ -643,6 +643,7 @@ struct gb_s
 	int8_t mbc;
 	/* Whether the MBC has internal RAM. */
 	uint8_t cart_ram;
+	uint8_t cart_rumble;	/* (LSDj fork, DEADACTIVE) MBC5 + rumble: bit 3 of the RAM bank is the motor */
 	/* Number of ROM banks in cartridge. */
 	uint16_t num_rom_banks_mask;
 	/* Number of RAM banks in cartridge. Ignore for MBC2. */
@@ -1016,7 +1017,7 @@ PGB_HOT void __gb_write(struct gb_s *gb, uint_fast16_t addr, uint8_t val)
 		}
 
 		else if(gb->mbc == 5)
-			gb->cart_ram_bank = (val & 0x0F);
+			gb->cart_ram_bank = (val & (gb->cart_rumble ? 0x07 : 0x0F));
 
 		return;
 
@@ -3767,8 +3768,8 @@ enum gb_init_error_e gb_init(struct gb_s *gb,
 	const uint8_t cart_ram[] =
 	{
 		0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0,
-		1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0
-	};
+		1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0
+	};	/* (LSDj fork, DEADACTIVE: 0x1D and 0x1E, MBC5 + rumble + RAM, have RAM; DMGo is 0x1E) */
 	/* How large the ROM is in banks of 16 KiB. */
 	const uint16_t num_rom_banks_mask[] =
 	{
@@ -3815,6 +3816,7 @@ enum gb_init_error_e gb_init(struct gb_s *gb,
 
 	gb->num_rom_banks_mask = num_rom_banks_mask[gb->gb_rom_read(gb, bank_count_location)] - 1;
 	gb->cart_ram = cart_ram[gb->gb_rom_read(gb, mbc_location)];
+	gb->cart_rumble = gb->mbc == 5 && gb->gb_rom_read(gb, mbc_location) >= 0x1C;
 	gb->num_ram_banks = num_ram_banks[gb->gb_rom_read(gb, ram_size_location)];
 
 	/* If the ROM says that it support RAM, but has 0 RAM banks, then

@@ -78,6 +78,7 @@ static struct {
     const lsdj_bank_t *rom;
     uint32_t nbanks;
     uint8_t *sram;                            /* LSDJ_SRAM bytes */
+    uint32_t sram_n;                          /* of them the cartridge's: its program's save (lsdj_prog_save) */
     uint8_t (*fb)[LSDJ_W];                    /* LSDJ_H rows of shades */
     uint8_t *dirty;                           /* LSDJ_H flags: set when a row's pixels change (0: not kept) */
     uint32_t errors, last_error, last_addr;
@@ -258,12 +259,12 @@ static uint8_t emu_rom_read(struct gb_s *gb, const uint_fast32_t a)
 static uint8_t emu_ram_read(struct gb_s *gb, const uint_fast32_t a)
 {
     (void)gb;
-    return a < LSDJ_SRAM ? emu.sram[a] : 0xFFu;
+    return a < emu.sram_n ? emu.sram[a] : 0xFFu;
 }
 static void emu_ram_write(struct gb_s *gb, const uint_fast32_t a, const uint8_t v)
 {
     (void)gb;
-    if (a < LSDJ_SRAM)
+    if (a < emu.sram_n)
         emu.sram[a] = v;
 }
 static void emu_error(struct gb_s *gb, const enum gb_error_e e, const uint16_t a)
@@ -280,11 +281,12 @@ static void emu_line(struct gb_s *gb, const uint8_t *px, const uint_fast8_t y)
         emu.dirty[y] = 1;
 }
 
-/* 0 = running; else Peanut-GB's gb_init error (bad header checksum, unsupported cartridge) or -1 (not MBC5 + RAM +
- * battery with a 128 KiB save: what LSDj is) */
+/* 0 = running; else Peanut-GB's gb_init error (bad header checksum, unsupported cartridge) or -1 (neither LSDj's
+ * cartridge nor DMGo's: lsdj_prog) */
 static int emu_init(const lsdj_bank_t *rom, uint32_t nbanks, uint8_t *sram, uint8_t (*fb)[LSDJ_W])
 {
     enum gb_init_error_e r;
+    uint8_t h[LSDJ_HDR];
     emu.rom = emu_rom_t = rom;
     emu.nbanks = emu_rom_n = nbanks;
     emu_lo_p = nbanks ? rom[0].p : 0;
@@ -297,7 +299,9 @@ static int emu_init(const lsdj_bank_t *rom, uint32_t nbanks, uint8_t *sram, uint
     emu.skipped = 0;
     emu_snd_n = AUDIO_SAMPLES;                /* (gb_init writes a sound register: no sound made for it) */
     emu_wait_find(rom, nbanks);
-    if (lsdj_rom_byte(rom, nbanks, 0x147) != 0x1Bu || lsdj_rom_byte(rom, nbanks, 0x149) != 0x04u)
+    lsdj_header(rom, nbanks, h);
+    emu.sram_n = lsdj_prog_save(lsdj_prog(h));
+    if (!emu.sram_n)
         return -1;
     r = gb_init(&emu.gb, emu_rom_read, emu_ram_read, emu_ram_write, emu_error, 0);
     if (r != GB_INIT_NO_ERROR)

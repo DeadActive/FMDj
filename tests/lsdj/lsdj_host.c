@@ -3,6 +3,7 @@
 /* Host harness of the LSDj unit's emulator (firmware/src/lsdj/lsdj_emu.c): runs the owner's own ROM, never stored
  * in this repo, for some frames with the keys held as given, and writes the save RAM, a screenshot and the sound.
  *   lsdj_host ROM FRAMES [-s SAVE_IN] [-o SAVE_OUT] [-p SHOT.pgm] [-w SOUND.wav] [-m MODE] [-k FROM:TO:KEYS]...
+ *             [-W WRAM_OUT]
  * MODE: lsdj_emu.c's emu_mode bits (1 inline ROM read, 2 frame skip, 4 the wait loop skipped, 8 sound within the
  * frame; all on by default). Prints a hash of every frame's sound and machine (registers, counters, memory) and the
  * final save RAM: the speed options (1, 2, 4) must not change it.
@@ -146,8 +147,12 @@ int main(int argc, char **argv)
             fputc(255 - fb[0][i] * 85, f);
         fclose(f);
     }
+    if ((p = opt(argc, argv, "-W")) && (f = fopen(p, "wb"))) {   /* the work RAM, C000..DFFF (tests read it) */
+        fwrite(emu.gb.wram, 1, sizeof emu.gb.wram, f);
+        fclose(f);
+    }
     if ((p = opt(argc, argv, "-o")) && (f = fopen(p, "wb"))) {
-        fwrite(sram, 1, sizeof sram, f);
+        fwrite(sram, 1, emu.sram_n, f);                /* the program's save: 128 KiB (LSDj), 32 KiB (DMGo) */
         fclose(f);
     }
     {

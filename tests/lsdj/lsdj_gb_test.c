@@ -25,6 +25,50 @@ static void test_rom(void)
     CHECK(lsdj_rom_byte(t, 3, 0xFFFFFFu) == 0xFF);
 }
 
+/* a made-up header (bytes 0x134..0x14F) of each kind: no ROM data, only the fields the programs are told apart by */
+static void header(uint8_t *h, const char *title, uint8_t type, uint8_t ram, uint16_t sum)
+{
+    memset(h, 0, LSDJ_HDR);
+    memcpy(h, title, strlen(title));
+    h[0x147 - 0x134] = type;
+    h[0x149 - 0x134] = ram;
+    h[0x14E - 0x134] = (uint8_t)(sum >> 8);
+    h[0x14F - 0x134] = (uint8_t)sum;
+}
+
+static void test_prog(void)
+{
+    uint8_t h[LSDJ_HDR];
+    header(h, "LSDJ-ANY", 0x1B, 0x04, 0x1234);                 /* LSDj: by its cartridge, whatever its title */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_LSDJ && !lsdj_prog_steps(h));
+    CHECK(lsdj_prog_save(LSDJ_PROG_LSDJ) == 128u * 1024u);
+    header(h, "DRUMMACHINA", 0x1E, 0x03, 0xEE3C);              /* DMGo v1: its title, its cartridge, the step keys */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_DMGO && lsdj_prog_steps(h));
+    CHECK(lsdj_prog_save(LSDJ_PROG_DMGO) == 32u * 1024u);
+    header(h, "DRUMMACHINA", 0x1E, 0x03, 0xEE3D);              /* another DMGo: runs, but no step keys */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_DMGO && !lsdj_prog_steps(h));
+    header(h, "DRUMMACHINA", 0x1B, 0x04, 0xEE3C);              /* that title on LSDj's cartridge: LSDj's rules */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_LSDJ && !lsdj_prog_steps(h));
+    header(h, "DRUMMACHINAX", 0x1E, 0x03, 0xEE3C);             /* another title on DMGo's cartridge: neither */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_NONE);
+    header(h, "DRUMMACHINA", 0x1E, 0x04, 0xEE3C);              /* DMGo with another save size: neither */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_NONE);
+    header(h, "LSDJ-ANY", 0x1B, 0x03, 0);                      /* LSDj's cartridge with a 32 KiB save: neither */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_NONE);
+    header(h, "GAME", 0x19, 0x00, 0);                          /* MBC5, no RAM */
+    CHECK(lsdj_prog(h) == LSDJ_PROG_NONE && !lsdj_prog_save(LSDJ_PROG_NONE));
+    {   /* the header out of a bank table */
+        static uint8_t bank0[0x150];
+        const lsdj_bank_t t[1] = {{bank0, sizeof bank0}};
+        uint8_t g[LSDJ_HDR];
+        header(bank0 + 0x134, "DRUMMACHINA", 0x1E, 0x03, 0xEE3C);
+        lsdj_header(t, 1, g);
+        CHECK(!memcmp(g, bank0 + 0x134, LSDJ_HDR) && lsdj_prog(g) == LSDJ_PROG_DMGO);
+        lsdj_header(t, 0, g);                                  /* no ROM: all 0xFF, nothing */
+        CHECK(g[0] == 0xFF && lsdj_prog(g) == LSDJ_PROG_NONE);
+    }
+}
+
 static void test_pad(void)
 {
     /* the button bit of each Game Boy key, in JOYPAD bit order: A, B (no button: note keys), SELECT, START, RIGHT,
@@ -42,6 +86,21 @@ static void test_pad(void)
     CHECK(lsdj_pad(map[2] | map[4], LSDJ_NOTE_A, map) == (uint8_t)~(JOYPAD_SELECT | JOYPAD_RIGHT | JOYPAD_A));
     CHECK(lsdj_pad(0xFFFFFFFFu, 0xFFFFFFFFu, map) == 0x00);
     CHECK(lsdj_pad((1u << 0) | (1u << 1) | (1u << 2), 0, map) == 0xFF);   /* OCT- / OCT+ / others: no Game Boy key */
+    /* DMGo's: A and B on D#5 and F#5, the white keys free for the steps */
+    CHECK(DMGO_NOTE_A == 1u << 22 && DMGO_NOTE_B == 1u << 25);
+    CHECK(lsdj_pad_ab(0, DMGO_NOTE_A, map, DMGO_NOTE_A, DMGO_NOTE_B) == (uint8_t)~JOYPAD_A);
+    CHECK(lsdj_pad_ab(0, DMGO_NOTE_B, map, DMGO_NOTE_A, DMGO_NOTE_B) == (uint8_t)~JOYPAD_B);
+    CHECK(lsdj_pad_ab(0, LSDJ_NOTE_A | LSDJ_NOTE_B, map, DMGO_NOTE_A, DMGO_NOTE_B) == 0xFF);   /* F5, G5: steps 15, 16 */
+    {
+        uint32_t i, white = 0;
+        for (i = 0; i < 16u; i++) {
+            CHECK(i == 0 || LSDJ_STEP_NOTE[i] > LSDJ_STEP_NOTE[i - 1u]);   /* left to right */
+            white |= LSDJ_STEP_NOTE[i];
+        }
+        CHECK(white == 0x5AD5AD5u);   /* F3 G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5: the 16 white keys */
+        CHECK(!(white & (DMGO_NOTE_A | DMGO_NOTE_B)));
+        CHECK(lsdj_pad_ab(0, white, map, DMGO_NOTE_A, DMGO_NOTE_B) == 0xFF);   /* steps are no Game Boy key */
+    }
 }
 
 static uint32_t presses(lsdj_knobs_t *k, uint8_t key, uint32_t frames)   /* times `key` goes down in that many frames */
@@ -244,6 +303,7 @@ static void test_unpack(void)
 int main(void)
 {
     test_rom();
+    test_prog();
     test_pad();
     test_knobs();
     test_pad_text();
