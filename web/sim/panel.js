@@ -40,7 +40,7 @@ export function buildPanel(device, lcd) {
     device.append(d);
     els.deco[name] = d;
   }
-  els.deco.bezel.append(span('stripes', ''), span('print', 'LSDJ · FM-1'), span('lamp', ''), span('lamp-print', 'POWER'));
+  els.deco.bezel.append(span('stripes', ''), span('print', 'FMDJ · FM-1'), span('lamp', ''), span('lamp-print', 'POWER'));
   device.append(lcd);
   els.power = document.createElement('button');
   els.power.className = 'power';

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LSDj songs</title>
+<title>FMDj songs</title>
 <style>
   :root { --bg: #fff; --fg: #000; --dim: #777; --line: #ddd; --bad: #b00020; }
   @media (prefers-color-scheme: dark) {
@@ -33,7 +33,7 @@
 </head>
 <body>
 <main>
-  <h1>LSDj on the FM-1: songs</h1>
+  <h1>FMDj: songs</h1>
   <p class="small">Chrome or Edge on a computer, the FM-1 on USB, LSDj started (PLAY). The song you are editing
     is not in the list until you save it in LSDj: PROJECT, LOAD/SAVE SONG, SAVE. After an upload LSDj starts
     again; load the song there: PROJECT, LOAD/SAVE SONG, LOAD.</p>
@@ -255,7 +255,7 @@
     $("savfile").onchange = () => {
         const f = $("savfile").files[0];
         $("savfile").value = "";
-        if (!f || !confirm(`Replace everything in LSDj on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
+        if (!f || !confirm(`Replace everything in FMDj on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
         job("Restore the save", async () => { const r = await uploadSav(uiLink, new Uint8Array(await f.arrayBuffer()), bar); await draw(); return kept("Restored " + f.name + ". LSDj started again.", r); });
     };
     buttons();

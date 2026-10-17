@@ -1,4 +1,4 @@
-# LSDj on the FM-1: sound timing and speed (2026-10-13)
+# FMDj: sound timing and speed (2026-10-13)
 
 The owner heard micro stutters. Two causes were found on the host with LSDj 9.4.2, and both are fixed here.
 

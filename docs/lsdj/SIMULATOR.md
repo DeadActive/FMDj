@@ -1,6 +1,6 @@
-# LSDj on the FM-1: the simulator page
+# FMDj: the simulator page
 
-`webapp/lsdj-sim/` on the site (`web/sim/` here): the FM-1's LSDj firmware running in a browser, behind the FM-1's
+`webapp/lsdj-sim/` on the site (`web/sim/` here): the FM-1's FMDj firmware running in a browser, behind the FM-1's
 panel drawn in the original Game Boy's colours. It is built after Hortator's simulator and uses the same parts.
 
 ## How it is made
@@ -17,7 +17,7 @@ panel drawn in the original Game Boy's colours. It is built after Hortator's sim
   cartridge block from it with the install page's code (`web/lsdjinstall.js`: LSDj's first start, the demo song typed
   in), and keeps the block in the browser (IndexedDB `fm1-lsdj-sim`). REC held saves into the same browser storage.
 - **The look** is CSS only (`web/sim/sim.css`); positions are the FM-1's own (`layout.js`). The screen's greys are
-  shown as the Game Boy screen's greens (`app.js`).
+  shown as the Game Boy screen's greens (`panel.js`).
 
 ## What differs from the FM-1
 

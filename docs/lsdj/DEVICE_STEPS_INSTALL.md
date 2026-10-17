@@ -1,4 +1,4 @@
-# LSDj on the FM-1: checking the install page
+# FMDj: checking the install page
 
 The page: `http://localhost:8004/webapp/lsdj-install/` (Chrome or Edge). What it does is in
 `docs/superpowers/specs/2026-10-13-lsdj-browser-install-design.md`.

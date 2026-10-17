@@ -1,4 +1,4 @@
-# LSDj on the FM-1: saving to flash and kits: device check
+# FMDj: saving to flash and kits: device check
 
 Firmware: `build/lsdj-private.fwsc` (private: it holds your LSDj ROM). Pages, served from this Mac:
 installer `http://localhost:8004/webapp/installer/`, songs `http://localhost:8004/webapp/lsdj/`. Use Chrome.

@@ -123,7 +123,7 @@ static __attribute__((noinline)) void fm1_main(void)    /* (gate 2 compares fm1_
     palette_set(UI_GREY_INDEX);
     lcd_init();
     lcd_fill(0, 0, 240, 240, T_BG);
-    draw_text_box(0, 94, 240, &AF_L, "LSDJ", T_THEME, 1);
+    draw_text_box(0, 94, 240, &AF_L, "FMDJ", T_THEME, 1);
     draw_text_box(0, 134, 240, &AF_S, FELUCCA_VERSION, T_MID, 1);
     if (felucca_dbg.magic != DBG_MAGIC) {
         memset(&felucca_dbg, 0, sizeof felucca_dbg);

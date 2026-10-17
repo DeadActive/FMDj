@@ -1,4 +1,4 @@
-# LSDj on the FM-1: checking the sound timing and the speed
+# FMDj: checking the sound timing and the speed
 
 What changed, and why, is in `docs/lsdj/SOUND_TIMING.md`. The status line and the four switches are in
 `docs/lsdj/CONTROLS.md`.

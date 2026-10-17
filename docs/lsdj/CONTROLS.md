@@ -1,4 +1,4 @@
-# LSDj on the FM-1: controls
+# FMDj: controls
 
 | Game Boy | FM-1 |
 |---|---|
