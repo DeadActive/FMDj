@@ -161,6 +161,17 @@ r = subprocess.run([sys.executable, str(SRC / "web" / "make_site.py"), str(PKG),
 check("rebuilt without: the old shots are gone", r.returncode == 0 and not (site / "shots").exists()
       and "shots/" not in (site / "index.html").read_text(encoding="utf-8"))
 
+# ---- shots are not copied into an output that lies inside another git repository
+foreign = OUT / "foreign-repo"
+shutil.rmtree(foreign, ignore_errors=True)
+foreign.mkdir(parents=True)
+subprocess.run(["git", "init", "-q", str(foreign)], check=True)
+site = foreign / "site"
+r = subprocess.run([sys.executable, str(SRC / "web" / "make_site.py"), str(PKG), "test", str(site)], cwd=SRC,
+                   env=dict(os.environ, FMDJ_SHOTS=str(shots)), capture_output=True, text=True)
+check("foreign repository: no shots copied, and says why",
+      r.returncode == 0 and not (site / "shots").exists() and "repository" in r.stdout, r.stdout + r.stderr)
+
 # ---- the simulator after its panel moved to panel.js
 r = subprocess.run(["node", str(SRC / "tests" / "lsdj" / "lsdj_sim_test.mjs")], cwd=SRC, capture_output=True, text=True)
 check("simulator: node tests/lsdj/lsdj_sim_test.mjs passes", r.returncode == 0, (r.stdout + r.stderr)[-800:])

@@ -54,6 +54,14 @@ def landing_shots(out):
                       capture_output=True).returncode != 0:
         print(f"site: {out} is not git-ignored here: LSDj's screens ({src}) left out, they are made from your ROM")
         return ""
+    d = out.resolve()
+    while not d.exists():
+        d = d.parent
+    top = subprocess.run(["git", "-C", str(d), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if top.returncode == 0 and Path(top.stdout.strip()).resolve() != HERE.parent.resolve():
+        print(f"site: {out} is inside another git repository ({top.stdout.strip()}): LSDj's screens ({src}) left "
+              f"out, they are made from your ROM")
+        return ""
     shots = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
     if not isinstance(shots, list) or any(not isinstance(s, dict) or not isinstance(s.get("title"), str)
                                           or not re.fullmatch(r"[A-Za-z0-9_-]+\.png", str(s.get("file")))

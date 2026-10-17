@@ -7,7 +7,9 @@
   fmdj_shots.py ROM SAVE OUTDIR
 
 LSDj's licence forbids distributing it: the screenshots are made from the ROM, so OUTDIR must be git-ignored
-(checked), and nothing written here is ever committed or published."""
+(checked), and nothing written here is ever committed or published.
+web/make_site.py takes the screenshots from build/fmdj/shots (or $FMDJ_SHOTS), so make them with
+tools/fmdj_shots.py $LSDJ_ROM $FMDJ_SAVE build/fmdj/shots"""
 import json
 import struct
 import subprocess
@@ -57,10 +59,30 @@ def read_pgm(path):
     return [(255 - v) // 85 for v in d[len(head):]]
 
 
+def foreign_repo(path):
+    """The top level of the git repository other than this one that contains PATH (or its nearest existing
+    parent), else None."""
+    d = Path(path).resolve()
+    while not d.exists():
+        d = d.parent
+    r = subprocess.run(["git", "-C", d, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    top = r.stdout.strip()
+    if r.returncode or not top or Path(top).resolve() == SRC.resolve():
+        return None
+    return top
+
+
 def main(rom, sav, out):
     out = Path(out).resolve()
     if subprocess.run(["git", "-C", SRC, "check-ignore", "-q", out], capture_output=True).returncode:
         raise SystemExit(f"fmdj_shots: {out} is not git-ignored: screenshots of the ROM must never be committed")
+    for what, f in (("ROM", rom), ("SAVE", sav)):
+        if not Path(f).is_file():
+            raise SystemExit(f"fmdj_shots: the {what} {f} is not an existing file (nothing written)")
+    top = foreign_repo(out)
+    if top:
+        raise SystemExit(f"fmdj_shots: {out} is inside another git repository ({top}): screenshots of the ROM "
+                         f"must not be put where they could be committed or published")
     host = SRC / "build" / "host" / "lsdj_host"
     host.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["cc", "-O2", "-w", f"-I{SRC / 'firmware/src'}", f"-I{SRC / 'firmware/src/lsdj'}", "-o", host,

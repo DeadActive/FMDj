@@ -5,7 +5,7 @@ installer `http://localhost:8004/webapp/installer/`, songs `http://localhost:800
 
 Nothing is saved on the FM-1 yet (that is the next step): what you upload lasts until power-off.
 
-1. **Install.** Open the installer page and install. The FM-1 restarts into the LSDj start screen.
+1. **Install.** Open the installer page and install. The FM-1 restarts into the FMDj start screen (FMDJ).
 2. **Start LSDj.** Press PLAY. Wait for the song screen.
 3. **Connect.** Open the songs page, press Connect, choose the FM-1 in Chrome's list (connecting takes a second or
    two). Expected: "No saved songs."

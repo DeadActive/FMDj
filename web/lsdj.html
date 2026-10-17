@@ -255,7 +255,7 @@
     $("savfile").onchange = () => {
         const f = $("savfile").files[0];
         $("savfile").value = "";
-        if (!f || !confirm(`Replace everything in FMDj on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
+        if (!f || !confirm(`Replace all of LSDj's songs on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
         job("Restore the save", async () => { const r = await uploadSav(uiLink, new Uint8Array(await f.arrayBuffer()), bar); await draw(); return kept("Restored " + f.name + ". LSDj started again.", r); });
     };
     buttons();

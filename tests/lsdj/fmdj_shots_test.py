@@ -81,5 +81,27 @@ else:
           and not Path("/tmp/x_fmdj_shots").exists())
     print("skipped 5 (LSDJ_ROM or build/lsdj/demo.sav missing)")
 
+# ---- 6 missing inputs / foreign repository (no ROM needed)
+tdir = SRC / "build" / "tests" / "fmdj_shots_refuse"
+subprocess.run(["rm", "-rf", str(tdir)])
+tdir.mkdir(parents=True)
+fake = tdir / "fake.gb"
+fake.write_bytes(b"x")
+o1 = tdir / "out1"
+r = subprocess.run([sys.executable, tool, fake, tdir / "nosuch.sav", o1], capture_output=True, text=True)
+check("6a refuses a missing SAVE, naming it", r.returncode != 0 and "nosuch.sav" in r.stdout + r.stderr
+      and not o1.exists(), r.stdout + r.stderr)
+(tdir / "some.sav").write_bytes(b"x")
+r = subprocess.run([sys.executable, tool, tdir / "nosuch.gb", tdir / "some.sav", o1], capture_output=True, text=True)
+check("6b refuses a missing ROM, naming it", r.returncode != 0 and "nosuch.gb" in r.stdout + r.stderr
+      and not o1.exists(), r.stdout + r.stderr)
+other = tdir / "otherrepo"
+other.mkdir()
+subprocess.run(["git", "init", "-q", str(other)], check=True)
+o2 = other / "deep" / "shots"
+r = subprocess.run([sys.executable, tool, fake, tdir / "some.sav", o2], capture_output=True, text=True)
+check("6c refuses an output inside another git repository", r.returncode != 0 and "repository" in r.stdout + r.stderr
+      and str(other.resolve()) in r.stdout + r.stderr and not o2.exists(), r.stdout + r.stderr)
+
 print("fmdj_shots_test: all passed" if not fails else f"{fails} FAILED")
 sys.exit(fails != 0)

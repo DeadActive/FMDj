@@ -68,7 +68,7 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     const sim = await Fm1Sim.create(wasm);
     ok(sim.boot(null, null) === true, "a first visit: no flash kept");
     run(sim, 0.3);
-    ok(colours(sim.fb(), 90, 230) > 4, "the start screen is drawn (LSDJ, the keys' lines)");
+    ok(colours(sim.fb(), 90, 230) > 4, "the start screen is drawn (FMDJ, the keys' lines)");
     tap(sim, B.PLAY);
     run(sim, 0.5);
     ok(!sim.playing() && sim.error() === -3 && sim.frames() === 0, "without a cartridge PLAY starts nothing (NO LSDJ ROM)");
