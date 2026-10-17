@@ -1,143 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // LSDj fork: 2026 DEADACTIVE (the panel, the input and the power-on after Hortator's simulator, web/sim/app.js)
-// The LSDj simulator page: draws the FM-1's panel in the Game Boy's colours (layout.js: the FM-1's own landscape, a
-// stacked portrait for phones), turns pointer and keyboard input into messages for the worklet (worklet.js runs the
-// firmware), paints the frames it sends back in the Game Boy screen's greens, and keeps what the firmware writes
-// to flash in IndexedDB (store.js). The user's own ROM is made into a cartridge block here (lsdjinstall.js, as the
-// install page does) and kept in this browser.
-import { BTN, B, ENC, KEYS, GB, HeldSet, keyEvent, keyHint, contextMenuLatches } from './controls.js';
+// The LSDj simulator page: draws the FM-1's panel in the Game Boy's colours (panel.js, placed by layout.js: the FM-1's
+// own landscape, a stacked portrait for phones), turns pointer and keyboard input into messages for the worklet
+// (worklet.js runs the firmware), paints the frames it sends back in the Game Boy screen's greens, and keeps what the
+// firmware writes to flash in IndexedDB (store.js). The user's own ROM is made into a cartridge block here
+// (lsdjinstall.js, as the install page does) and kept in this browser.
+import { HeldSet, keyEvent, contextMenuLatches } from './controls.js';
 import { FlashStore, openFlashDb, loadCart, saveCart } from './store.js';
 import { needsResume, playbackSession } from './audio.js';
-import { LAYOUTS, DECO_CLASS, blend } from './layout.js';
+import { buildPanel, layoutPanel, LUT, SHADE } from './panel.js';
 import { loadEmu, makeCart } from './lsdjinstall.js';
 import { songsPanel } from './songs.js';
 
 const $ = id => document.getElementById(id);
 const device = $('device'), fit = $('fit'), note = $('note');
-const els = { deco: {}, ctl: {}, enc: {}, lbl: {} };
 const lcd = document.createElement('canvas');
 lcd.width = lcd.height = 240;
 lcd.className = 'lcd';
 lcd.setAttribute('aria-label', 'screen');
 const lcdCtx = lcd.getContext('2d');
+let els;                                           // the panel's elements (panel.js), built at the start
 
-// ---- the Game Boy screen's greens: a grey of the firmware's picture -> a place between the darkest and the lightest
-const RAMP = [[0x0f, 0x38, 0x0f], [0x30, 0x62, 0x30], [0x8b, 0xac, 0x0f], [0x9b, 0xbc, 0x0f]];
-function green(l) {                                // l: 0 (black) .. 255 (white) -> 0xAABBGGRR
-  const t = l / 255 * 3, i = Math.min(2, Math.floor(t)), f = t - i, a = RAMP[i], b = RAMP[i + 1];
-  const c = k => Math.round(a[k] + (b[k] - a[k]) * f);
-  return (0xff000000 | (c(2) << 16) | (c(1) << 8) | c(0)) >>> 0;
-}
-const LUT = new Uint32Array(65536);                // RGB565 -> the green for its brightness
-for (let c = 0; c < 65536; c++) {
-  const r = ((c >> 11) & 31) * 255 / 31, g = ((c >> 5) & 63) * 255 / 63, b = (c & 31) * 255 / 31;
-  LUT[c] = green(0.299 * r + 0.587 * g + 0.114 * b);
-}
-const SHADE = [232, 160, 88, 16].map(green);       // the Game Boy's four shades, as the firmware's palette has them
-
-function place(el, [x, y, w, h]) {
-  el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.width = `${w}px`; el.style.height = `${h}px`;
-}
-function span(cls, text) {
-  const s = document.createElement('span');
-  s.className = cls;
-  s.textContent = text;
-  return s;
-}
-
-// ---- the panel's elements (built once, placed per layout)
-const DIR = new Set([B.HOME, B.ARP, B.SEL, B.SAVE]), PILL = new Set([B.SEQ, B.PLAY]);
-function build() {
-  for (const name of Object.keys(DECO_CLASS)) {
-    const d = document.createElement('div');
-    d.className = DECO_CLASS[name];
-    device.append(d);
-    els.deco[name] = d;
-  }
-  els.deco.bezel.append(span('stripes', ''), span('print', 'LSDJ · FM-1'), span('lamp', ''), span('lamp-print', 'POWER'));
-  device.append(lcd);
-  els.power = document.createElement('button');
-  els.power.className = 'power';
-  els.power.id = 'power-on';
-  els.power.setAttribute('role', 'switch');
-  els.power.setAttribute('aria-checked', 'false');
-  els.power.setAttribute('aria-label', 'power');
-  els.power.disabled = true;
-  els.powerPrint = document.createElement('div');
-  els.powerPrint.className = 'power-print';
-  els.powerPrint.textContent = '◂ OFF · ON ▸';
-  device.append(els.power, els.powerPrint);
-  BTN.forEach((b, id) => {
-    const el = document.createElement('div'), ctl = `btn:${id}`;
-    el.className = `btn${DIR.has(id) ? ' dir' : ''}${PILL.has(id) ? ' pill' : ''}${GB[ctl] ? '' : ' idle'}`;
-    el.dataset.ctl = ctl;
-    el.setAttribute('role', 'button');
-    el.setAttribute('aria-label', GB[ctl] ? `${b.label}: ${GB[ctl]}` : b.label);
-    el.append(span('', b.label));
-    if (GB[ctl]) el.append(span('gb', GB[ctl]));
-    addHint(el, ctl);
-    device.append(el);
-    els.ctl[ctl] = el;
-  });
-  KEYS.forEach(k => {
-    const el = document.createElement('div'), ctl = `key:${k.n}`;
-    el.className = `key${k.black ? ' black' : ''}${GB[ctl] ? ' ab' : ' idle'}`;
-    el.dataset.ctl = ctl;
-    el.setAttribute('role', 'button');
-    el.setAttribute('aria-label', GB[ctl] ? `${k.name}: ${GB[ctl]}` : k.name);
-    if (GB[ctl]) el.append(span('', GB[ctl]));
-    addHint(el, ctl);
-    device.append(el);
-    els.ctl[ctl] = el;
-  });
-  [...ENC.map((e, i) => [String(i), e.label]), ['master', 'MASTER']].forEach(([id, label]) => {
-    const el = document.createElement('div'), gb = GB[`enc:${id}`];
-    el.className = `enc${gb ? '' : ' idle'}`;
-    el.tabIndex = gb ? 0 : -1;
-    el.setAttribute('role', 'slider');
-    el.setAttribute('aria-label', gb ? `${label}: ${gb}` : label);
-    el.append(span('skirt', ''), span('cap', ''));
-    device.append(el);
-    els.enc[id] = el;
-    const l = document.createElement('div');
-    l.className = `lbl${gb ? '' : ' idle'}`;
-    l.append(document.createTextNode(label));
-    if (gb) l.append(span('gb', gb));
-    device.append(l);
-    els.lbl[id] = l;
-  });
-}
-function addHint(el, ctl) {
-  if (keyHint[ctl]) el.append(span('hint', keyHint[ctl]));
-}
-
-let phone = false;
-function relayout() {
-  phone = window.innerWidth < 700 && window.innerHeight > window.innerWidth;
-  const A = LAYOUTS.landscape, G = blend(A, phone ? LAYOUTS.portrait : A, phone ? 1 : 0);
-  for (const [name, d] of Object.entries(G.deco)) {
-    const b = d.box;
-    place(els.deco[name], name !== 'bezel' ? b : phone ? [b[0] - 8, b[1] - 8, b[2] + 16, b[3] + 16] : [b[0] - 22, b[1] - 14, b[2] + 44, b[3] + 28]);
-    els.deco[name].style.opacity = d.opacity;
-  }
-  place(lcd, G.lcd);
-  place(els.power, phone ? [14, 3, 50, 12] : [64, 2, 54, 13]);
-  place(els.powerPrint, phone ? [70, 5, 80, 10] : [126, 4, 90, 10]);
-  for (const [ctl, b] of Object.entries(G.ctl)) place(els.ctl[ctl], b);
-  for (const [id, b] of Object.entries(G.enc)) {
-    place(els.enc[id], b);
-    place(els.lbl[id], [b[0] - 30, b[1] - (phone ? 15 : 30), b[2] + 60, 28]);
-    els.lbl[id].querySelector('.gb')?.toggleAttribute('hidden', phone);
-  }
-  const avail = Math.min(document.documentElement.clientWidth - 32, 1040);
-  const scale = Math.max(0.2, Math.min(avail / G.W, phone ? 1.2 : 1));
-  device.classList.toggle('phone', phone);
-  device.style.width = `${G.W}px`;
-  device.style.height = `${G.H}px`;
-  device.style.setProperty('--scale', scale);
-  fit.style.width = `${G.W * scale}px`;
-  fit.style.height = `${G.H * scale}px`;
-}
+const relayout = () => layoutPanel(device, fit, els, lcd, Math.min(document.documentElement.clientWidth - 32, 1040));
 
 // ---- input -> worklet
 let node = null;
@@ -401,7 +285,7 @@ async function powerOn() {
 }
 
 // ---- start
-build();
+els = buildPanel(device, lcd);
 relayout();
 blank();
 showMaster();
