@@ -195,7 +195,7 @@ async function chooseRom(file) {
       preview(emu.screen());
     }, () => new Promise(r => setTimeout(r)));
     const kept = await saveCart(made);
-    if (kept && cartProg(made) !== program) { location.reload(); return; }   // the other program: its keys on the panel
+    if (kept && cartProg(made) !== (program ?? 'lsdj')) { location.reload(); return; }   // DMGo's keys on the panel
     cart = made;
     busy = false;
     blank();

@@ -174,8 +174,18 @@ typedef struct {
     uint8_t q[16], n;                         /* steps waiting (0..15), the oldest first */
     uint8_t busy, keep[3];                    /* the step's frame ran: the cursor (field, column, column) to put back */
     uint8_t out;                              /* the keys DMGo got last frame */
+    uint8_t fresh;                            /* the Game Boy restarted: nothing until DMGo has shown its title */
     uint32_t held;                            /* the white keys down: a press is a key that was up */
 } lsdj_steps_t;
+
+/* the Game Boy starts again (PLAY, `ble go reset`): what waits is dropped, and until DMGo has been on its title
+ * screen its work RAM is the last run's (a reset does not clear it), so no step is made. Keys held stay held */
+static void lsdj_steps_restart(lsdj_steps_t *s)
+{
+    s->n = 0;
+    s->busy = 0;
+    s->fresh = 1;
+}
 
 static void lsdj_steps_keys(lsdj_steps_t *s, uint32_t notes)   /* the note keys held now: new presses wait */
 {
@@ -186,8 +196,10 @@ static void lsdj_steps_keys(lsdj_steps_t *s, uint32_t notes)   /* the note keys 
             s->q[s->n++] = (uint8_t)i;
 }
 
-/* before a Game Boy frame: pad, the owner's keys (active low) -> the keys for it. A step waits while B is down or
- * was down last frame (DMGo takes a press); on any page but a channel page with nothing over it, it is dropped */
+/* before a Game Boy frame: pad, the owner's keys (active low) -> the keys for it. A step waits while any key is down
+ * or was down last frame: DMGo takes B as a press, B with a direction or A is another edit, and a key held through
+ * the step's frame would come back as a new press. On any page but a channel page with nothing over it, it is
+ * dropped */
 static uint8_t lsdj_steps_frame(lsdj_steps_t *s, uint8_t *wram, uint8_t pad)
 {
     uint32_t i, step;
@@ -198,7 +210,13 @@ static uint8_t lsdj_steps_frame(lsdj_steps_t *s, uint8_t *wram, uint8_t pad)
         s->busy = 0;
         return s->out = (uint8_t)(pad | JOYPAD_B);
     }
-    if (!s->n || !(s->out & pad & JOYPAD_B))
+    if (s->fresh) {
+        if (!wram[DMGO_W_STARTED])
+            s->fresh = 0;
+        s->n = 0;
+        return s->out = pad;
+    }
+    if (!s->n || s->out != 0xFFu || pad != 0xFFu)
         return s->out = pad;
     step = s->q[0];
     for (i = 1; i < s->n; i++)
@@ -212,7 +230,7 @@ static uint8_t lsdj_steps_frame(lsdj_steps_t *s, uint8_t *wram, uint8_t pad)
     wram[DMGO_W_FIELD] = DMGO_FIELD_SEQ;
     wram[DMGO_W_COL] = wram[DMGO_W_COL2] = (uint8_t)step;
     s->busy = 1;
-    return s->out = (uint8_t)~JOYPAD_B;       /* B alone: B + a direction is another edit in DMGo */
+    return s->out = (uint8_t)~JOYPAD_B;
 }
 
 /* the Game Boy keys held in pad (active low) as text, e.g. "START SEL R"; "-" if none (b: >= 22 bytes) */

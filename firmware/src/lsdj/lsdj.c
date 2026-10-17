@@ -241,10 +241,14 @@ static int lsdj_save(void)                     /* the save RAM into flash: a sec
 {
     char b[12];
     int r;
+    uint8_t was = store.prog;
     st.gap_off = 1;                           /* (silence, but not a gap of the Game Boy's) */
     lsdj_note("SAVING");
     store.prog = (uint8_t)prog;               /* the save in flash is this program's from now on */
     r = flash_on ? lsdj_store_save(&flash, &store, sram, save_n) : LSDJ_ST_FAIL;
+    if (r == LSDJ_ST_FULL || !flash_on)       /* nothing written: the save in flash is still whose it was (after a
+                                               * flash error the store was read again: it says so itself) */
+        store.prog = was;
     if (r == LSDJ_ST_OK) {
         put_s(put_u(put_s(b, "SAVED "), (store.len + 1023u) / 1024u), "K");
         lsdj_note(b);
@@ -277,7 +281,7 @@ static void lsdj_flash_req(void)               /* the console queued it (lsdj_xf
 static void lsdj_restart(void)                 /* `ble go reset`: the Game Boy from its reset, the save RAM kept */
 {
     emu_init(rom_tab, cart.nbanks, sram, fb);         /* (it ran before: the cartridge is LSDj's or DMGo's) */
-    memset(&steps, 0, sizeof steps);
+    lsdj_steps_restart(&steps);
     emu.dirty = dirty;
     memset(shown, 0xFF, sizeof shown);        /* every line pair is sent again */
     memset(dirty, 1, sizeof dirty);
@@ -480,6 +484,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     st.gaps = 0;
     st.gap_off = 1;                           /* (the ring is empty until the first frame: not a gap) */
     memset(&steps, 0, sizeof steps);
+    lsdj_steps_restart(&steps);
     if (store.have && store.prog != prog)     /* the FM-1 has the other program's save: say why it is not here */
         lsdj_note_for(store.prog == LSDJ_PROG_DMGO ? "DMGO SAVE KEPT" : "LSDJ SAVE KEPT", 8000u);
     draw = lsdj_push;

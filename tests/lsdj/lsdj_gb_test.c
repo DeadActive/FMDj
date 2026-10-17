@@ -319,7 +319,9 @@ static void test_steps(void)
     dmgo_page();
     CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF);            /* nothing pressed: the owner's keys */
     lsdj_steps_keys(&s, LSDJ_STEP_NOTE[2]);                    /* step 3 */
-    CHECK(lsdj_steps_frame(&s, wram, (uint8_t)~JOYPAD_RIGHT) == (uint8_t)~JOYPAD_B);   /* B alone, the cursor on it */
+    CHECK(lsdj_steps_frame(&s, wram, (uint8_t)~JOYPAD_A) == (uint8_t)~JOYPAD_A && CURSOR(3, 5));   /* A held: waits */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));   /* (DMGo saw A last frame) */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B);   /* nothing else down: B alone, the cursor on it */
     CHECK(CURSOR(12, 2));
     lsdj_steps_keys(&s, LSDJ_STEP_NOTE[2]);                    /* still held: no second press */
     CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));   /* B up, the cursor back */
@@ -364,6 +366,24 @@ static void test_steps(void)
         CHECK(lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B && CURSOR(12, 1));
         CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
     }
+
+    /* the Game Boy restarted (`ble go reset`): what waited is dropped, a key still held is not pressed again, and
+     * nothing is done until DMGo has been on its title screen (its memory is the old run's until it starts) */
+    dmgo_page();
+    lsdj_steps_keys(&s, 0);
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[3] | LSDJ_STEP_NOTE[6]);   /* two waiting; step 4 is held */
+    lsdj_steps_restart(&s);
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));   /* dropped */
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[3]);                    /* still held: not a press */
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[3] | LSDJ_STEP_NOTE[8]);   /* a new one, on the old run's memory: dropped */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
+    wram[0x02F] = 0;                                           /* the title screen */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF);
+    wram[0x02F] = 1;                                           /* past it: keys count again */
+    lsdj_steps_keys(&s, 0);
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[8]);
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B && CURSOR(12, 8));
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
 
     /* 16 wait at most: a key pressed 20 times before a frame runs toggles 16 times */
     dmgo_page();

@@ -343,6 +343,15 @@ static void test_flash(void)                  /* REC held 1 s saves; PLAY after 
         CHECK(!strcmp(st.note, "DMGO SAVE KEPT") && store.seq == seq && store.prog == LSDJ_PROG_DMGO);
         console("ble info");
         CHECK(strstr(con_log, " saved 0 prog 0 size 20000") != 0);   /* (no save of LSDj's in flash) */
+        for (i = 0; i < LSDJ_SRAM; i++)               /* a save that does not fit: DMGo's stays, and stays DMGo's */
+            sram[i] = (uint8_t)(i * 2654435761u >> 13);
+        console("ble save");
+        pass();
+        console("ble st");
+        CHECK(!strcmp(con_log, "ok 1\r\n") && store.seq == seq && store.prog == LSDJ_PROG_DMGO);
+        console("ble info");
+        CHECK(strstr(con_log, " saved 0 prog 0 size 20000") != 0);
+        lsdj_start();                                 /* (the start-up save again) */
         buttons = core_rec_bit();                     /* REC: LSDj's save replaces it */
         for (i = 0; i < 60; i++)
             pass();
