@@ -55,9 +55,13 @@ export function songsPanel(root, ask, running) {
     }
   }
 
+  let dmgo = false;                                   // the cartridge is DMGo's (info): a whole save, no songs
   async function refresh(said) {
     const inf = await link.info();
-    if (!inf.started) { draw([]); say('Press PLAY (Enter) to start LSDj; its songs are listed then.'); return; }
+    dmgo = inf.prog === 'dmgo';
+    $('song-files').parentElement.hidden = dmgo;
+    if (!inf.started) { draw([]); say('Press PLAY (Enter) to start it; then its saves come and go here.'); return; }
+    if (dmgo) { draw([]); say(said || "DMGo's whole save (32 KiB) comes and goes here as a .sav."); return; }
     const l = await listSongs(link);
     draw(l.list);
     say(said || (l.list.length ? `${l.list.length} song${l.list.length > 1 ? 's' : ''} in LSDj's list; ${l.free} of 191 blocks free.`
@@ -83,13 +87,14 @@ export function songsPanel(root, ask, running) {
   $('songs-refresh').onclick = () => job(async () => '');
   $('save-now').onclick = () => job(async () => { await saveToFlash(link); return 'Saved: the memory as it is now is kept in this browser.'; });
   $('sav-get').onclick = () => job(async () => {
-    saveFile(`lsdj-sim-${stamp()}.sav`, await downloadSav(link, progress));
+    saveFile(`${dmgo ? 'dmgo' : 'lsdj'}-sim-${stamp()}.sav`, await downloadSav(link, progress));
     return 'Downloaded the whole save.';
   });
   $('sav-file').onchange = () => {
     const f = $('sav-file').files[0];
     $('sav-file').value = '';
-    if (!f || !confirm(`Replace everything in LSDj (all songs, and the one being edited) with ${f.name}? LSDj starts again.`)) return;
+    if (!f || !confirm(dmgo ? `Replace DMGo's save (all its patterns and slots) with ${f.name}? DMGo starts again.` :
+      `Replace everything in LSDj (all songs, and the one being edited) with ${f.name}? LSDj starts again.`)) return;
     job(async () => kept(`Restored ${f.name}.`, await uploadSav(link, new Uint8Array(await f.arrayBuffer()), progress)));
   };
   $('song-files').onchange = () => {

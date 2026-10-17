@@ -333,19 +333,28 @@ export function deleteSong(link, slot, shown = null) {
     });
 }
 
+/* the whole save: LSDj's 128 KiB, or DMGo's 32 KiB (info says which program the FM-1 runs) */
+export const DMGO_SAV = 0x8000;
 export function downloadSav(link, progress = () => {}) {
-    return whileHeld(link, false, () => link.read(0, SAV_SIZE, progress));
+    return whileHeld(link, false, async () => link.read(0, (await link.info()).size, progress));
 }
 
-/* the whole save. It cannot be replaced in one step: the names and the block table (0x8000..0x81FF) go last, so
-   until then LSDj's song list is the old one; a restore that stops leaves a mixed save, and says so */
+/* the whole save. LSDj's cannot be replaced in one step: the names and the block table (0x8000..0x81FF) go last, so
+   until then LSDj's song list is the old one; a restore that stops leaves a mixed save, and says so. DMGo's has no
+   file system: front to back. A save of the other program is refused before anything is written */
 export function uploadSav(link, bytes, progress = () => {}) {
-    if (bytes.length !== SAV_SIZE) throw new Error("not an LSDj save: it must be 131072 bytes");
-    if (bytes[0x813E] !== 0x6A || bytes[0x813F] !== 0x6B) throw new Error("not an LSDj save: no file system mark");
+    if (bytes.length !== SAV_SIZE && bytes.length !== DMGO_SAV)
+        throw new Error("not a save: LSDj's are 131072 bytes, DMGo's 32768");
+    if (bytes.length === SAV_SIZE && (bytes[0x813E] !== 0x6A || bytes[0x813F] !== 0x6B))
+        throw new Error("not an LSDj save: no file system mark");
     return whileHeld(link, true, async () => {
-        const old = await link.read(0, SAV_SIZE, (a, n) => progress(a, 2 * n));
+        const inf = await link.info(), n = bytes.length;
+        if (inf.size !== n)
+            throw new Error(inf.prog === "dmgo" ? "the FM-1 runs DMGo: its save is 32768 bytes, this one is LSDj's" :
+                            "the FM-1 runs LSDj: its save is 131072 bytes, this one is DMGo's");
+        const old = await link.read(0, n, (a, m) => progress(a, 2 * m));
         const pieces = [];
-        for (const [a, e] of [[0, FS_HEAD], [BLOCKS, SAV_SIZE], [FS_HEAD, BLOCKS]])
+        for (const [a, e] of inf.prog === "dmgo" ? [[0, n]] : [[0, FS_HEAD], [BLOCKS, SAV_SIZE], [FS_HEAD, BLOCKS]])
             for (let o = a; o < e; o += WR) {
                 const n = Math.min(WR, e - o);
                 if (!samePiece(old, bytes, o, n)) pieces.push([o, n]);
@@ -358,7 +367,7 @@ export function uploadSav(link, bytes, progress = () => {}) {
                 if (!i) throw e;                         // nothing was written yet
                 throw new Error(`the save on the FM-1 is incomplete: restore it again (${e.message})`);
             }
-            progress(SAV_SIZE + Math.round(SAV_SIZE * ++i / pieces.length), 2 * SAV_SIZE);
+            progress(n + Math.round(n * ++i / pieces.length), 2 * n);
         }
         link.crcs = null;
         return { unsaved: await persist(link, await link.info()) };

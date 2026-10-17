@@ -168,6 +168,16 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     sim.key(22, true); run(sim, 0.1); sim.key(22, false); run(sim, 0.5);   // D#5: DMGo's A opens its menu
     ok(!same(top0, rows(sim.fb(), ...TOP)), "D#5 is A: DMGo's top menu opens");
     ok(sim.error() === 0 && sim.playing(), "... and it still runs");
+    const link = simLink(Link, async (line) => { const t = sim.console(line); run(sim, 0.02); return t; });
+    const inf = await link.info();
+    ok(inf.prog === "dmgo" && inf.size === 0x8000, "the firmware says DMGo, a 32 KiB save");
+    const sav = await downloadSav(link);
+    ok(sav.length === 0x8000, "DMGo's whole save comes out (32 KiB)");
+    const mod = sav.slice(); mod[0x7FF0] ^= 0x5A;
+    await uploadSav(link, mod);
+    run(sim, 0.5);
+    const back = await downloadSav(link);
+    ok(back[0x7FF0] === mod[0x7FF0] && sim.playing() && sim.error() === 0, "... and goes in again; DMGo runs on");
   }
   setProgram("dmgo");                              // the page with DMGo kept: its keys on the panel and keyboard
   ok(GB["key:22"] === "A" && GB["key:25"] === "B" && !GB["key:24"] && !GB["key:26"] && STEP["key:0"] === "1" &&

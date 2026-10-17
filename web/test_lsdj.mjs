@@ -409,6 +409,23 @@ await (async () => {
     ok(await rejects(Promise.resolve().then(() => ln.uploadSav(sim.link, other.subarray(0, 0x8000))), /131072/), "a save of the wrong size is refused");
     const blank = new Uint8Array(fs.SAV_SIZE);
     ok(await rejects(Promise.resolve().then(() => ln.uploadSav(sim.link, blank)), /file system mark/), "a file that is not an LSDj save is refused");
+    { // DMGo installed (info: prog 1, size 08000): its whole save in and out, nothing of LSDj's file system
+        const d = Uint8Array.from({ length: 0x8000 }, (_, i) => (i * 13) & 0xFF);
+        let s = simWith(d);
+        s.prog = 1;
+        const inf = await s.link.info();
+        ok(inf.prog === "dmgo" && inf.size === 0x8000, "DMGo: info says so, and its save's size");
+        const got = await ln.downloadSav(s.link);
+        ok(got.length === 0x8000 && eq(got, d) && !s.held, "DMGo: its 32 KiB save downloads");
+        const d2 = d.slice(); d2[100] ^= 0xFF; d2[0x7FFF] ^= 1;
+        await ln.uploadSav(s.link, d2);
+        ok(eq(s.sram, d2) && s.resets === 1, "DMGo: a 32 KiB save is restored (no file system mark needed)");
+        ok(await rejects(ln.uploadSav(s.link, base), /runs DMGo.*32768/) && eq(s.sram, d2) && !s.held, "DMGo: an LSDj save is refused, nothing written");
+        ok(await rejects(Promise.resolve().then(() => ln.uploadSav(s.link, new Uint8Array(1000))), /131072 .*32768/),
+           "a file of neither size is refused");
+        s = simWith(base);
+        ok(await rejects(ln.uploadSav(s.link, d2), /runs LSDj.*131072/) && eq(s.sram, base) && !s.held, "LSDj: a DMGo save is refused, nothing written");
+    }
 
     /* ---- after the final review (2026-10-12) ---- */
     /* a reply belongs to its command: the console's own banner (printed when the port opens) on a slow link */

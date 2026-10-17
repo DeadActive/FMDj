@@ -40,22 +40,26 @@
   <p class="small">The page saves to the FM-1's flash after every change it makes. What you edit in LSDj is kept
     when you hold REC for a second (the status line says SAVED), or with "Save now" here.</p>
   <p class="small">Use this page while LSDj is idle: not while it shows its own save or load in progress.</p>
+  <p class="small">With DMGo! on the FM-1 instead, this page backs up and restores its whole save (32 KiB).</p>
   <p><button id="connect">Connect</button> <button id="refresh" class="quiet" hidden>Refresh</button></p>
   <div id="panel" hidden>
-    <table>
-      <thead><tr><th>Slot</th><th>Name</th><th>Version</th><th>Blocks</th><th></th></tr></thead>
-      <tbody id="list"></tbody>
-    </table>
-    <p class="small" id="room"></p>
-    <p id="drop">Drop .lsdprj or .lsdsng files here, or <button id="pick" class="quiet">choose files</button></p>
-    <input type="file" id="files" accept=".lsdprj,.lsdsng" multiple hidden>
+    <p class="small" id="dmgoline" hidden>DMGo is on this FM-1: its patterns are in its save.</p>
+    <div id="songpart">
+      <table>
+        <thead><tr><th>Slot</th><th>Name</th><th>Version</th><th>Blocks</th><th></th></tr></thead>
+        <tbody id="list"></tbody>
+      </table>
+      <p class="small" id="room"></p>
+      <p id="drop">Drop .lsdprj or .lsdsng files here, or <button id="pick" class="quiet">choose files</button></p>
+      <input type="file" id="files" accept=".lsdprj,.lsdsng" multiple hidden>
+    </div>
     <p><button id="savget">Download the whole save (.sav)</button>
        <button id="savput" class="quiet">Restore a save…</button></p>
     <input type="file" id="savfile" accept=".sav" hidden>
     <div id="flashpart" hidden>
       <p class="small" id="flashline"></p>
       <p><button id="savenow">Save now</button> <button id="shrink" class="quiet" hidden>Give unused kit banks back to the save</button></p>
-      <table>
+      <table id="kitpart">
         <thead><tr><th>Kit bank</th><th>Kit</th><th></th></tr></thead>
         <tbody id="kits"></tbody>
       </table>
@@ -68,7 +72,7 @@
 /*LIB*/
 (function () {
     const $ = id => document.getElementById(id);
-    let uiLink = null, uiBusy = false;
+    let uiLink = null, uiBusy = false, dmgo = false;      // dmgo: the FM-1 runs DMGo (info), not LSDj
 
     const say = (text, bad) => { $("status").textContent = text; $("status").className = bad ? "bad" : ""; };
     const bar = (done, total) => { $("bar").hidden = false; $("bar").max = total; $("bar").value = done; };
@@ -110,6 +114,13 @@
         $("flashpart").hidden = !info.flash;
         if (!info.flash) return;
         const kib = n => Math.ceil(n / 1024);
+        $("kitpart").hidden = dmgo;
+        if (dmgo) {                                      // DMGo: no kits; another program's save in flash is not its own
+            $("shrink").hidden = true;
+            $("flashline").textContent = info.saved ? `Flash: DMGo's save takes ${kib(info.used)} of ${kib(info.cap)} KiB.` :
+                "Flash: no DMGo save yet (hold REC in DMGo, or Save now).";
+            return;
+        }
         $("flashline").textContent = (info.saved ? `Flash: the save takes ${kib(info.used)} of ${kib(info.cap)} KiB.` : `Flash: nothing saved yet (room for ${kib(info.cap)} KiB).`) +
             ` Kit banks: ${info.kits} of ${info.nkit}; each one takes 8 KiB from the save's room.`;
         const kits = await listKits(uiLink);
@@ -150,6 +161,14 @@
     }
 
     async function draw() {
+        dmgo = (await uiLink.info()).prog === "dmgo";
+        $("songpart").hidden = dmgo;
+        $("dmgoline").hidden = !dmgo;
+        if (dmgo) {
+            await drawFlash();
+            buttons();
+            return;
+        }
         const { list, free } = await listSongs(uiLink);
         $("list").textContent = "";
         for (const s of list) {
@@ -247,7 +266,7 @@
     $("drop").ondragleave = () => $("drop").classList.remove("over");
     $("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); upload([...e.dataTransfer.files]); };
     $("savget").onclick = () => job("Download the save", async () => {
-        saveFile(`lsdj-fm1-${stamp()}.sav`, await downloadSav(uiLink, bar));
+        saveFile(`${dmgo ? "dmgo" : "lsdj"}-fm1-${stamp()}.sav`, await downloadSav(uiLink, bar));
         return "Downloaded the save.";
     });
     $("savput").onclick = () => $("savfile").click();
@@ -255,8 +274,9 @@
     $("savfile").onchange = () => {
         const f = $("savfile").files[0];
         $("savfile").value = "";
-        if (!f || !confirm(`Replace all of LSDj's songs on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
-        job("Restore the save", async () => { const r = await uploadSav(uiLink, new Uint8Array(await f.arrayBuffer()), bar); await draw(); return kept("Restored " + f.name + ". LSDj started again.", r); });
+        if (!f || !confirm(dmgo ? `Replace DMGo's save on the FM-1 with ${f.name}? All its patterns and save slots are replaced.` :
+                                  `Replace all of LSDj's songs on the FM-1 with ${f.name}? The song being edited and all saved songs are replaced.`)) return;
+        job("Restore the save", async () => { const r = await uploadSav(uiLink, new Uint8Array(await f.arrayBuffer()), bar); await draw(); return kept(`Restored ${f.name}. ${dmgo ? "DMGo" : "LSDj"} started again.`, r); });
     };
     buttons();
 })();
