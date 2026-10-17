@@ -3,7 +3,9 @@
 /* Host harness of the LSDj unit's emulator (firmware/src/lsdj/lsdj_emu.c): runs the owner's own ROM, never stored
  * in this repo, for some frames with the keys held as given, and writes the save RAM, a screenshot and the sound.
  *   lsdj_host ROM FRAMES [-s SAVE_IN] [-o SAVE_OUT] [-p SHOT.pgm] [-w SOUND.wav] [-m MODE] [-k FROM:TO:KEYS]...
- *             [-W WRAM_OUT]
+ *             [-W WRAM_OUT] [-n FROM:STEP]...
+ * -n: DMGo's step key STEP (1..16, a white key) down at frame FROM for 4 frames, through lsdj_gb.c's step keys as the
+ * firmware runs them (DMGo v1 only: lsdj_prog_steps).
  * MODE: lsdj_emu.c's emu_mode bits (1 inline ROM read, 2 frame skip, 4 the wait loop skipped, 8 sound within the
  * frame; all on by default). Prints a hash of every frame's sound and machine (registers, counters, memory) and the
  * final save RAM: the speed options (1, 2, 4) must not change it.
@@ -35,6 +37,19 @@ static uint8_t keys_at(uint32_t f, int argc, char **argv)
                     *c == 's' ? JOYPAD_SELECT : *c == 't' ? JOYPAD_START : 0;
     }
     return (uint8_t)~down;
+}
+
+static uint32_t notes_at(uint32_t f, int argc, char **argv)   /* the white keys down (-n) */
+{
+    uint32_t down = 0;
+    int i;
+    for (i = 1; i + 1 < argc; i++) {
+        unsigned a, n;
+        if (!strcmp(argv[i], "-n") && sscanf(argv[i + 1], "%u:%u", &a, &n) == 2 && n >= 1 && n <= 16 && f >= a &&
+            f < a + 4u)
+            down |= LSDJ_STEP_NOTE[n - 1u];
+    }
+    return down;
 }
 
 static const char *opt(int argc, char **argv, const char *o)
@@ -80,6 +95,9 @@ int main(int argc, char **argv)
     FILE *f, *wav = 0;
     long n;
     uint32_t i, frames, nb, ink = 0, peak = 0, nsamp = 0, hash = 2166136261u;
+    uint8_t h[LSDJ_HDR];
+    static lsdj_steps_t steps;
+    int with_steps;
     clock_t t0;
     int r;
     const char *p;
@@ -114,13 +132,20 @@ int main(int argc, char **argv)
         fprintf(stderr, "emu_init: %d\n", r);
         return 1;
     }
+    lsdj_header(banks, nb, h);
+    with_steps = lsdj_prog_steps(h);
     if ((p = opt(argc, argv, "-w")) && (wav = fopen(p, "wb")))
         fseek(wav, 44, SEEK_SET);
     frames = (uint32_t)atoi(argv[2]);
     t0 = clock();
     for (i = 0; i < frames; i++) {
         uint32_t s;
-        emu_frame(keys_at(i, argc, argv));
+        uint8_t pad = keys_at(i, argc, argv);
+        if (with_steps) {                          /* as lsdj.c: the white keys, then the frame's keys */
+            lsdj_steps_keys(&steps, notes_at(i, argc, argv));
+            pad = lsdj_steps_frame(&steps, emu.gb.wram, pad);
+        }
+        emu_frame(pad);
         for (s = 0; s < AUDIO_SAMPLES_TOTAL; s++)
             hash = (hash ^ (uint16_t)emu.snd[s]) * 16777619u;
         hash = machine(hash, i % 64u == 63u || i + 1u == frames);

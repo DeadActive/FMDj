@@ -59,6 +59,8 @@ static char xfer_out[LSDJ_XFER_OUT];
  *   the cursor: the SELECT knob left / right, the ALGORITHM knob up / down (clockwise: right, down), a step = a press
  *   A, B: the top F and G of the keyboard (lsdj_gb.c LSDJ_NOTE_A / _B);  START: PLAY;  SELECT: SEQ
  *   LSDj's screens (SELECT + direction): the PRESETS knob left / right, OCT+ up, OCT- down
+ * DMGo (2026-10-17): A, B on D#5 and F#5, the 16 white keys its steps, no screen shortcuts (SELECT + a direction
+ * means other things in it); the rest the same.
  * and, as before, the cursor on buttons too (they can be held): UP SCL, DOWN SAVE, LEFT HOME, RIGHT ARP.
  * The buttons below by label, in JOYPAD bit order: A, B (no button), SELECT, START, RIGHT, LEFT, UP, DOWN.
  * OCT- + OCT+ held 5 s together is still the core's UBOOT. */
@@ -71,6 +73,11 @@ static lsdj_store_t store;                    /* what the flash holds (lsdj_stor
 static uint8_t flash_on;                      /* the core has flash for us */
 static lsdj_cart_t cart;                      /* the cartridge block: the ROM's banks and the start-up save */
 static lsdj_bank_t rom_tab[LSDJ_ROM_BANKS];   /* the Game Boy's ROM: the block's, the flash kit banks in its free ones */
+static int prog = LSDJ_PROG_NONE;             /* the program installed (lsdj_gb.c lsdj_prog): LSDj or DMGo */
+static uint32_t save_n;                       /* its save RAM: 128 KiB (LSDj) or 32 KiB (DMGo), the start of sram[] */
+static uint32_t note_a, note_b;               /* the note keys of A and B: LSDj's top F / G, DMGo's D#5 / F#5 */
+static uint8_t with_steps;                    /* DMGo v1: the white keys are its steps (lsdj_steps_*) */
+static lsdj_steps_t steps;
 static uint8_t kit_bank[LSDJ_ST_KMAX], nkit;  /* the ROM's free kit banks in order: flash kit bank j shows as kit_bank[j] */
 static uint8_t kit_buf[LSDJ_BANK] LSDJ_POOL;  /* a kit bank on its way from the console to flash */
 
@@ -206,7 +213,8 @@ static void lsdj_banks(void)                   /* rom_tab: the ROM, and the K fl
 {
     uint32_t b, j;
     memcpy(rom_tab, cart.bank, sizeof rom_tab);
-    for (b = 8, nkit = 0; b < cart.nbanks && nkit < LSDJ_ST_KMAX; b++)      /* kits: banks 8..26 and 32.. */
+    for (b = 8, nkit = 0; prog == LSDJ_PROG_LSDJ && b < cart.nbanks && nkit < LSDJ_ST_KMAX; b++)   /* LSDj's kits:
+                                                                                                * banks 8..26, 32.. */
         if ((b <= 26u || b >= 32u) && !cart.bank[b].n)
             kit_bank[nkit++] = (uint8_t)b;
     for (j = 0; j < store.k && j < nkit; j++) {   /* (store.k is the flash layout's: never changed here, even if a
@@ -231,7 +239,7 @@ static int lsdj_save(void)                     /* the save RAM into flash: a sec
     int r;
     st.gap_off = 1;                           /* (silence, but not a gap of the Game Boy's) */
     lsdj_note("SAVING");
-    r = flash_on ? lsdj_store_save(&flash, &store, sram, LSDJ_SRAM) : LSDJ_ST_FAIL;
+    r = flash_on ? lsdj_store_save(&flash, &store, sram, save_n) : LSDJ_ST_FAIL;
     if (r == LSDJ_ST_OK) {
         put_s(put_u(put_s(b, "SAVED "), (store.len + 1023u) / 1024u), "K");
         lsdj_note(b);
@@ -255,7 +263,7 @@ static void lsdj_flash_req(void)               /* the console queued it (lsdj_xf
     else if (xfer.req == LSDJ_REQ_KIT_ERASE)
         r = lsdj_store_kit_erase(&flash, &store, xfer.req_arg);
     else if (xfer.req == LSDJ_REQ_KITS)
-        r = lsdj_store_kits(&flash, &store, xfer.req_arg, sram, LSDJ_SRAM);
+        r = lsdj_store_kits(&flash, &store, xfer.req_arg, sram, save_n);
     lsdj_banks();                             /* K may have changed */
     xfer.res = (uint8_t)r;
     xfer.req = LSDJ_REQ_NONE;
@@ -263,7 +271,8 @@ static void lsdj_flash_req(void)               /* the console queued it (lsdj_xf
 
 static void lsdj_restart(void)                 /* `ble go reset`: the Game Boy from its reset, the save RAM kept */
 {
-    emu_init(rom_tab, cart.nbanks, sram, fb);         /* (it ran before: the cartridge is LSDj) */
+    emu_init(rom_tab, cart.nbanks, sram, fb);         /* (it ran before: the cartridge is LSDj's or DMGo's) */
+    memset(&steps, 0, sizeof steps);
     emu.dirty = dirty;
     memset(shown, 0xFF, sizeof shown);        /* every line pair is sent again */
     memset(dirty, 1, sizeof dirty);
@@ -342,7 +351,11 @@ static void lsdj_step(void)
         t0 = core_ticks();
         st.buttons = core_buttons();
         st.notes = core_notes();
-        st.pad = lsdj_pad(st.buttons, st.notes, pad_map) & (uint8_t)~lsdj_knobs_frame(&knobs);
+        st.pad = lsdj_pad_ab(st.buttons, st.notes, pad_map, note_a, note_b) & (uint8_t)~lsdj_knobs_frame(&knobs);
+        if (with_steps) {                     /* DMGo's step keys: its cursor on the step and B, for a frame */
+            lsdj_steps_keys(&steps, st.notes);
+            st.pad = lsdj_steps_frame(&steps, emu.gb.wram, st.pad);
+        }
         if (xfer.key_n) {                     /* the console's `ble key` */
             xfer.key_n--;
             st.pad &= (uint8_t)~xfer.key;
@@ -411,15 +424,30 @@ static __attribute__((noinline)) void lsdj_start(void)
                   "INSTALL IT AGAIN", CORE_MID, CORE_BG, 1);
         return;
     }
+    {
+        uint8_t h[LSDJ_HDR];
+        lsdj_header(cart.bank, cart.nbanks, h);
+        prog = lsdj_prog(h);
+        save_n = lsdj_prog_save(prog);
+        with_steps = (uint8_t)lsdj_prog_steps(h);
+        note_a = prog == LSDJ_PROG_DMGO ? DMGO_NOTE_A : LSDJ_NOTE_A;
+        note_b = prog == LSDJ_PROG_DMGO ? DMGO_NOTE_B : LSDJ_NOTE_B;
+    }
+    if (prog == LSDJ_PROG_NONE) {
+        st.error = -1;
+        core_fill(0, 0, 240, 240, CORE_BG);
+        core_text(0, 110, 240, CORE_FONT_M, "NOT LSDJ OR DMGO", CORE_TEXT, CORE_BG, 1);
+        return;
+    }
     r = -1;
     flash_on = core_flash_ptr(LSDJ_ST_BASE) != 0;
     if (flash_on) {                           /* (reading only: flash is written on REC or a console request) */
         lsdj_store_scan(&flash_ro, &store);
         if (store.have)
-            r = lsdj_store_load(&flash_ro, &store, sram, LSDJ_SRAM);
+            r = lsdj_store_load(&flash_ro, &store, sram, save_n);
     }
     if (r)                                    /* no save in flash: the start-up save, as built */
-        r = lsdj_unpack(sram, LSDJ_SRAM, cart.save, cart.save_len);
+        r = lsdj_unpack(sram, save_n, cart.save, cart.save_len);
     lsdj_banks();
     core_fill(0, 0, 240, 240, CORE_BG);
     if (r) {
@@ -435,7 +463,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     emu.dirty = dirty;
     if (r) {
         st.error = r;
-        core_text(0, 110, 240, CORE_FONT_M, "NOT AN LSDJ ROM", CORE_TEXT, CORE_BG, 1);
+        core_text(0, 110, 240, CORE_FONT_M, "NOT LSDJ OR DMGO", CORE_TEXT, CORE_BG, 1);
         return;
     }
     for (r = 0; r < 8; r++)
@@ -446,6 +474,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     st.pad_shown = 0;                         /* draw the keys part once */
     st.gaps = 0;
     st.gap_off = 1;                           /* (the ring is empty until the first frame: not a gap) */
+    memset(&steps, 0, sizeof steps);
     draw = lsdj_push;
     run = lsdj_step;
     xfer.started = 1;
@@ -465,11 +494,13 @@ void ble_key(uint32_t pressed_buttons, int32_t select_steps)
     } else {
         lsdj_knobs_add(&knobs, LSDJ_AX_LR, select_steps);
         lsdj_knobs_add(&knobs, LSDJ_AX_UD, algo);
-        lsdj_knobs_add(&knobs, LSDJ_AX_NAV_LR, preset);
-        if (pressed_buttons & core_button_bit(CORE_BTN_OCTUP))
-            lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, -1);
-        if (pressed_buttons & core_button_bit(CORE_BTN_OCTDN))
-            lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, 1);
+        if (prog == LSDJ_PROG_LSDJ) {         /* LSDj's screen shortcuts */
+            lsdj_knobs_add(&knobs, LSDJ_AX_NAV_LR, preset);
+            if (pressed_buttons & core_button_bit(CORE_BTN_OCTUP))
+                lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, -1);
+            if (pressed_buttons & core_button_bit(CORE_BTN_OCTDN))
+                lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, 1);
+        }
     }
     if (pressed_buttons & core_button_bit(CORE_BTN_FX))           /* the options, switched while running */
         emu_mode ^= EMU_FRAME_SKIP;
@@ -504,17 +535,19 @@ void ble_draw(void)
     if (splash_done || st.error)
         return;
     splash_done = 1;
-    core_text(0, 160, 240, CORE_FONT_S, "PLAY: START, THEN PLAY: DEMO", CORE_THEME, CORE_BG, 1);
-    core_text(0, 176, 240, CORE_FONT_S, "LEFT RIGHT: SELECT KNOB", CORE_MID, CORE_BG, 1);
-    core_text(0, 192, 240, CORE_FONT_S, "UP DOWN: ALGORITHM KNOB", CORE_MID, CORE_BG, 1);
-    core_text(0, 208, 240, CORE_FONT_S, "A: TOP F  B: TOP G  SEL: SEQ", CORE_MID, CORE_BG, 1);
-    core_text(0, 224, 240, CORE_FONT_S, "SCREENS: PRESETS, OCT- OCT+", CORE_MID, CORE_BG, 1);
+    /* (before PLAY nothing reads the cartridge: gate 4. So both programs' keys) */
+    core_text(0, 144, 240, CORE_FONT_S, "PLAY: START, THEN PLAY: DEMO", CORE_THEME, CORE_BG, 1);
+    core_text(0, 160, 240, CORE_FONT_S, "LEFT RIGHT: SELECT KNOB", CORE_MID, CORE_BG, 1);
+    core_text(0, 176, 240, CORE_FONT_S, "UP DOWN: ALGORITHM KNOB  SEL: SEQ", CORE_MID, CORE_BG, 1);
+    core_text(0, 192, 240, CORE_FONT_S, "LSDJ  A: TOP F  B: TOP G", CORE_MID, CORE_BG, 1);
+    core_text(0, 208, 240, CORE_FONT_S, "SCREENS: PRESETS, OCT- OCT+", CORE_MID, CORE_BG, 1);
+    core_text(0, 224, 240, CORE_FONT_S, "DMGO  A: D#5  B: F#5  STEPS: WHITE", CORE_MID, CORE_BG, 1);
 }
 
 static void lsdj_console(const char *args)     /* the words after `ble` on the console line: a transfer command */
 {
     xfer.sram = sram;
-    xfer.size = LSDJ_SRAM;
+    xfer.size = save_n;
     xfer.rom = rom_tab;                     /* (PLAY reads the block and the store: no bank before it) */
     xfer.nbanks = run ? cart.nbanks : 0;
     xfer.mode = (uint8_t)emu_mode;

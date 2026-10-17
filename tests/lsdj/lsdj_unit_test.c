@@ -583,8 +583,8 @@ int main(int argc, char **argv)
         fclose(f);
     }
     memset(flash_sim, 0xFF, sizeof flash_sim);   /* an empty store */
-    ble_draw();                               /* the splash, before PLAY */
-    CHECK(texts == 5 && !ble_started());
+    ble_draw();                               /* the splash, before PLAY: LSDj's keys and DMGo's */
+    CHECK(texts == 6 && !ble_started());
     for (i = 0; i < 50; i++)
         pass();
     CHECK(!ble_started() && st.frames == 0);  /* nothing runs before PLAY */

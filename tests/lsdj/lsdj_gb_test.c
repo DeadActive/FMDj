@@ -300,11 +300,88 @@ static void test_unpack(void)
     CHECK(lsdj_unpack(dst, 3, src, 1) != 0);                  /* a run without its byte */
 }
 
+/* DMGo's step keys on a made-up work RAM (C000..DFFF): a channel page, the cursor somewhere else */
+static uint8_t wram[0x2000];
+static void dmgo_page(void)
+{
+    memset(wram, 0, sizeof wram);
+    wram[0x02F] = 1;                          /* past the title */
+    wram[0x01A] = 3;                          /* the cursor: field 3, column 5 */
+    wram[0x01B] = wram[0xB1F] = 5;
+}
+#define CURSOR(f, c) (wram[0x01A] == (f) && wram[0x01B] == (c) && wram[0xB1F] == (c))
+
+static void test_steps(void)
+{
+    lsdj_steps_t s;
+    uint32_t i, n;
+    memset(&s, 0, sizeof s);
+    dmgo_page();
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF);            /* nothing pressed: the owner's keys */
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[2]);                    /* step 3 */
+    CHECK(lsdj_steps_frame(&s, wram, (uint8_t)~JOYPAD_RIGHT) == (uint8_t)~JOYPAD_B);   /* B alone, the cursor on it */
+    CHECK(CURSOR(12, 2));
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[2]);                    /* still held: no second press */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));   /* B up, the cursor back */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));   /* done */
+
+    lsdj_steps_keys(&s, 0);                                    /* steps 1 and 16 together: one after the other */
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[0] | LSDJ_STEP_NOTE[15]);
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B && CURSOR(12, 0));
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B && CURSOR(12, 15));
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF);
+
+    /* the owner holds B (F#5): the step waits until B has been up a whole frame (DMGo takes a press, not a hold) */
+    lsdj_steps_keys(&s, 0);
+    lsdj_steps_keys(&s, LSDJ_STEP_NOTE[4]);
+    CHECK(lsdj_steps_frame(&s, wram, (uint8_t)~JOYPAD_B) == (uint8_t)~JOYPAD_B && CURSOR(3, 5));   /* (theirs) */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));   /* B just up: DMGo saw it down last frame */
+    CHECK(lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B && CURSOR(12, 4));
+    CHECK(lsdj_steps_frame(&s, wram, (uint8_t)~JOYPAD_B) == 0xFF && CURSOR(3, 5));   /* B up whatever they hold */
+
+    /* not on a channel page with nothing over it: the step is dropped, nothing touched */
+    {
+        static const struct { uint32_t at; uint8_t v; } NOT[] = {
+            {0x02F, 0},                       /* the title screen */
+            {0x005, 4}, {0x005, 5},           /* PATTERNS, SAVE */
+            {0x006, 1},                       /* the top menu open */
+            {0xA34, 1}};                      /* PICK A PAT open */
+        for (i = 0; i < sizeof NOT / sizeof NOT[0]; i++) {
+            dmgo_page();
+            wram[NOT[i].at] = NOT[i].v;
+            lsdj_steps_keys(&s, 0);
+            lsdj_steps_keys(&s, LSDJ_STEP_NOTE[1]);
+            CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
+            wram[NOT[i].at] = NOT[i].v == 0 ? 1 : 0;           /* the page right again: the step was not kept */
+            CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
+        }
+        dmgo_page();
+        wram[0x005] = 3;                      /* CH4: a channel page */
+        lsdj_steps_keys(&s, 0);
+        lsdj_steps_keys(&s, LSDJ_STEP_NOTE[1]);
+        CHECK(lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B && CURSOR(12, 1));
+        CHECK(lsdj_steps_frame(&s, wram, 0xFF) == 0xFF && CURSOR(3, 5));
+    }
+
+    /* 16 wait at most: a key pressed 20 times before a frame runs toggles 16 times */
+    dmgo_page();
+    for (i = 0; i < 20u; i++) {
+        lsdj_steps_keys(&s, 0);
+        lsdj_steps_keys(&s, LSDJ_STEP_NOTE[7]);
+    }
+    for (i = n = 0; i < 60u; i++)
+        n += lsdj_steps_frame(&s, wram, 0xFF) == (uint8_t)~JOYPAD_B;
+    CHECK(n == 16 && CURSOR(3, 5));
+}
+
 int main(void)
 {
     test_rom();
     test_prog();
     test_pad();
+    test_steps();
     test_knobs();
     test_pad_text();
     test_line_and_span();

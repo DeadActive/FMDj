@@ -158,6 +158,63 @@ static uint8_t lsdj_knobs_frame(lsdj_knobs_t *k)       /* the keys down (1 = dow
     return 0;
 }
 
+/* DMGo's step keys (v1: lsdj_prog_steps): white key N toggles step N of the channel page shown. DMGo does it
+ * itself: for one frame its cursor is put on the step and B is pressed, the next frame the cursor goes back with B
+ * up. The same as the owner moving there and pressing B (the same memory and sound, in any pattern slot; the host,
+ * 2026-10-17), without the cursor moving. Its work RAM (offsets from C000): */
+#define DMGO_W_PAGE 0x005u                    /* 0..3: CH1..CH4; 4 PATTERNS, 5 SAVE, 6 setup */
+#define DMGO_W_MENU 0x006u                    /* 1: the top menu (A) is open */
+#define DMGO_W_FIELD 0x01Au                   /* the cursor: its field (12: the SEQ row) */
+#define DMGO_W_COL 0x01Bu                     /* ... its column (0..15), kept twice */
+#define DMGO_W_COL2 0xB1Fu
+#define DMGO_W_STARTED 0x02Fu                 /* 0 on the title screen */
+#define DMGO_W_PICK 0xA34u                    /* 1: PICK A PAT is open */
+#define DMGO_FIELD_SEQ 12u
+typedef struct {
+    uint8_t q[16], n;                         /* steps waiting (0..15), the oldest first */
+    uint8_t busy, keep[3];                    /* the step's frame ran: the cursor (field, column, column) to put back */
+    uint8_t out;                              /* the keys DMGo got last frame */
+    uint32_t held;                            /* the white keys down: a press is a key that was up */
+} lsdj_steps_t;
+
+static void lsdj_steps_keys(lsdj_steps_t *s, uint32_t notes)   /* the note keys held now: new presses wait */
+{
+    uint32_t i, down = notes & ~s->held;
+    s->held = notes;
+    for (i = 0; i < 16u; i++)
+        if ((down & LSDJ_STEP_NOTE[i]) && s->n < sizeof s->q)
+            s->q[s->n++] = (uint8_t)i;
+}
+
+/* before a Game Boy frame: pad, the owner's keys (active low) -> the keys for it. A step waits while B is down or
+ * was down last frame (DMGo takes a press); on any page but a channel page with nothing over it, it is dropped */
+static uint8_t lsdj_steps_frame(lsdj_steps_t *s, uint8_t *wram, uint8_t pad)
+{
+    uint32_t i, step;
+    if (s->busy) {
+        wram[DMGO_W_FIELD] = s->keep[0];
+        wram[DMGO_W_COL] = s->keep[1];
+        wram[DMGO_W_COL2] = s->keep[2];
+        s->busy = 0;
+        return s->out = (uint8_t)(pad | JOYPAD_B);
+    }
+    if (!s->n || !(s->out & pad & JOYPAD_B))
+        return s->out = pad;
+    step = s->q[0];
+    for (i = 1; i < s->n; i++)
+        s->q[i - 1u] = s->q[i];
+    s->n--;
+    if (!wram[DMGO_W_STARTED] || wram[DMGO_W_PAGE] > 3u || wram[DMGO_W_MENU] || wram[DMGO_W_PICK])
+        return s->out = pad;
+    s->keep[0] = wram[DMGO_W_FIELD];
+    s->keep[1] = wram[DMGO_W_COL];
+    s->keep[2] = wram[DMGO_W_COL2];
+    wram[DMGO_W_FIELD] = DMGO_FIELD_SEQ;
+    wram[DMGO_W_COL] = wram[DMGO_W_COL2] = (uint8_t)step;
+    s->busy = 1;
+    return s->out = (uint8_t)~JOYPAD_B;       /* B alone: B + a direction is another edit in DMGo */
+}
+
 /* the Game Boy keys held in pad (active low) as text, e.g. "START SEL R"; "-" if none (b: >= 22 bytes) */
 static void lsdj_pad_text(char *b, uint8_t pad)
 {
