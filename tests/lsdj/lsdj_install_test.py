@@ -119,7 +119,7 @@ def main():
     junk = T / "junk.gb"
     junk.write_bytes(bytes(range(256)) * 128)
     rc, said, cart, pkg = page(junk, base, demo, "junk")
-    ok(rc == 1 and "not an LSDj ROM" in said and not cart and not pkg, f"a file that is no ROM: {said[:48]}")
+    ok(rc == 1 and "not an LSDj or DMGo ROM" in said and not cart and not pkg, f"a file that is no ROM: {said[:48]}")
     blank = T / "blank.gb"
     blank.write_bytes(test_rom(draw=False))
     rc, said, cart, pkg = page(blank, base, demo, "blank")

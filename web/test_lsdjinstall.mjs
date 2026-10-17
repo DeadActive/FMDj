@@ -47,7 +47,35 @@ if (!fs.existsSync(WASM)) {
   a = await refused(rom(2, () => 0x00), 479740);                         // NOPs: it runs, and draws nothing
   ok(/the screen stays blank/.test(a.said), "a ROM that runs and draws nothing: refused");
   a = await refused(new Uint8Array(1000), 479740);
-  ok(/not an LSDj ROM: it is not 1 to 64 whole banks/.test(a.said), "a file that is not whole banks: refused");
+  ok(/not an LSDj or DMGo ROM: it is not 1 to 64 whole banks/.test(a.said), "a file that is not whole banks: refused");
+  const titled = (r, title, type, ram) => {                              // the same, as another kind of cartridge
+    r.set(new TextEncoder().encode(title.padEnd(16, "\0")), 0x134);
+    r[0x147] = type; r[0x149] = ram;
+    let x = 0;
+    for (let i = 0x134; i <= 0x14C; i++) x = (x - r[i] - 1) & 0xFF;
+    r[0x14D] = x;
+    return r;
+  };
+  a = await refused(titled(rom(2, () => 0x00), "GAME", 0x1E, 0x03), 479740);
+  ok(/not an LSDj or DMGo ROM: it is neither/.test(a.said), "DMGo's cartridge without DMGo's title: refused");
+  emu.setRom(titled(rom(2, () => 0x00), "DRUMMACHINA", 0x1E, 0x03));
+  ok(emu.prog() === "dmgo" && emu.saveSize() === 0x8000, "DMGo's title on its cartridge: DMGo, a 32 KiB save");
+  emu.setRom(rom(2, () => 0x00));
+  ok(emu.prog() === "lsdj" && emu.saveSize() === 0x20000, "LSDj's cartridge: LSDj, a 128 KiB save");
+  a = await refused(titled(rom(2, () => 0x00), "DRUMMACHINA", 0x1E, 0x03), 479740);   // NOPs: it does not play
+  ok(/runs, but .* makes no sound|screen stays blank/.test(a.said), "DMGo's title on NOPs: refused: " + a.said.slice(0, 40));
+
+  const DMGO = process.env.DMGO_ROM;                                     // the owner's own DMGo (v1): the real thing
+  if (!DMGO) console.log("DMGo's own ROM: skipped (DMGO_ROM)");
+  else {
+    const steps = [];
+    const cart = await makeCart(emu, new Uint8Array(fs.readFileSync(DMGO)), { keys: [], frames: 1 }, 479740,
+                                (what) => { if (!steps.includes(what)) steps.push(what); });
+    const t = cart.subarray(cart.length - 16);
+    ok(String.fromCharCode(...t.subarray(0, 4)) === "LSDC" && t[6] === 4, "DMGo: a block of its 4 banks");
+    ok(steps.join(", ") === "DMGo's first start, playing a step", "DMGo: its first start and a step played, no demo: " + steps.join(", "));
+    ok(cart.length < 70000, "DMGo: its block is small (" + cart.length + " B)");
+  }
 }
 console.log(fails ? `test_lsdjinstall: ${fails} FAILED` : "test_lsdjinstall: all passed");
 process.exit(fails ? 1 : 0);

@@ -28,12 +28,13 @@
 <body>
 <main>
   <h1>FMDj</h1>
-  <p>This page puts your own LSDj ROM into the FM-1's FMDj firmware and installs it over USB. It works in Chrome or
-     Edge.</p>
-  <p class="small">The firmware here holds nothing of LSDj. Your ROM file is read by this page only: it is not sent
-     anywhere, and the firmware made with it is for your FM-1 alone.</p>
+  <p>This page puts your own LSDj or DMGo! ROM into the FM-1's FMDj firmware and installs it over USB. It works in
+     Chrome or Edge. One of them is on the FM-1 at a time: to change, install the other one.</p>
+  <p class="small">The firmware here holds nothing of LSDj or DMGo. Your ROM file is read by this page only: it is
+     not sent anywhere, and the firmware made with it is for your FM-1 alone. DMGo! is free from
+     <a href="https://audiowanderer.com/AW/drum-machina-go-or/" target="_blank" rel="noopener">Audiowanderer</a>.</p>
 
-  <h2>1. Your LSDj ROM</h2>
+  <h2>1. Your LSDj or DMGo ROM</h2>
   <p><input id="rom" type="file" accept=".gb,.gbc" disabled></p>
   <canvas id="screen" width="160" height="144" hidden></canvas>
   <progress id="rom-bar" max="100" value="0" hidden></progress>
@@ -41,11 +42,14 @@
 
   <h2>2. Install</h2>
   <p>Connect the FM-1 by USB, directly to the computer. Do not unplug it while writing.</p>
+  <p class="small">Changing from LSDj to DMGo or back: the FM-1 keeps the other one's save in its flash, unused,
+     until you save (REC held) in the new one. Back it up first on the <a href="../lsdj/">song page</a>.</p>
   <p><button id="go" disabled>Install</button></p>
   <progress id="bar" max="100" value="0"></progress>
   <p id="status"></p>
-  <p class="small">After the install, PLAY starts LSDj and PLAY again plays the demo song. Songs and kits go in and
-     out with the <a href="../lsdj/">song page</a>.</p>
+  <p class="small">After the install, PLAY starts it. In LSDj PLAY again plays the demo song; songs and kits go in
+     and out with the <a href="../lsdj/">song page</a>. In DMGo the 16 white keys are the steps of the channel shown,
+     A is D#5 and B is F#5; its save goes in and out with the song page.</p>
   <p class="small">If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:
      <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>.
      The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware.
@@ -54,7 +58,8 @@
 
   <p class="small">LSDj fork of Felucca: DEADACTIVE. Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments.
      Game Boy emulation: Peanut-GB (Mahyar Koshkouei, MIT) and minigb_apu (Alex Baines, Mahyar Koshkouei, MIT).
-     LSDj is by Johan Kotlinski; it is not part of this page or of the firmware here, and you need your own copy.
+     LSDj is by Johan Kotlinski and DMGo! by Audiowanderer; neither is part of this page or of the firmware here,
+     and you need your own copy.
      The package also holds three JieLi AC79 SDK files (JieLi Technology, Apache-2.0):
      <a href="../../firmware/LICENSES/">licences</a>. GPL-3.0, no warranty.</p>
 </main>
@@ -64,7 +69,7 @@ const $ = (id) => document.getElementById(id);
 const meta = /*META*/;
 const TEXT = {
   start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing", reboot: "Restarting",
-  done: "Done. Press PLAY on the FM-1 to start LSDj.", stopped: "Stopped. Replug the USB cable and press Install again.",
+  done: "Done. Press PLAY on the FM-1 to start it.", stopped: "Stopped. Replug the USB cable and press Install again.",
   error: "Error: ",
   denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
   notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
@@ -102,7 +107,7 @@ function draw() {
     baseInfo(new Package(pkg));
     emu = await loadEmu(await w.arrayBuffer());
     base = pkg;
-    romSay(`Firmware ${meta.version} loaded. Choose your LSDj ROM file (.gb).`);
+    romSay(`Firmware ${meta.version} loaded. Choose your LSDj or DMGo ROM file (.gb).`);
   } catch (e) { romSay("Could not load: " + e.message); }
   lock();
 })();
@@ -119,7 +124,8 @@ $("rom").addEventListener("change", async () => {
   say("");
   try {
     const rom = new Uint8Array(await file.arrayBuffer()), info = baseInfo(new Package(base));
-    const parts = { "LSDj's first start": [0, 8], "typing the demo song": [8, 90], "playing it": [98, 2] };
+    const parts = { "LSDj's first start": [0, 8], "typing the demo song": [8, 90], "playing it": [98, 2],
+                    "DMGo's first start": [0, 40], "playing a step": [40, 60] };
     const cart = await makeCart(emu, rom, meta.demo, info.room, (what, done, total) => {
       const [at, share] = parts[what];
       $("rom-bar").value = at + share * done / total;

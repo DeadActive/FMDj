@@ -7,7 +7,7 @@
  * ROM into lw_rom().
  *   lw_rom(), lw_sram(), lw_fb(), lw_out()   the buffers: the ROM file (up to 1 MiB), the 128 KiB save, the picture
  *                                            (160 x 144 shades 0..3), the block
- *   lw_check(len)                            the file of len bytes now in lw_rom(): is it an LSDj ROM: lsdj_cart.c's
+ *   lw_check(len)                            the file of len bytes now in lw_rom(): is it LSDj or DMGo: lsdj_cart.c's
  *                                            LSDJ_CART_OK / _ROM_*
  *   lw_start(len)                            the Game Boy from its reset with that ROM and the save in lw_sram():
  *                                            0, or emu_init's error
@@ -15,7 +15,9 @@
  *   lw_errors(), lw_peak(), lw_ink()         since lw_start: emulator errors, the loudest sample, and now: the
  *                                            picture's pixels that differ from its first (0: a blank screen)
  *   lw_need(), lw_cart(max)                  the block's size for the ROM and the save in lw_sram(); the block into
- *                                            lw_out(): its size, or LSDJ_CART_FULL */
+ *                                            lw_out(): its size, or LSDJ_CART_FULL
+ *   lw_prog(), lw_save_n()                   the ROM in lw_rom(): its program (lsdj_gb.c: 0 LSDj, 1 DMGo, -1 none)
+ *                                            and its save's size (128 KiB, 32 KiB; 0) */
 #include <stdint.h>
 #include <stdlib.h>                           /* (before lsdj_emu.c: it has its own abort) */
 #include <string.h>
@@ -90,6 +92,8 @@ LW uint32_t lw_ink(void)
     return ink;
 }
 
+LW int lw_prog(void) { return lsdj_prog(lw_rom_b + 0x134); }
+LW uint32_t lw_save_n(void) { return lsdj_prog_save(lw_prog()); }
 LW uint32_t lw_need(void) { return lsdj_cart_need(lw_rom_b, lw_len, lw_sram_b); }
 LW int32_t lw_cart(uint32_t max)
 {
