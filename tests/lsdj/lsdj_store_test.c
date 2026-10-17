@@ -433,6 +433,37 @@ static void test_cuts_with_kits(void)         /* a save's power cuts with kit ba
     }
 }
 
+/* the program a save is of (LSDj or DMGo, lsdj_gb.c lsdj_prog): kept in its record; a record without it (every
+ * save before DMGo) is LSDj's */
+static void test_prog(void)
+{
+    lsdj_store_t st;
+    lsdj_rec_t r;
+    memset(fl, 0xFF, sizeof fl);
+    power_on();
+    lsdj_store_scan(&F, &st);
+    CHECK(!st.have && st.prog == LSDJ_PROG_LSDJ);
+    CHECK(lsdj_store_save(&F, &st, sav[1], SAV_N) == LSDJ_ST_OK);   /* st.prog as scanned: LSDj */
+    memcpy(&r, f_ptr(lsdj_st_slot_off(st.k, st.newest)), sizeof r);
+    CHECK(r.prog == 0 && r.rsv == 0);                         /* as the records before it: their reserved bytes */
+    lsdj_store_scan(&F, &st);
+    CHECK(st.have && st.prog == LSDJ_PROG_LSDJ);
+    st.prog = LSDJ_PROG_DMGO;                                 /* DMGo installed: REC saves its 32 KiB */
+    CHECK(lsdj_store_save(&F, &st, sav[2], 0x8000u) == LSDJ_ST_OK && st.prog == LSDJ_PROG_DMGO);
+    lsdj_store_scan(&F, &st);
+    CHECK(st.have && st.prog == LSDJ_PROG_DMGO);
+    memset(got, 0x5A, SAV_N);
+    CHECK(lsdj_store_load(&F, &st, got, 0x8000u) == 0 && !memcmp(got, sav[2], 0x8000u));
+    CHECK(lsdj_store_load(&F, &st, got, SAV_N) != 0);         /* not 128 KiB */
+    CHECK(lsdj_store_kits(&F, &st, 2, sav[2], 0x8000u) == LSDJ_ST_OK);   /* the save moved by a new layout: still DMGo's */
+    lsdj_store_scan(&F, &st);
+    CHECK(st.have && st.k == 2 && st.prog == LSDJ_PROG_DMGO);
+    st.prog = LSDJ_PROG_LSDJ;                                 /* LSDj again: REC makes it LSDj's */
+    CHECK(lsdj_store_save(&F, &st, sav[1], SAV_N) == LSDJ_ST_OK);
+    lsdj_store_scan(&F, &st);
+    CHECK(st.prog == LSDJ_PROG_LSDJ && load_is(1));
+}
+
 int main(void)
 {
     make_saves();
@@ -444,6 +475,7 @@ int main(void)
     test_kits();
     test_kit_cuts();
     test_cuts_with_kits();
+    test_prog();                              /* (last: it starts from an empty area) */
     CHECK(bad == 0);                                          /* nothing ever reached outside the area */
     printf(fails ? "lsdj_store_test: %d FAILED\n" : "lsdj_store_test: all passed\n", fails);
     return fails != 0;

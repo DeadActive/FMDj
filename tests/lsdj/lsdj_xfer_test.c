@@ -112,7 +112,7 @@ static void test_crc(void)
 
 static void test_state(void)
 {
-    CHECK(is("info", "ok v2 started 0 held 0 banks 03 kits 00 03 cap 1DFE0 used 00000 saved 0"));
+    CHECK(is("info", "ok v3 started 0 held 0 banks 03 kits 00 03 cap 1DFE0 used 00000 saved 0 prog 0 size 20000"));
     CHECK(is("hold", "err not started"));
     CHECK(is("r 0 4", "err hold"));
     CHECK(is("w 0 00 0000", "err hold"));
@@ -121,8 +121,18 @@ static void test_state(void)
         fprintf(vec, "! started\n");
     x.started = 1;
     CHECK(is("  hold", "ok"));                          /* leading spaces: as the console passes the line */
-    CHECK(is("info", "ok v2 started 1 held 1 banks 03 kits 00 03 cap 1DFE0 used 00000 saved 0"));
+    CHECK(is("info", "ok v3 started 1 held 1 banks 03 kits 00 03 cap 1DFE0 used 00000 saved 0 prog 0 size 20000"));
     CHECK(is("info x", "err ?"));
+    x.prog = 1;                                         /* DMGo installed: its program and its 32 KiB save */
+    x.size = 0x8000u;
+    if (vec)
+        fprintf(vec, "! prog 1 8000\n");
+    CHECK(is("info", "ok v3 started 1 held 1 banks 03 kits 00 03 cap 1DFE0 used 00000 saved 0 prog 1 size 08000"));
+    CHECK(is("r 8000 1", "err range"));                 /* past its save */
+    x.prog = 0;
+    x.size = 0x20000u;
+    if (vec)
+        fprintf(vec, "! prog 0 20000\n");
     CHECK(is("", "err ?"));
     CHECK(is("holdx", "err ?"));
     CHECK(is("format", "err ?"));
@@ -221,7 +231,7 @@ static void test_flash(void)                  /* (started and held) the flash co
     flash_state(2, 0x1BFE0u, 0, 0);
     req_done(LSDJ_REQ_KITS, 2, LSDJ_RES_OK);
     CHECK(is("st", "ok 0"));
-    CHECK(is("info", "ok v2 started 1 held 1 banks 03 kits 02 03 cap 1BFE0 used 00000 saved 0"));
+    CHECK(is("info", "ok v3 started 1 held 1 banks 03 kits 02 03 cap 1BFE0 used 00000 saved 0 prog 0 size 20000"));
     CHECK(is("kd 0 6040 0000", "err kit") && is("kc 00000000", "err kit"));   /* no bank begun */
     CHECK(is("k 2", "err range") && is("k 1", "ok"));
     for (i = 0; i < LSDJ_BANK; i++)
@@ -253,7 +263,7 @@ static void test_flash(void)                  /* (started and held) the flash co
     CHECK(is("save", "ok"));
     flash_state(2, 0x1BFE0u, 0xF00u, 1);
     req_done(LSDJ_REQ_SAVE, 0, LSDJ_RES_OK);
-    CHECK(is("info", "ok v2 started 1 held 1 banks 03 kits 02 03 cap 1BFE0 used 00F00 saved 1"));
+    CHECK(is("info", "ok v3 started 1 held 1 banks 03 kits 02 03 cap 1BFE0 used 00F00 saved 1 prog 0 size 20000"));
     CHECK(is("go", "ok"));                                          /* not held: only a save is taken */
     CHECK(is("k 1", "err hold") && is("kx 1", "err hold") && is("kits 1", "err hold") && is("kc 0", "err hold"));
     sprintf(line, "kd 0 6040A1 %04X", lsdj_crc16(d, 3));

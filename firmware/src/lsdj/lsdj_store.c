@@ -10,8 +10,8 @@
  *   kit banks      K of them (0..12), 16 KiB each, a ROM bank as it is, from the top down; an erased one reads 0xFF,
  *                  which LSDj takes for a free bank
  *   the save       two slots of 29 - 2K sectors between them: A from sector 2 (it never moves), B right after. A
- *                  slot: a 32-byte record alone in its first page, then from byte 256 the 128 KiB save,
- *                  PackBits-packed (as storage.c lays its sectors out).
+ *                  slot: a 32-byte record alone in its first page, then from byte 256 the save (LSDj's 128 KiB or
+ *                  DMGo's 32 KiB: the record says whose), PackBits-packed (as storage.c lays its sectors out).
  *
  * A save goes to the slot that does not hold the newest one: erase, the packed bytes, read back, the record last.
  * Until the record is whole the other slot is the save, so the power may go at any point.
@@ -44,7 +44,7 @@ typedef struct {
 typedef struct {
     uint32_t magic;
     uint16_t version;
-    uint8_t rsv[2];
+    uint8_t prog, rsv;                        /* prog: whose save (lsdj_prog); 0, LSDj, in the records before DMGo */
     uint32_t seq, len, crc;                   /* len, crc: of the packed save */
     uint32_t rsv2[2];
     uint32_t hcrc;                            /* of the 28 bytes before it */
@@ -63,6 +63,7 @@ typedef struct {
     uint8_t k;                                /* kit banks */
     uint8_t formatted, lay_newest;            /* a layout record is there; the copy (0 / 1) that is the newer */
     uint8_t have, newest;                     /* a whole save is in flash; the slot (0 = A) that holds the newest */
+    uint8_t prog;                             /* whose it is (LSDJ_PROG_*); what the next save is written as */
     uint32_t lay_seq, seq, len;               /* the highest sequence numbers seen; the newest save's packed length */
 } lsdj_store_t;
 
@@ -198,13 +199,14 @@ static void lsdj_store_scan(const lsdj_flash_t *f, lsdj_store_t *st)
             st->have = 1;
             st->newest = (uint8_t)s;
             st->len = r[s].len;
+            st->prog = r[s].prog;
             return;
         }
         ok[s] = 0;
     }
 }
 
-/* the newest save into dst (n: 128 KiB); 0 = done */
+/* the newest save into dst (n: its size, st->prog's); 0 = done */
 static int lsdj_store_load(const lsdj_flash_t *f, const lsdj_store_t *st, uint8_t *dst, uint32_t n)
 {
     if (!st->have)
@@ -279,6 +281,7 @@ static int lsdj_st_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_t *
     memset(&r, 0, sizeof r);
     r.magic = LSDJ_ST_MAGIC;
     r.version = LSDJ_ST_VERSION;
+    r.prog = st->prog;
     r.seq = st->seq + 1u;
     r.len = len;
     r.crc = crc;
@@ -292,8 +295,8 @@ static int lsdj_st_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_t *
     return LSDJ_ST_OK;
 }
 
-/* the save (src: the 128 KiB save RAM) into flash. After a flash error st is read from the flash again: what is
- * there counts, not what was meant to be. */
+/* the save (src: the save RAM, n bytes) into flash, as st->prog's. After a flash error st is read from the flash
+ * again: what is there counts, not what was meant to be. */
 LSDJ_STORE_FN int lsdj_store_save(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_t *src, uint32_t n)
 {
     int r = lsdj_st_save(f, st, src, n);

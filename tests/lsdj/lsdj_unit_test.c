@@ -331,6 +331,27 @@ static void test_flash(void)                  /* REC held 1 s saves; PLAY after 
     console("ble b 22 0 2");
     CHECK(!strncmp(con_log, "ok FFFF ", 8));          /* erased: free again */
     console("ble go");
+    {   /* the FM-1's save is DMGo's (DMGo was installed and saved): LSDj starts from its own start-up save, says
+         * why, and leaves DMGo's in flash until REC saves over it */
+        uint32_t seq;
+        store.prog = LSDJ_PROG_DMGO;
+        CHECK(lsdj_store_save(&flash, &store, sram, 32u * 1024u) == LSDJ_ST_OK);
+        seq = store.seq;
+        memset(sram, 0xEE, LSDJ_SRAM);
+        lsdj_start();
+        CHECK(st.error == 0 && memcmp(sram + 0x1FF10, mark, 4) && sram[0] != 0xEE);   /* the start-up save */
+        CHECK(!strcmp(st.note, "DMGO SAVE KEPT") && store.seq == seq && store.prog == LSDJ_PROG_DMGO);
+        console("ble info");
+        CHECK(strstr(con_log, " saved 0 prog 0 size 20000") != 0);   /* (no save of LSDj's in flash) */
+        buttons = core_rec_bit();                     /* REC: LSDj's save replaces it */
+        for (i = 0; i < 60; i++)
+            pass();
+        buttons = 0;
+        pass();
+        CHECK(store.seq == seq + 1u && store.prog == LSDJ_PROG_LSDJ && store.len > 0);
+        console("ble info");
+        CHECK(strstr(con_log, " saved 1 prog 0 size 20000") != 0);
+    }
     CHECK(flash_bad == 0);
 }
 
@@ -417,7 +438,7 @@ static void test_console(void)                /* after PLAY: `ble ...` holds and
     console("  ble  ");
     CHECK(strstr(con_log, "lsdj running") != 0);
     console("ble info");
-    CHECK(!strcmp(con_log, "ok v2 started 1 held 0 banks 40 kits 00 0C cap 1CF00 used 00000 saved 0\r\n"));
+    CHECK(!strcmp(con_log, "ok v3 started 1 held 0 banks 40 kits 00 0C cap 1CF00 used 00000 saved 0 prog 0 size 20000\r\n"));
     console("ble r 0 4");
     CHECK(!strcmp(con_log, "err hold\r\n"));          /* not while the Game Boy runs */
     console("ble hold");
@@ -472,7 +493,7 @@ static int test_no_rom(int damaged)
     for (i = 0; i < 10; i++)
         pass();
     console("ble info");
-    CHECK(!strncmp(con_log, "ok v2 started 0 held 0 banks 00 ", 32));
+    CHECK(!strncmp(con_log, "ok v3 started 0 held 0 banks 00 ", 32));
     ble_key(core_play_bit(), 0);              /* PLAY */
     CHECK(!ble_started() && st.error == (damaged ? -4 : -3));
     CHECK(!strcmp(big_text, damaged ? "LSDJ ROM DAMAGED" : "NO LSDJ ROM"));
@@ -550,7 +571,7 @@ static int test_own_rom(void)
         CHECK(loud);
     }
     console("ble info");
-    CHECK(!strncmp(con_log, "ok v2 started 1 held 0 banks 02 kits 00 00 ", 43));
+    CHECK(!strncmp(con_log, "ok v3 started 1 held 0 banks 02 kits 00 00 ", 43));
     console("ble b 1 0 2");
     CHECK(!strncmp(con_log, "ok FFFF ", 8));             /* its second bank: empty */
     console("ble b 2 0 2");

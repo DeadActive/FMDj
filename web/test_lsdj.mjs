@@ -155,7 +155,7 @@ class Sim {
                               mute: false, corrupt: 0, failWrite: -1, failFrom: Infinity, writes: 0, hasLsdj: true, onHold: null, latency: 0,
                               // the flash store: K kit banks of nkit, shown as ROM banks kitBank[]; a queued request
                               kits: 0, nkit: 0, kitBank: [], used: 0, saved: false, kit: new Uint8Array(0x4000), kitOpen: 0,
-                              req: 0, reqArg: 0, res: 0, manual: false, slow: 0, v1: false, flashImage: null, saves: 0, fullOver: Infinity, failReq: 0, noBank: false });
+                              req: 0, reqArg: 0, res: 0, manual: false, slow: 0, v1: false, prog: 0, size: sram.length, flashImage: null, saves: 0, fullOver: Infinity, failReq: 0, noBank: false });
     }
     cap() { return (29 - 2 * this.kits) * 4096 - 256; }    // (lsdj_store.c: two slots of 29 - 2K sectors, a 256-byte head)
     runReq() {                                          // as lsdj.c's step: the queued request, carried out
@@ -180,8 +180,9 @@ class Sim {
         const w = text.trim().split(/ +/), num = s => (/^[0-9A-Fa-f]{1,8}$/.test(s || "") ? parseInt(s, 16) : NaN);
         const [c, ...a] = w;
         const H = (v, n) => v.toString(16).toUpperCase().padStart(n, "0"), one = a.length === 1 && !isNaN(num(a[0]));
-        if (c === "info" && !a.length) return `ok v${this.v1 ? 1 : 2} started ${+this.started} held ${+this.held} banks ${H(this.banks.length, 2)}` +
-            (this.v1 ? "" : ` kits ${H(this.kits, 2)} ${H(this.nkit, 2)} cap ${H(this.capFixed ?? this.cap(), 5)} used ${H(this.used, 5)} saved ${+this.saved}`);
+        if (c === "info" && !a.length) return `ok v${this.v1 ? 1 : 3} started ${+this.started} held ${+this.held} banks ${H(this.banks.length, 2)}` +
+            (this.v1 ? "" : ` kits ${H(this.kits, 2)} ${H(this.nkit, 2)} cap ${H(this.capFixed ?? this.cap(), 5)} used ${H(this.used, 5)} saved ${+this.saved}` +
+                            ` prog ${this.prog} size ${H(this.size, 5)}`);
         if (this.v1 && ["st", "save", "kb", "k", "kx", "kits", "kd", "kc"].includes(c)) return "err ?";
         if (c === "st" && !a.length) return this.req ? "ok busy" : "ok " + H(this.res, 1);
         if (c === "save" && !a.length) {
@@ -228,7 +229,7 @@ class Sim {
         if (c === "r" && a.length === 2 && !isNaN(num(a[0])) && !isNaN(num(a[1]))) {
             const [at, n] = a.map(num);
             if (!this.held) return "err hold";
-            if (!n || n > 256 || at + n > this.sram.length) return "err range";
+            if (!n || n > 256 || at + n > this.size) return "err range";
             return this.data(this.sram.subarray(at, at + n));
         }
         if (c === "w" && a.length >= 1 && !isNaN(num(a[0]))) {
@@ -238,7 +239,7 @@ class Sim {
             if (!h.length || a.length !== 3 || isNaN(num(a[2]))) return "err ?";
             const d = ln.unhex(h), at = num(a[0]);
             if (!this.held) return "err hold";
-            if (at + d.length > this.sram.length) return "err range";
+            if (at + d.length > this.size) return "err range";
             if (num(a[2]) !== ln.crc16(d)) return "err crc";
             if (this.writes === this.failWrite || this.writes >= this.failFrom) { this.writes++; return "err crc"; }   // one bad line / a dead link
             this.writes++;
@@ -312,6 +313,7 @@ const rejects = async (p, re) => { try { await p; } catch (e) { return re.test(e
             if (l === "! started") sim.started = true;
             else if (l.startsWith("! flash ")) { const [k, cap, used, saved] = l.slice(8).split(" ").map(x => parseInt(x, 16)); Object.assign(sim, { kits: k, capFixed: cap, used, saved: !!saved }); }
             else if (l.startsWith("! done ")) { sim.req = 0; sim.res = parseInt(l.slice(7), 16); }
+            else if (l.startsWith("! prog ")) { const [p, size] = l.slice(7).split(" ").map(x => parseInt(x, 16)); Object.assign(sim, { prog: p, size }); }
             else if (l.startsWith("> ")) cmd = l.slice(2);
             else if (l.startsWith("< ")) { n++; if (sim.exec(cmd) !== l.slice(2)) { bad++; console.log(`   ${cmd} -> ${sim.exec(cmd)}, the firmware: ${l.slice(2)}`); } }
         }
@@ -326,7 +328,7 @@ await (async () => {
     let sim = simWith(base);
     await sim.link.sync();
     const info = await sim.link.info();
-    ok(info.version === 2 && info.started && !info.held && info.banks === 2 && info.nkit === 0, "info");
+    ok(info.version === 3 && info.started && !info.held && info.banks === 2 && info.nkit === 0 && info.prog === "lsdj" && info.size === 0x20000, "info");
     ok(await rejects(sim.link.read(0, 4), /hold/), "a read without hold is refused by the device");
     await sim.link.hold();
     ok(eq(await sim.link.read(0x8000, 1000), base.subarray(0x8000, 0x8000 + 1000)), "1000 bytes read in pieces of 256");
@@ -462,7 +464,7 @@ await (async () => {
     };
     sim = flashSim();
     const inf = await sim.link.info();
-    ok(inf.version === 2 && inf.kits === 0 && inf.nkit === 3 && inf.cap === 29 * 4096 - 256 && inf.used === 0 && !inf.saved && inf.flash, "info: the flash store");
+    ok(inf.version === 3 && inf.kits === 0 && inf.nkit === 3 && inf.cap === 29 * 4096 - 256 && inf.used === 0 && !inf.saved && inf.flash, "info: the flash store");
     await ln.saveToFlash(sim.link);
     ok(sim.saved && sim.saves === 1 && eq(sim.flashImage, sim.sram) && !sim.held, "save now");
     sim.slow = 3;

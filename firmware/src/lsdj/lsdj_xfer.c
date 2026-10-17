@@ -2,9 +2,10 @@
  * LSDj fork: 2026 DEADACTIVE */
 /* The LSDj unit's transfer commands: what follows `ble` on a console line -> one reply line. Pure (no core, no
  * hardware; host-tested by tests/lsdj/lsdj_xfer_test.c). Include lsdj_gb.c first.
- *   info               ok v2 started S held H banks NN kits KK NN cap CCCCC used UUUUU saved D
+ *   info               ok v3 started S held H banks NN kits KK NN cap CCCCC used UUUUU saved D prog P size SSSSS
  *                                               (kit banks in flash, of how many the ROM has room for; a save
- *                                               slot's room and the packed size of the save in flash)
+ *                                               slot's room and the packed size of the save in flash; the program
+ *                                               installed, 0 LSDj 1 DMGo, and its save RAM's size)
  *   hold               ok | err not started     the Game Boy stops between two frames (lsdj.c)
  *   go [reset]         ok                       it runs again; reset: LSDj starts again first
  *   r ADDR LEN         ok HEX CRC16             save RAM, LEN 1..100 (256 bytes); needs hold
@@ -30,7 +31,7 @@
  * Numbers are hex, 1..8 digits, no prefix. CRC16: XMODEM (0x1021, start 0) of the data bytes, 4 digits.
  * Errors: err ? (not a command), err hold, err range, err hex, err crc, err busy (a request waits), err kit (no
  * `k` before). */
-#define LSDJ_XFER_VERSION 2u                  /* 2: the flash store's commands and info fields */
+#define LSDJ_XFER_VERSION 3u                  /* 2: the flash store's commands and info fields; 3: prog, size */
 #define LSDJ_XFER_RD 256u                     /* bytes in a read reply */
 #define LSDJ_XFER_WR 20u                      /* bytes in a write line: "ble w 1FFEC " + 40 + " CRC " <= 63 */
 #define LSDJ_XFER_OUT (3u + 2u * LSDJ_XFER_RD + 1u + 4u + 1u)   /* "ok " HEX " " CRC and the NUL */
@@ -49,7 +50,8 @@ typedef struct {
     uint8_t *kit;                             /* 16 KiB: a kit bank on its way to flash */
     const uint8_t *kit_bank;                  /* the ROM bank number each possible flash kit bank shows as */
     uint8_t nkit, kits;                       /* how many the ROM has room for; how many there are (K) */
-    uint8_t saved;                            /* a save is in flash */
+    uint8_t saved;                            /* a save is in flash (the installed program's) */
+    uint8_t prog;                             /* the program installed: 0 LSDj, 1 DMGo (lsdj_prog) */
     uint32_t cap, used;                       /* a save slot's room; the packed size of the save in flash */
     uint8_t req, req_arg, res;                /* the request waiting for lsdj.c (LSDJ_REQ_*), its number; the last
                                                * one's result (LSDJ_RES_*) */
@@ -188,7 +190,11 @@ static void lsdj_xfer_cmd(lsdj_xfer_t *x, const char *p, uint32_t now_ms, char *
         o = xf_puts(o, " used ");
         o = xf_hex(o, x->used, 5);
         o = xf_puts(o, " saved ");
-        xf_hex(o, x->saved, 1);
+        o = xf_hex(o, x->saved, 1);
+        o = xf_puts(o, " prog ");
+        o = xf_hex(o, x->prog, 1);
+        o = xf_puts(o, " size ");
+        xf_hex(o, x->size, 5);
     } else if (xf_word(&p, "st")) {
         if (!xf_end(p))
             goto unknown;

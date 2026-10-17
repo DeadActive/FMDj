@@ -90,13 +90,15 @@ export class Link {
         return p;
     }
 
-    /* flash: the store's side (protocol 2); an FM-1 with the firmware before saving answers protocol 1 */
+    /* flash: the store's side (protocol 2); an FM-1 with the firmware before saving answers protocol 1. Protocol 3:
+     * the program installed (0 LSDj, 1 DMGo) and its save's size; before it, always LSDj's 128 KiB */
     async info() {
-        const m = /^v([0-9A-F]+) started ([01]) held ([01]) banks ([0-9A-F]+)(?: kits ([0-9A-F]+) ([0-9A-F]+) cap ([0-9A-F]+) used ([0-9A-F]+) saved ([01]))?$/.exec(await this.cmd("info"));
+        const m = /^v([0-9A-F]+) started ([01]) held ([01]) banks ([0-9A-F]+)(?: kits ([0-9A-F]+) ([0-9A-F]+) cap ([0-9A-F]+) used ([0-9A-F]+) saved ([01]))?(?: prog ([0-9A-F]) size ([0-9A-F]+))?$/.exec(await this.cmd("info"));
         if (!m) throw new Error("FM-1: an info reply this page does not know");
         const h = t => parseInt(t || "0", 16);
         return { version: h(m[1]), started: m[2] === "1", held: m[3] === "1", banks: h(m[4]), kits: h(m[5]), nkit: h(m[6]),
-                 cap: h(m[7]), used: h(m[8]), saved: m[9] === "1", flash: h(m[1]) >= 2 && h(m[7]) > 0 };
+                 cap: h(m[7]), used: h(m[8]), saved: m[9] === "1", flash: h(m[1]) >= 2 && h(m[7]) > 0,
+                 prog: m[10] === "1" ? "dmgo" : "lsdj", size: m[11] ? h(m[11]) : 0x20000 };
     }
 
     hold() { return this.cmd("hold"); }

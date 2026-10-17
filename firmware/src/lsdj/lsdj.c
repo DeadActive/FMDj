@@ -95,8 +95,9 @@ static struct {
     volatile uint32_t master_q12;             /* its gain, applied by the audio ISR */
     uint8_t pad, pad_shown;                   /* the Game Boy keys of the last frame; those on the status line */
     uint8_t held_shown;                       /* "USB" is on the status line */
-    char note[12];                            /* shown there instead for 2 s: SAVING, SAVED nnK, SAVE FULL, SAVE FAILED */
-    uint32_t note_ms, rec_ms;                 /* since the note; since REC went down (| 1: 0 = up) */
+    char note[24];                            /* shown there instead for a while: SAVING, SAVED nnK, SAVE FULL, SAVE
+                                               * FAILED (2 s); LSDJ SAVE KEPT, DMGO SAVE KEPT (8 s) */
+    uint32_t note_ms, note_for, rec_ms;       /* since the note, for how long; since REC went down (| 1: 0 = up) */
     uint8_t rec_done;                         /* this REC press has saved */
     uint32_t sec_skipped, last_skipped;       /* LSDj's wait loop: instructions not run, a frame (console `ble`) */
     uint32_t step_ticks, sec_frame_max, sec_pass_max, last_frame_max, last_pass_max;   /* the last second's longest
@@ -204,7 +205,8 @@ static void lsdj_xfer_flash(void)              /* what `ble info` and the kit co
     xfer.kit_bank = kit_bank;
     xfer.nkit = nkit;
     xfer.kits = store.k < nkit ? store.k : nkit;
-    xfer.saved = store.have;
+    xfer.saved = store.have && store.prog == prog;   /* (another program's save is not this one's) */
+    xfer.prog = (uint8_t)(prog == LSDJ_PROG_DMGO);
     xfer.cap = lsdj_st_cap(store.k);
     xfer.used = store.have ? store.len : 0;
 }
@@ -226,12 +228,14 @@ static void lsdj_banks(void)                   /* rom_tab: the ROM, and the K fl
     lsdj_xfer_flash();
 }
 
-static void lsdj_note(const char *s)           /* on the status line now, for 2 s */
+static void lsdj_note_for(const char *s, uint32_t ms)   /* on the status line now, for ms */
 {
     put_s(st.note, s);
     st.note_ms = core_ms();
+    st.note_for = ms;
     keys_line();
 }
+static void lsdj_note(const char *s) { lsdj_note_for(s, 2000u); }
 
 static int lsdj_save(void)                     /* the save RAM into flash: a second or two, nothing else runs */
 {
@@ -239,6 +243,7 @@ static int lsdj_save(void)                     /* the save RAM into flash: a sec
     int r;
     st.gap_off = 1;                           /* (silence, but not a gap of the Game Boy's) */
     lsdj_note("SAVING");
+    store.prog = (uint8_t)prog;               /* the save in flash is this program's from now on */
     r = flash_on ? lsdj_store_save(&flash, &store, sram, save_n) : LSDJ_ST_FAIL;
     if (r == LSDJ_ST_OK) {
         put_s(put_u(put_s(b, "SAVED "), (store.len + 1023u) / 1024u), "K");
@@ -262,8 +267,8 @@ static void lsdj_flash_req(void)               /* the console queued it (lsdj_xf
         r = lsdj_store_kit_write(&flash, &store, xfer.req_arg, kit_buf);
     else if (xfer.req == LSDJ_REQ_KIT_ERASE)
         r = lsdj_store_kit_erase(&flash, &store, xfer.req_arg);
-    else if (xfer.req == LSDJ_REQ_KITS)
-        r = lsdj_store_kits(&flash, &store, xfer.req_arg, sram, save_n);
+    else if (xfer.req == LSDJ_REQ_KITS && prog == LSDJ_PROG_LSDJ && store.prog == LSDJ_PROG_LSDJ)
+        r = lsdj_store_kits(&flash, &store, xfer.req_arg, sram, save_n);   /* (LSDj's kits, with LSDj's save) */
     lsdj_banks();                             /* K may have changed */
     xfer.res = (uint8_t)r;
     xfer.req = LSDJ_REQ_NONE;
@@ -312,7 +317,7 @@ static void lsdj_step(void)
         status_line();
     }
     lsdj_xfer_tick(&xfer, core_ms());
-    if (st.note[0] && core_ms() - st.note_ms >= 2000u) {
+    if (st.note[0] && core_ms() - st.note_ms >= st.note_for) {
         st.note[0] = 0;
         st.held_shown = (uint8_t)!xfer.held;  /* redraw what the note covered */
     }
@@ -443,7 +448,7 @@ static __attribute__((noinline)) void lsdj_start(void)
     flash_on = core_flash_ptr(LSDJ_ST_BASE) != 0;
     if (flash_on) {                           /* (reading only: flash is written on REC or a console request) */
         lsdj_store_scan(&flash_ro, &store);
-        if (store.have)
+        if (store.have && store.prog == prog) /* the other program's save stays, unread, until REC saves over it */
             r = lsdj_store_load(&flash_ro, &store, sram, save_n);
     }
     if (r)                                    /* no save in flash: the start-up save, as built */
@@ -475,6 +480,8 @@ static __attribute__((noinline)) void lsdj_start(void)
     st.gaps = 0;
     st.gap_off = 1;                           /* (the ring is empty until the first frame: not a gap) */
     memset(&steps, 0, sizeof steps);
+    if (store.have && store.prog != prog)     /* the FM-1 has the other program's save: say why it is not here */
+        lsdj_note_for(store.prog == LSDJ_PROG_DMGO ? "DMGO SAVE KEPT" : "LSDJ SAVE KEPT", 8000u);
     draw = lsdj_push;
     run = lsdj_step;
     xfer.started = 1;
