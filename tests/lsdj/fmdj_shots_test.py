@@ -81,6 +81,21 @@ else:
           and not Path("/tmp/x_fmdj_shots").exists())
     print("skipped 5 (LSDJ_ROM or build/lsdj/demo.sav missing)")
 
+# ---- 5d an older-format save: LSDj shows UPGRADING... for a while, which the settle pass must outwait
+fsav = os.environ.get("FMDJ_SAVE")
+if rom and fsav and Path(fsav).is_file():
+    out = SRC / "build" / "tests" / "fmdj_shots_dontstop"
+    subprocess.run(["rm", "-rf", str(out)])
+    r = subprocess.run([sys.executable, tool, rom, fsav, out], capture_output=True, text=True)
+    check("5d tool runs with FMDJ_SAVE", r.returncode == 0, r.stdout + r.stderr)
+    files = [(out / (n + ".png")).read_bytes() if (out / (n + ".png")).exists() else None for n in want]
+    check("5e nine different PNGs (no UPGRADING... twins)", all(files) and len(set(files)) == 9,
+          f"{len(set(files))} distinct")
+    left = sorted(p.name for p in out.iterdir() if p.suffix not in (".png", ".json"))
+    check("5f no settled-save temp file left", not left, str(left))
+else:
+    print("skipped 5d-f (LSDJ_ROM or FMDJ_SAVE missing)")
+
 # ---- 6 missing inputs / foreign repository (no ROM needed)
 tdir = SRC / "build" / "tests" / "fmdj_shots_refuse"
 subprocess.run(["rm", "-rf", str(tdir)])

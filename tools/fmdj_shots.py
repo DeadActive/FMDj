@@ -6,6 +6,11 @@
 
   fmdj_shots.py ROM SAVE OUTDIR
 
+A save in an older LSDj song format makes LSDj 9.4.2 show "UPGRADING..." while it converts the song, so the first
+~220 frames of a run from power-on (song, chain, phrase, groove, project) would all show that message. A settle
+pass therefore runs the ROM with SAVE and no keys for SETTLE frames, writes the converted save RAM to a temporary
+file in OUTDIR (deleted at the end), and every screen's run starts from that settled save.
+
 LSDj's licence forbids distributing it: the screenshots are made from the ROM, so OUTDIR must be git-ignored
 (checked), and nothing written here is ever committed or published.
 web/make_site.py takes the screenshots from build/fmdj/shots (or $FMDJ_SHOTS), so make them with
@@ -21,6 +26,7 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[1]
 PALETTE = [(0x9B, 0xBC, 0x0F), (0x8B, 0xAC, 0x0F), (0x30, 0x62, 0x30), (0x0F, 0x38, 0x0F)]   # light to dark
 W, H = 160, 144
+SETTLE = 900   # frames (15 s of Game Boy time), well past the older-format conversion
 PATHS = {"song": [], "chain": ["r"], "phrase": ["r", "r"], "instr": ["r", "r", "r"],
          "table": ["r", "r", "r", "r"], "synth": ["r", "r", "u"], "wave": ["r", "r", "r", "r", "u"],
          "groove": ["d"], "project": ["u"]}
@@ -89,11 +95,24 @@ def main(rom, sav, out):
                     SRC / "tests" / "lsdj" / "lsdj_host.c"], check=True)
     out.mkdir(parents=True, exist_ok=True)
     manifest = []
+    settled = out / ".settled.sav"
+    try:
+        r = subprocess.run([host, rom, str(SETTLE), "-s", sav, "-o", settled], capture_output=True, text=True)
+        if r.returncode:
+            raise SystemExit(f"fmdj_shots: settle pass: the host emulator failed ({r.returncode}): "
+                             f"{(r.stdout + r.stderr).strip()}")
+        _shots(host, rom, settled, out, manifest)
+    finally:
+        settled.unlink(missing_ok=True)
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
+
+
+def _shots(host, rom, sav, out, manifest):
     with tempfile.TemporaryDirectory() as tmp:
         for name, path in PATHS.items():
             pgm = Path(tmp) / (name + ".pgm")
             frames = 120 + 20 * len(path) + 60
-            r = subprocess.run([host, rom, str(frames), "-s", sav, *keys_for(path), "-p", pgm],
+            r = subprocess.run([host, rom, str(frames), "-s", str(sav), *keys_for(path), "-p", pgm],
                                capture_output=True, text=True)
             if r.returncode:
                 raise SystemExit(f"fmdj_shots: {name}: the host emulator failed ({r.returncode}): "
@@ -101,7 +120,6 @@ def main(rom, sav, out):
             (out / (name + ".png")).write_bytes(png(read_pgm(pgm)))
             manifest.append({"name": name, "title": name.upper(), "file": name + ".png"})
             print(f"fmdj_shots: {name:8} {frames} frames -> {out / (name + '.png')}")
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
 
 
 if __name__ == "__main__":
