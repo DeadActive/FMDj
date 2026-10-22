@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // LSDj fork: 2026 DEADACTIVE
 // The FMDj landing page: the FM-1's panel as the simulator draws it (webapp/lsdj-sim/panel.js), a picture only (no
-// sound, no input), with LSDj's screens in its screen. The screens are the gallery's pictures (web/make_site.py puts
-// them on the page from shots/manifest.json; none, no gallery): each is LSDj's 160 x 144 picture at 3x in the Game
-// Boy's greens, drawn here as the firmware shows it, at 1.5x in rows 4 .. 219 of the 240 x 240 screen. The next one
-// every 3 s; a click on one shows it and keeps it.
+// sound, no input), with the programs' screens in its screen. The screens are the galleries' pictures, LSDj's then
+// DMGo's (web/make_site.py puts them on the page from shots/lsdj/ and shots/dmgo/; none, no gallery): each is the Game
+// Boy's 160 x 144 picture at 3x in its greens, drawn here as the firmware shows it, at 1.5x in rows 12 .. 227 of the
+// 240 x 240 screen (the status bar off, as it starts). The next one every 3 s, through both programs; a click on one
+// shows it and keeps it.
 import { buildPanel, layoutPanel, SHADE } from './webapp/lsdj-sim/panel.js';
 
 const $ = id => document.getElementById(id);
@@ -39,7 +40,7 @@ function draw(pic) {
   }
   smallCtx.putImageData(d, 0, 0);
   lcdCtx.imageSmoothingEnabled = false;
-  lcdCtx.drawImage(small, 0, 4, 240, 216);
+  lcdCtx.drawImage(small, 0, 12, 240, 216);
 }
 
 const shots = [...document.querySelectorAll('#shots button')];
@@ -51,7 +52,7 @@ async function show(i) {
   try { await pic.decode(); } catch { return; }    // a picture that does not load leaves the screen as it was
   if (at !== i) return;
   draw(pic);
-  lcd.setAttribute('aria-label', `screen: LSDj's ${b.dataset.title} screen`);
+  lcd.setAttribute('aria-label', `screen: ${b.dataset.prog}'s ${b.dataset.title} screen`);
 }
 if (shots.length) {
   device.classList.add('on');                      // the power lamp lit, the switch on

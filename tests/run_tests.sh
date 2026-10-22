@@ -298,8 +298,8 @@ if command -v node >/dev/null 2>&1; then
     run "LSDj install page's logic on made-up ROMs: too big, not runnable, blank (the WebAssembly part skipped without it)" node web/test_lsdjinstall.mjs
     run "LSDj install page: its block and package are the Mac build's byte for byte; what it refuses (skipped without the WebAssembly)" python3 tests/lsdj/lsdj_install_test.py
     run "LSDj simulator: the panel's ids, PLAY, the Game Boy's speed, sound, a save kept (the WebAssembly part skipped without it)" node tests/lsdj/lsdj_sim_test.mjs
-    run "FMDj screenshots: the walk to each LSDj screen, the PNGs (the run skipped without LSDJ_ROM)" python3 tests/lsdj/fmdj_shots_test.py
-    run "FMDj landing page: the site's front page with screenshots and without, its links and modules all on the site (skipped without the private package and the WebAssembly)" python3 tests/lsdj/fmdj_site_test.py
+    run "FMDj screenshots: the walk to each LSDj and DMGo screen, the PNGs (the runs skipped without LSDJ_ROM / DMGO_ROM)" python3 tests/lsdj/fmdj_shots_test.py
+    run "FMDj landing page: the site's front page with both programs' screenshots, one's and none, its sections, its links and modules all on the site (skipped without the private package and the WebAssembly)" python3 tests/lsdj/fmdj_site_test.py
     run "FMDj name: the pages, docs, bezel print and start screen say FMDj; LSDj stays where it means the program or ROM" python3 tests/lsdj/fmdj_name_test.py
 else
     echo "== skip web tests (no node)"

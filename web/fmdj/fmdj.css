@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * LSDj fork: 2026 DEADACTIVE */
 /* The FMDj landing page: the simulator's look (webapp/lsdj-sim/sim.css: the page, the device, the table), and here
- * only what this page adds: the name large, the links as the simulator's magenta buttons, the gallery of LSDj's
- * screens under the device, the sections. */
+ * only what this page adds: the name large, the links as the simulator's magenta buttons, the galleries of LSDj's and
+ * DMGo's screens under the device, the sections (LSDj and DMGo side by side when there is room). */
 .hero { text-align: center; }
 .hero h1 { font-size: 56px; margin-bottom: 4px; }
 .hero .lead { font-size: 18px; margin-bottom: 14px; }
@@ -12,8 +12,11 @@ a.act { text-decoration: none; }
 /* the device is a picture here */
 .device, .device * { cursor: default; }
 
-/* the gallery: LSDj's screens, the one on the device marked */
+/* the galleries: each program's screens under its name, the one on the device marked */
 .shots { margin-top: 28px; }
+.shots h3 { font: italic 700 16px/1.2 var(--print); margin: 0 0 10px; }
+.shots .prog + .prog { margin-top: 22px; }
+.shots .prog .small { text-align: left; margin-top: 8px; }
 .gallery { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px 12px;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
 .gallery li { text-align: center; font: 600 11px/1 var(--print); letter-spacing: .12em; color: var(--dim); }
@@ -24,14 +27,22 @@ a.act { text-decoration: none; }
 .gallery img { display: block; width: 100%; height: auto; border-radius: 4px; image-rendering: pixelated; }
 .shots .small { text-align: center; margin: 12px 0 0; }
 
+.toc { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 24px; font: 600 13px/1.4 var(--print);
+  letter-spacing: .08em; text-transform: uppercase; }
+.toc a { color: var(--dim); }
 section { margin-top: 8px; }
-section p, .does dd { max-width: 760px; }
-.does dt { font: italic 700 15px/1.3 var(--print); margin-top: 14px; }
-.does dd { margin: 2px 0 0; color: var(--ink); }
+h3 { font: italic 700 15px/1.3 var(--print); margin: 22px 0 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
+.two > section { min-width: 0; }
+.wide { overflow-x: auto; max-width: 760px; }
+section p { max-width: 760px; }
 .steps { padding-left: 22px; max-width: 760px; }
 .steps li { margin-bottom: 6px; }
 footer h2 { font-size: 15px; color: var(--ink); }
 footer p { margin: 0 0 8px; }
+@media (max-width: 760px) {
+  .two { grid-template-columns: 1fr; }
+}
 @media (max-width: 520px) {
   .hero h1 { font-size: 42px; }
   th, td { padding-right: 8px; }

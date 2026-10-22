@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # LSDj fork: 2026 DEADACTIVE
 """The FMDj landing page (web/fmdj/, written by web/make_site.py as the site's root index.html): built from the
-private package with made-up screenshots (FMDJ_SHOTS) and with none. Checks its name, its links, that every local
-href / src / import on it is a file of the site, the gallery with shots and no shots/ reference without them.
+private package with made-up screenshots of both programs (FMDJ_SHOTS: LSDj's, FMDJ_DMGO_SHOTS: DMGo's), of one,
+and with none. Checks its name, its links, that every local href / src / import on it is a file of the site, the
+galleries with shots and no shots/ reference without them, its sections (the emulator, LSDj, DMGo, how to use it, the
+roadmap) and the credits.
 Also runs the simulator's node test (web/sim/panel.js came out of web/sim/app.js). Skipped without
 build/lsdj-private.fwsc and the WebAssembly (build/web/sim/lsdjsim.wasm, build/web/lsdj_emu.wasm)."""
 import json
@@ -80,14 +82,33 @@ def imports(js):
         re.findall(r"""import\(\s*['"]([^'"]+)['"]\s*\)""", js)
 
 
-def build(case, shots):
-    site = OUT / case
-    shutil.rmtree(site, ignore_errors=True)
-    env = dict(os.environ, FMDJ_SHOTS=str(shots))
+def build(case, lsdj, dmgo, site=None, ok=True):
+    site = site or OUT / case
+    if site.parent == OUT:
+        shutil.rmtree(site, ignore_errors=True)
+    env = dict(os.environ, FMDJ_SHOTS=str(lsdj), FMDJ_DMGO_SHOTS=str(dmgo))
     r = subprocess.run([sys.executable, str(SRC / "web" / "make_site.py"), str(PKG), "test", str(site)],
                        cwd=SRC, env=env, capture_output=True, text=True)
-    check(f"{case}: make_site runs", r.returncode == 0, r.stderr[-800:])
-    return site
+    if ok:
+        check(f"{case}: make_site runs", r.returncode == 0, r.stderr[-800:])
+    return site, r
+
+
+def shots_dir(name, prog, names):
+    d = OUT / name
+    shutil.rmtree(d, ignore_errors=True)
+    d.mkdir(parents=True)
+    man = [{"prog": prog, "name": n, "title": n.upper().replace("-", " "), "file": f"{n}.png"} for n in names]
+    for i, m in enumerate(man):
+        (d / m["file"]).write_bytes(png(4, 3, (0x9B - i * 20, 0xBC - len(prog), 0x0F)))
+    (d / "manifest.json").write_text(json.dumps(man))
+    return d, man
+
+
+def section(html, sid):
+    """the markup of <section id=sid> up to the next section (or the footer)"""
+    m = re.search(r'<section\b[^>]*\bid="%s"[^>]*>(.*?)(?=<section\b|<footer\b)' % sid, html, re.S)
+    return m.group(1) if m else ""
 
 
 def common(case, site):
@@ -126,49 +147,78 @@ if any(not f.exists() for f in NEEDS):
     print("skipped: needs " + ", ".join(str(f.relative_to(SRC)) for f in NEEDS if not f.exists()))
     sys.exit(0)
 
-# ---- with shots: three tiny PNGs and their manifest
-shots = OUT / "shots-in"
-shutil.rmtree(shots, ignore_errors=True)
-shots.mkdir(parents=True)
-manifest = [{"name": n, "title": n.upper(), "file": f"{n}.png"} for n in ("song", "chain", "phrase")]
-for i, m in enumerate(manifest):
-    (shots / m["file"]).write_bytes(png(4, 3, (0x9B - i * 20, 0xBC, 0x0F)))
-(shots / "manifest.json").write_text(json.dumps(manifest))
-site = build("with", shots)
-html, p = common("with", site)
-for m in manifest:
-    check(f"with: the page names shots/{m['file']}", f"shots/{m['file']}" in html)
-    check(f"with: shots/{m['file']} is the one given",
-          (site / "shots" / m["file"]).is_file() and
-          (site / "shots" / m["file"]).read_bytes() == (shots / m["file"]).read_bytes())
-    check(f"with: the page names the screen {m['title']}", m["title"] in p.text)
-check("with: shots/manifest.json", (site / "shots" / "manifest.json").is_file()
-      and json.loads((site / "shots" / "manifest.json").read_text()) == manifest)
-
-# ---- without shots: an empty directory
+# ---- with shots of both: three tiny LSDj PNGs, two DMGo ones, their manifests
+lsdj, lman = shots_dir("shots-lsdj", "lsdj", ("song", "chain", "phrase"))
+dmgo, dman = shots_dir("shots-dmgo", "dmgo", ("title", "ch1-pulse"))
 empty = OUT / "shots-none"
 shutil.rmtree(empty, ignore_errors=True)
 empty.mkdir(parents=True)
-site = build("without", empty)
+site, _ = build("with", lsdj, dmgo)
+html, p = common("with", site)
+for prog, who, src, man in (("lsdj", "LSDj", lsdj, lman), ("dmgo", "DMGo", dmgo, dman)):
+    for m in man:
+        f = f"shots/{prog}/{m['file']}"
+        check(f"with: the page names {f}", f in html)
+        check(f"with: {f} is the one given", (site / f).is_file() and (site / f).read_bytes() == (src / m["file"]).read_bytes())
+        check(f"with: the page names {who}'s screen {m['title']}", m["title"] in p.text
+              and f"{who}'s {m['title']} screen" in html)
+    check(f"with: shots/{prog}/manifest.json", (site / "shots" / prog / "manifest.json").is_file()
+          and json.loads((site / "shots" / prog / "manifest.json").read_text()) == man)
+gal = section(html, "shots")
+check("with: two galleries, each under its program's name, LSDj's first",
+      re.search(r"<h3[^>]*>LSDj</h3>.*?shots/lsdj/.*?<h3[^>]*>DMGo!</h3>.*?shots/dmgo/", gal, re.S) is not None
+      and "shots/dmgo/" not in gal.split("DMGo!</h3>")[0])
+
+# ---- the sections and what they say (the page as built, with shots)
+for sid, words in (("emulator", ("Peanut-GB", "minigb_apu", "within the frame", "FPS", "CPU", "GAPS")),
+                   ("lsdj", ("Johan Kotlinski", "littlesounddj.com")),
+                   ("dmgo", ("Audiowanderer", "free", "white keys", "16")),
+                   ("how", ("install page", "Chrome", "Edge", "USB", "PLAY", "D#5", "F#5", "GLO", "REC",
+                            "song page", "simulator", "SELECT knob", "ALGORITHM knob")),
+                   ("roadmap", ("link port", "MIDI clock", "mGB"))):
+    body = section(html, sid)
+    check(f"section {sid}: there, with a heading", re.match(r"\s*<h2\b", body) is not None, body[:200])
+    miss = [w for w in words if w not in body]
+    check(f"section {sid}: says {', '.join(words)}", not miss, miss)
+check("DMGo's page linked", 'href="https://audiowanderer.com/AW/drum-machina-go-or/"' in html)
+check("LSDj's page linked", 'href="https://www.littlesounddj.com/"' in html)
+foot = html[html.find("<footer"):]
+for words in ("DEADACTIVE", "Johan Kotlinski", "Audiowanderer", "Peanut-GB", "minigb_apu", "Leo Kuroshita",
+              "M-VAVE and FM-1 are trademarks of their respective owners.", "Game Boy is a trademark of Nintendo",
+              "firmware/LICENSES/", "GPL-3.0"):
+    check(f"the credits: {words}", words in foot)
+check("no stale names (the status line's SPD / LOAD, SEL / SAVE)", not re.search(r"\bSPD\b|\bLOAD\b|SEL / SAVE", p.text))
+check("the how-to names both programs' controls", "LSDj" in section(html, "how") and "DMGo" in section(html, "how"))
+
+# ---- one program's shots only: that gallery, no reference to the other's
+for case, l, d, has, hasnt in (("lsdj-only", lsdj, empty, "lsdj", "dmgo"), ("dmgo-only", empty, dmgo, "dmgo", "lsdj")):
+    site, _ = build(case, l, d)
+    html, p = common(case, site)
+    check(f"{case}: shots/{has}/ on the page, no shots/{hasnt}/", f"shots/{has}/" in html and f"shots/{hasnt}/" not in html)
+    check(f"{case}: no shots/{hasnt} directory", (site / "shots" / has).is_dir() and not (site / "shots" / hasnt).exists())
+
+# ---- without shots: empty directories
+site, _ = build("without", empty, empty)
 html, p = common("without", site)
 check("without: no shots/ reference on the page", "shots/" not in html)
 check("without: no shots/ directory", not (site / "shots").exists())
 
 # ---- a site built over one with shots loses them (no stale pictures)
-site = OUT / "with"
-r = subprocess.run([sys.executable, str(SRC / "web" / "make_site.py"), str(PKG), "test", str(site)], cwd=SRC,
-                   env=dict(os.environ, FMDJ_SHOTS=str(empty)), capture_output=True, text=True)
+site, r = build("rebuilt without", empty, empty, site=OUT / "with")
 check("rebuilt without: the old shots are gone", r.returncode == 0 and not (site / "shots").exists()
       and "shots/" not in (site / "index.html").read_text(encoding="utf-8"))
+
+# ---- one program's screens given as the other's: refused
+_, r = build("swapped", dmgo, empty, site=OUT / "swapped", ok=False)
+check("DMGo's manifest as LSDj's (FMDJ_SHOTS): refused, naming it", r.returncode != 0 and "dmgo" in r.stdout + r.stderr,
+      r.stdout + r.stderr)
 
 # ---- shots are not copied into an output that lies inside another git repository
 foreign = OUT / "foreign-repo"
 shutil.rmtree(foreign, ignore_errors=True)
 foreign.mkdir(parents=True)
 subprocess.run(["git", "init", "-q", str(foreign)], check=True)
-site = foreign / "site"
-r = subprocess.run([sys.executable, str(SRC / "web" / "make_site.py"), str(PKG), "test", str(site)], cwd=SRC,
-                   env=dict(os.environ, FMDJ_SHOTS=str(shots)), capture_output=True, text=True)
+site, r = build("foreign", lsdj, dmgo, site=foreign / "site")
 check("foreign repository: no shots copied, and says why",
       r.returncode == 0 and not (site / "shots").exists() and "repository" in r.stdout, r.stdout + r.stderr)
 

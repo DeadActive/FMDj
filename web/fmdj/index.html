@@ -1,14 +1,15 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
      LSDj fork: 2026 DEADACTIVE
-     The FMDj landing page: the site's root index.html (web/make_site.py writes it, with LSDj's screens in place of
-     the SHOTS mark when there are any). It lives at the site's root: its paths are from there. -->
+     The FMDj landing page: the site's root index.html (web/make_site.py writes it, with the programs' screens, LSDj's
+     and DMGo's, in place of the SHOTS mark when there are any). It lives at the site's root: its paths are from there.
+     What it says comes from docs/ROADMAP.md and docs/lsdj/CONTROLS.md: keep them in step. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FMDj: LSDj on the M-VAVE FM-1</title>
-<meta name="description" content="LSDj, the Game Boy tracker, inside the M-VAVE FM-1.">
+<title>FMDj: LSDj and DMGo! on the M-VAVE FM-1</title>
+<meta name="description" content="Game Boy music programs inside the M-VAVE FM-1: LSDj, the tracker, and DMGo!, the drum machine. Your own ROM, installed from the browser.">
 <link rel="stylesheet" href="webapp/lsdj-sim/sim.css">
 <link rel="stylesheet" href="fmdj.css">
 </head>
@@ -16,7 +17,7 @@
 <main>
   <header class="hero">
     <h1><i>FMDj</i></h1>
-    <p class="lead">LSDj, the Game Boy tracker, inside the M-VAVE FM-1.</p>
+    <p class="lead">Game Boy music programs inside the M-VAVE FM-1: LSDj, the tracker, and DMGo!, the drum machine.</p>
     <nav class="go">
       <a class="act" href="webapp/lsdj-install/">Install with your ROM</a>
       <a class="act" href="webapp/lsdj/">Song page</a>
@@ -27,78 +28,148 @@
   <div class="stage"><div id="fit" class="fit"><div id="device" class="device"></div></div></div>
 <!--SHOTS-->
 
-  <section>
-    <h2>What it is</h2>
-    <p>FMDj is firmware for the FM-1. It runs a Game Boy emulator, and the Game Boy runs LSDj. The keys, buttons and
-      knobs are the Game Boy's buttons, and the FM-1's screen is the Game Boy's.</p>
-    <p>LSDj is not part of it. You bring your own LSDj ROM: the install page puts it into the firmware in your
-      browser, and the firmware made with it is for your FM-1 alone.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#emulator">The emulator</a> <a href="#lsdj">LSDj</a> <a href="#dmgo">DMGo!</a>
+    <a href="#how">How to use it</a> <a href="#roadmap">Roadmap</a>
+  </nav>
+
+  <section id="emulator">
+    <h2>The emulator</h2>
+    <p>FMDj is firmware for the FM-1. Inside it runs a Game Boy: Peanut-GB is its processor, memory and screen,
+      minigb_apu its four sound channels. The Game Boy runs one program, LSDj or DMGo!, from your own ROM. The FM-1's
+      keys, buttons and knobs are the Game Boy's buttons, and its screen shows the Game Boy's at 1.5x.</p>
+    <p>The sound is made as the program writes it, timed within the frame, not once per Game Boy frame: notes land on
+      their beat. When the sound runs low, the FM-1 runs a second Game Boy frame at once, so it does not stutter.
+      LSDj's wait loop is skipped without changing anything it does, and every second frame is drawn: that leaves the
+      FM-1 time to spare.</p>
+    <p>The status bar (off at first, in the GLO menu) shows how it keeps up: <b>FPS</b> is the Game Boy's frames a
+      second (59.7 is real time), <b>CPU</b> how much of the FM-1's time the Game Boy needs (under 100 % it keeps up),
+      <b>GAPS</b> the seconds in which the sound ran dry.</p>
+    <p>Nothing of LSDj or DMGo is in the firmware or on this site. You bring your own ROM: the install page puts it
+      into the firmware in your browser, and the firmware made with it is for your FM-1 alone.</p>
   </section>
 
-  <section>
-    <h2>What it does</h2>
-    <dl class="does">
-      <dt>Songs and kits over USB</dt>
-      <dd>The song page connects to the FM-1 by USB in Chrome. It lists LSDj's songs, downloads and uploads
-        projects and songs (.lsdprj, .lsdsng), and backs up or restores the whole save (.sav). A project that brings
-        its own kits gets a kit bank on the FM-1.</dd>
-      <dt>Saving to flash</dt>
-      <dd>Hold REC for a second and the save goes into the FM-1's flash. PLAY after power-on loads it. The save uses
-        the part of the flash where Hortator keeps its user samples (USR1 to USR3); they are lost at the first
-        save.</dd>
-      <dt>Sound timing and speed</dt>
-      <dd>The sound is made as LSDj writes it, not once per Game Boy frame, so notes land on their beat. LSDj's wait
-        loop is skipped without changing anything it does, which leaves the FM-1 time to spare. The status line shows
-        the speed (SPD), the load (LOAD) and any seconds with a dropout (GAPS).</dd>
-      <dt>The install page</dt>
-      <dd>It checks your ROM runs, types in a demo song, and installs the firmware over USB, in Chrome or Edge. Your
-        ROM file is read by the page only: it is sent nowhere.</dd>
-      <dt>The simulator</dt>
-      <dd>The same firmware runs in a browser page, behind the FM-1's panel drawn in the Game Boy's colours, with your
-        own ROM. Songs and saves are kept in that browser.</dd>
-    </dl>
-  </section>
+  <div class="two">
+    <section id="lsdj">
+      <h2>LSDj</h2>
+      <p>Little Sound Dj, by Johan Kotlinski, is a tracker for the Game Boy's four sound channels. A song is made of
+        chains, a chain of phrases; instruments, tables, grooves, synths and waves shape the sound. Buy it at
+        <a href="https://www.littlesounddj.com/" target="_blank" rel="noopener">littlesounddj.com</a>.</p>
+      <p>On the FM-1, the PRESETS knob and OCT- / OCT+ move between LSDj's screens. The install types in a demo song.
+        Songs and kits go in and out over USB with the song page; a project's own kits get a kit bank on the
+        FM-1.</p>
+    </section>
+    <section id="dmgo">
+      <h2>DMGo!</h2>
+      <p>Drum Machina Go!, by Audiowanderer, is a free drum machine for the Game Boy: four channels (CH1 and CH2
+        pulse, CH3 wave, CH4 noise) of 16 steps each, with their own sound settings, preset rhythms (PICK A PAT), 16
+        patterns and 8 save slots. Get it at
+        <a href="https://audiowanderer.com/AW/drum-machina-go-or/" target="_blank" rel="noopener">audiowanderer.com</a>.</p>
+      <p>On the FM-1, the 16 white keys are the steps of the channel shown: a key is B on its step (off, on, crossed),
+        and the cursor stays where it is. A is D#5 and B is F#5. DMGo's whole save (32 KiB) goes in and out with the
+        song page.</p>
+    </section>
+  </div>
 
-  <section class="help">
-    <h2>Controls</h2>
+  <section id="how" class="help">
+    <h2>How to use it</h2>
+    <ol class="steps">
+      <li><b>Get your ROM</b> (.gb): LSDj is bought from
+        <a href="https://www.littlesounddj.com/" target="_blank" rel="noopener">littlesounddj.com</a>, DMGo! is a
+        free download from
+        <a href="https://audiowanderer.com/AW/drum-machina-go-or/" target="_blank" rel="noopener">Audiowanderer</a>.</li>
+      <li><b>Try it first</b>, if you like, in the <a href="webapp/lsdj-sim/">simulator</a>: the same firmware in the
+        browser, behind the FM-1's panel, with your ROM. Its saves stay in that browser.</li>
+      <li><b>Install</b>: open the <a href="webapp/lsdj-install/">install page</a> in Chrome or Edge and choose your
+        ROM. The page checks that it runs. Connect the FM-1 by USB, directly to the computer, and press Install. Do not
+        unplug it while writing. Your ROM is read by the page only: it is sent nowhere.</li>
+      <li><b>Start</b>: on the FM-1, PLAY starts the program. In LSDj, PLAY again plays the demo song.</li>
+    </ol>
+    <p>One program is on the FM-1 at a time: to change, install the other one. The FM-1 keeps the other one's save in
+      its flash, unused, until the new one saves. Back it up first on the song page.</p>
+
+    <h3>Controls</h3>
+    <div class="wide">
     <table>
-      <tr><th>Game Boy</th><th>FM-1</th><th>Keyboard</th></tr>
+      <tr><th>Game Boy</th><th>FM-1</th><th>Simulator</th></tr>
       <tr><td>◀ ▶</td><td>SELECT knob; HOME / ARP buttons</td><td>← →</td></tr>
-      <tr><td>▲ ▼</td><td>ALGORITHM knob; SEL / SAVE buttons</td><td>↑ ↓</td></tr>
-      <tr><td>A</td><td>the top F key</td><td>X</td></tr>
-      <tr><td>B</td><td>the top G key</td><td>Z</td></tr>
-      <tr><td>START</td><td>PLAY (the first press starts LSDj)</td><td>Enter</td></tr>
+      <tr><td>▲ ▼</td><td>ALGORITHM knob; SCL / SAVE buttons</td><td>↑ ↓</td></tr>
+      <tr><td>A</td><td>LSDj: the top F key (F5). DMGo: D#5</td><td>X</td></tr>
+      <tr><td>B</td><td>LSDj: the top G key (G5). DMGo: F#5</td><td>Z</td></tr>
+      <tr><td>START</td><td>PLAY (the first press starts the program)</td><td>Enter</td></tr>
       <tr><td>SELECT</td><td>SEQ</td><td>Shift</td></tr>
       <tr><td>SELECT + ◀ ▶ ▲ ▼ (LSDj's screens)</td><td>PRESETS knob; OCT+ / OCT-</td><td>Shift + arrows</td></tr>
+      <tr><td>DMGo's steps 1 to 16</td><td>the 16 white keys</td><td>a click on them</td></tr>
+      <tr><td>the menu</td><td>GLO</td><td>M</td></tr>
       <tr><td>save to flash</td><td>REC held for a second</td><td>S held</td></tr>
       <tr><td>volume</td><td>MASTER knob</td><td></td></tr>
     </table>
-    <p class="small">The keyboard keys are the simulator's. Editing is as in LSDj: hold A (the top F) and turn SELECT
-      to change a value by one, ALGORITHM by an octave or 0x10.</p>
-  </section>
+    </div>
+    <p class="small">Clockwise is RIGHT on the SELECT knob and DOWN on the ALGORITHM knob; a step is a press. Editing
+      in LSDj: hold A and turn SELECT to change a value by one, ALGORITHM by an octave or 0x10. OCT- and OCT+ held
+      together for 5 s enter UBOOT.</p>
 
-  <section>
-    <h2>Put it on your FM-1</h2>
-    <ol class="steps">
-      <li>Open the <a href="webapp/lsdj-install/">install page</a> in Chrome or Edge and choose your own LSDj ROM
-        (.gb). The page checks that it runs.</li>
-      <li>Connect the FM-1 by USB, directly to the computer, and press Install. Do not unplug it while writing.</li>
-      <li>On the FM-1, PLAY starts LSDj and PLAY again plays the demo song.</li>
-      <li>Songs and kits go in and out with the <a href="webapp/lsdj/">song page</a>.</li>
-    </ol>
-    <p>No FM-1 at hand? Try it in the <a href="webapp/lsdj-sim/">simulator</a>.</p>
+    <h3>The GLO menu</h3>
+    <p>GLO opens the menu over the lower half of the picture; GLO or B closes it. The program plays on. UP / DOWN
+      choose a line, LEFT / RIGHT or A change it. The settings are kept in the FM-1's flash and come back at the next
+      PLAY.</p>
+    <div class="wide">
+    <table>
+      <tr><th>Line</th><th>Values (first: as it starts)</th></tr>
+      <tr><td>SCREEN</td><td>DMG, POCKET, LIGHT, SGB, DARK: the screen's colours</td></tr>
+      <tr><td>STATUS BAR</td><td>OFF, ON: FPS, CPU and GAPS under the picture</td></tr>
+      <tr><td>DRAW</td><td>EVERY 2ND, EVERY: every frame drawn is smoother and needs more CPU</td></tr>
+      <tr><td>ROM READ</td><td>FAST, PLAIN</td></tr>
+      <tr><td>WAIT LOOP</td><td>SKIP, RUN: LSDj's wait loop skipped, or run instruction by instruction</td></tr>
+      <tr><td>SOUND</td><td>IN FRAME, PER FRAME: the sound timed within the frame, or made once per frame (notes up
+        to 17 ms off their beat)</td></tr>
+    </table>
+    </div>
+
+    <h3>Saving</h3>
+    <p>Hold REC for a second: SAVING, then SAVED and the size, under the picture. PLAY after power-on loads that save.
+      The first time FMDj writes to the FM-1's flash (a save, kits or the menu's settings), Hortator's user samples
+      (USR1 to USR3) are cleared: that part of the flash is FMDj's from then on.</p>
+
+    <h3>Songs and saves in and out</h3>
+    <p>The <a href="webapp/lsdj/">song page</a> connects to the FM-1 by USB in Chrome. With LSDj it lists the songs,
+      downloads and uploads projects and songs (.lsdprj, .lsdsng) and backs up or restores the whole save (.sav).
+      With DMGo it backs up and restores DMGo's whole save (.sav).</p>
+
     <p class="small">If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:
       <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>.
       The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware.
       Use it at your own risk.</p>
   </section>
 
+  <section id="roadmap">
+    <h2>Roadmap</h2>
+    <h3>Done</h3>
+    <ul class="steps">
+      <li>LSDj: its screens on the FM-1 at 1.5x, the sound timed within the frame, no stutters when the sound runs
+        low.</li>
+      <li>DMGo!, one program at a time: the white keys its steps. Each program's save is kept until the other one's
+        replaces it.</li>
+      <li>Install from the browser, saves in flash, the song page, the simulator.</li>
+      <li>The GLO menu: screen themes, the status bar, the emulator's options.</li>
+    </ul>
+    <h3>Next</h3>
+    <ol class="steps">
+      <li><b>The link port.</b> The Game Boy's serial port in the emulator, clocked from the FM-1. The next two stand
+        on it.</li>
+      <li><b>Sync by MIDI clock.</b> The FM-1's MIDI clock in and out driving the programs' own sync: LSDj's sync
+        modes, DMGo's LINK IN / OUT and PULSE OUT. FMDj then plays in time with other gear, and leads it.</li>
+      <li><b>mGB.</b> A third program (trash80's MIDI synth, your own copy as with the others): the FM-1's keys and
+        MIDI play the Game Boy's four channels as a chip synth.</li>
+    </ol>
+  </section>
+
   <footer class="small">
     <h2>Credits and licence</h2>
-    <p>LSDj is by Johan Kotlinski. It is not included here: you need your own copy. FMDj, the LSDj fork of Felucca:
-      DEADACTIVE. Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. Game Boy emulation: Peanut-GB
-      (Mahyar Koshkouei, MIT) and minigb_apu (Alex Baines, Mahyar Koshkouei, MIT). The panel is drawn after
-      Hortator's simulator.</p>
+    <p>LSDj is by Johan Kotlinski, DMGo! (Drum Machina Go!) by Audiowanderer. Neither is included here: you need
+      your own copy. FMDj, the LSDj fork of Felucca: DEADACTIVE. Felucca by Leo Kuroshita (@kurogedelic), Hügelton
+      Instruments. Game Boy emulation: Peanut-GB (Mahyar Koshkouei, MIT) and minigb_apu (Alex Baines, Mahyar
+      Koshkouei, MIT). The panel is drawn after Hortator's simulator.</p>
     <p>The firmware package also holds three JieLi AC79 SDK files (JieLi Technology, Apache-2.0):
       <a href="firmware/LICENSES/">licences</a>. GPL-3.0, no warranty.</p>
     <p>Game Boy is a trademark of Nintendo. M-VAVE and FM-1 are trademarks of their respective owners. This project is not
