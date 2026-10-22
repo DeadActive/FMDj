@@ -1,269 +1,91 @@
 # FMDj
 
-Game Boy music programs inside the M-VAVE FM-1: **LSDj**, the tracker, and **DMGo!**, the drum machine, run on the
-FM-1's own firmware in a Game Boy emulator (Peanut-GB, minigb_apu). You bring your own ROM; the install page puts it
-into the firmware in your browser and installs it over USB.
-
-- Site: [deadactive.github.io/FMDj](https://deadactive.github.io/FMDj/): what it is, screenshots, how to use it
-- Install: [install page](https://deadactive.github.io/FMDj/webapp/lsdj-install/) (Chrome or Edge, USB, your own
-  LSDj or DMGo ROM)
-- Try: [simulator](https://deadactive.github.io/FMDj/webapp/lsdj-sim/): the FM-1 and this firmware in the browser,
-  with your ROM
-- Songs and saves: [song page](https://deadactive.github.io/FMDj/webapp/lsdj/)
-- Controls: [docs/lsdj/CONTROLS.md](docs/lsdj/CONTROLS.md); roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
-
-Nothing of LSDj or DMGo is in this repository, the firmware or the site's packages: LSDj is by Johan Kotlinski
-([littlesounddj.com](https://www.littlesounddj.com/)), DMGo! by Audiowanderer (free from
-[audiowanderer.com](https://audiowanderer.com/AW/drum-machina-go-or/)); you need your own copy. Installing is at
-your own risk; an FM-1 that no longer starts is recovered with a
-[Transporter](https://github.com/kurogedelic/FM-1-transporter).
-
-Build: `FELUCCA_LSDJ=1 ./build.sh` makes the firmware without a ROM (`build/lsdj-base.fwsc`), with
-`LSDJ_ROM=your.gb` also a private one with your ROM in it (never published). The site: `tools/fmdj_publish.sh`.
-
-FMDj, the LSDj fork of Felucca: DEADACTIVE. Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments.
-GPL-3.0-only. M-VAVE and FM-1 are trademarks of their respective owners; Game Boy is a trademark of Nintendo. This
-project is not affiliated with any of them.
-
----
-
-*The rest of this README is Felucca's: the firmware FMDj is built on.*
-
-# Felucca
-
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
-[![Sponsor](https://img.shields.io/badge/Sponsor-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/hugelton)
 
-![Felucca 1.0](docs/felucca-1.0.png)
+Game Boy music programs inside the M-VAVE FM-1: **LSDj**, the tracker, and **DMGo!**, the drum machine. They run on
+the FM-1's own firmware in a Game Boy emulator, on its screen, keys, knobs and sound. You bring your own ROM; the
+install page puts it into the firmware in your browser and installs it over USB.
 
-**TL;DR:** Felucca 1.0.5.2 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
-open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
-no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
-**Return to official V15** takes you back. Want to look around first?
-[Try it in your browser](https://hugelton.github.io/Felucca/webapp/try/), no FM-1 needed.
+- **Site:** [deadactive.github.io/FMDj](https://deadactive.github.io/FMDj/): what it is, screenshots, how to use it
+- **Install:** [install page](https://deadactive.github.io/FMDj/webapp/lsdj-install/) (Chrome or Edge, USB, your own
+  LSDj or DMGo ROM)
+- **Try first:** [simulator](https://deadactive.github.io/FMDj/webapp/lsdj-sim/): the FM-1 and this firmware in the
+  browser, with your ROM
+- **Songs and saves:** [song page](https://deadactive.github.io/FMDj/webapp/lsdj/) (Chrome, USB)
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you find in
-[Issues](https://github.com/hugelton/Felucca/issues).
+## Your own ROM
 
-- Install: [web installer](https://hugelton.github.io/Felucca/) (Chrome or Edge, USB), or `tools/fm1_install.py` from a terminal
-- Try: [Felucca in your browser](https://hugelton.github.io/Felucca/webapp/try/): the same firmware compiled to
-  WebAssembly, with the panel on screen (mouse, touch, computer keyboard, Web MIDI in)
-- Editor: [web editor](https://hugelton.github.io/Felucca/webapp/editor/); its development has moved to
-  [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp)
-- Build: [BUILDING.md](BUILDING.md)
+Nothing of LSDj or DMGo is in this repository, the firmware or the site's packages.
 
-<a href="https://hugelton.itch.io/felucca"><img src="https://static.itch.io/images/badge-color.svg" alt="Available on itch.io" width="74"></a>
+- **LSDj** is by Johan Kotlinski: [littlesounddj.com](https://www.littlesounddj.com/).
+- **DMGo!** (Drum Machina Go!) is by Audiowanderer, free from
+  [audiowanderer.com](https://audiowanderer.com/AW/drum-machina-go-or/).
 
-## Features
+One of them is on the FM-1 at a time; to change, install the other one.
 
-- **Thirteen engines** (below), each with its own factory presets
-- **Four tracks**, one synth part each with its own engine and sound (drums are the DRUM engine);
-  8 voices shared between them. ALGORITHM selects the track on every page
-- **Sequencer:** 64 steps per track with chords, ties, accent, slide, per-step chance and ratchets
-  (a step played 2, 3 or 4 times in its length); a piano roll of the steps; a drum grid (white keys =
-  steps, black keys = lanes); automation (formerly motion):
-  recording of knob moves per step (an automation icon marks the cards it drives); live loop recording
-  with overdub; REC held on the SEQ pages clears the sequence (it asks first, and SAVE held undoes it);
-  divisions listed by length, 4 bars to 1/32; loading a sound never touches your patterns
-- **Songs:** chain patterns A–D
-- **Chord keys:** one finger plays an in-key chord (triads or sevenths of the scale, or fixed chord
-  shapes), with voicings; on the keys, MIDI in, recording and the arpeggiator
-- **Arpeggiator** with REPEAT and a beat LED, 16 scales with a white-key mode, glide,
-  MONO / LEGATO / UNISON
-- **Modulation matrix:** 4 slots per track, MIDI controllers as sources
-- **Effects:** distortion and the SLICER per track; chorus, delay and reverb sends (the reverb as
-  ROOM or SPRING); master limiter
-- **FX layer:** hold FX for repeat, reverse, filter sweeps, tape stop, freeze and a harmonizer
-  (OCT UP / OCT DN with shimmer), and mutes on the black keys; MENU > FX LATCH makes them toggle, so
-  nothing has to stay held
-- **Quick layers:** hold FX, GLO, SCL or EDIT for shortcuts on the keys and knobs, or double-tap it to
-  keep the layer open; one-step undo (SAVE held); REC on every page; OCT+ confirms, OCT- goes back;
-  what can be pressed breathes softly instead of blinking
-- **Presets:** factory presets, 32 user preset slots and 4 projects, named on the device (an FM6
-  sound keeps its own patch in both); projects from every earlier version load. The PRESETS knob
-  changes the sound from every page that is not a list, and moves the step cursor on the SEQ pages
-- **Screen:** flat UI with Inter Tight and Fukiai icons, FLAT or LINE style, 10 palettes including
-  grayscale, black and white, high contrast and NIGHT; tracks numbered 1–4 on small cushions;
-  MENU > LARGE for tall knob cards with larger labels and values; the menu in four tabs
-- **LEDs:** idle buttons and keys glow dim so the panel can be found in the dark (MENU > LEDS: OFF,
-  DIM LO, DIM HI or INV, the official firmware's look); PLAY turns green while playing; the keys show
-  the notes the sequencer and MIDI IN play, and on SEQ > STEP (stopped) the notes of the step under the cursor
-- **USB:** class-compliant MIDI in and out, and a 44.1 kHz stereo audio input ("Felucca") that
-  records the master output on the computer, no driver needed (at a fixed level with MENU > USB LEVEL FIXED;
-  on macOS 13–15, set MENU > USB SERIAL to OFF so the audio input appears)
-- **MIDI:** USB and TRS MIDI in; with ROUT CH1-4, channels 1–4 play tracks 1–4 and 5–16 are ignored
-  (ROUT SEL: every channel plays the selected track), and the keys send on the track's channel; pitch
-  bend, sustain, panic; clock from internal, USB or TRS
-- **Web:** editor for every parameter (with a 6-operator FM patch editor), step grid, mixer,
-  preset library, sample upload and recording with trim, the MENU settings; full backup and restore;
-  return to the official firmware; Felucca itself running in the browser
+## Getting started
+
+1. Get your ROM (`.gb`).
+2. If you like, try it in the [simulator](https://deadactive.github.io/FMDj/webapp/lsdj-sim/) first.
+3. Open the [install page](https://deadactive.github.io/FMDj/webapp/lsdj-install/) in Chrome or Edge and choose
+   your ROM: the page runs it in the emulator to check it. Connect the FM-1 by USB, directly to the computer, and
+   press Install. Do not unplug it while writing.
+4. On the FM-1, **PLAY** starts the program. In LSDj, PLAY again plays the demo song.
 
 ## Controls
 
-![FM-1 controls with Felucca](docs/controls.jpg)
+| Game Boy | FM-1 |
+|---|---|
+| ◀ ▶ | SELECT knob; HOME / ARP |
+| ▲ ▼ | ALGORITHM knob; SCL / SAVE |
+| A / B | LSDj: the top F / G keys. DMGo: D#5 / F#5 |
+| START / SELECT | PLAY / SEQ |
+| LSDj's screens (SELECT + direction) | PRESETS knob; OCT+ / OCT- |
+| DMGo's steps 1 to 16 | the 16 white keys |
+| the menu | GLO |
+| save to flash | REC held for a second |
 
-- Tap a page button for its page, again for the next; HOME returns home
-- Hold FX, GLO, SCL or EDIT for its quick layer; hold SAVE to undo, HOME for the menu, SEQ for the song
-- Double-tap FX, GLO, SCL or EDIT to keep its layer open without holding; tap it again to close
-- Hold REC on SEQ > STEP (or the drum grid), PATTERN or CHANCE to clear the track's sequence: OCT+ clears, OCT− cancels
-- On action pages and in dialogs, OCT+ does it and OCT− goes back; in the menu, OCT+ / OCT− change the value and HOME closes it
-- Save a sound: stop, tap SAVE, pick a slot with KNOB 1, then OCT+ and OCT+ again (name it with the keys)
+**GLO** opens a menu over the lower half of the screen while the music plays on: the screen's colours (DMG green,
+Pocket, Light, Super Game Boy, Dark), the status bar (FPS, CPU, gaps; off at first), and the emulator's options. It
+is kept in flash. All of it: [docs/lsdj/CONTROLS.md](docs/lsdj/CONTROLS.md).
 
-## Menu
+## The emulator
 
-Hold **HOME** for the menu. Since 1.0.5 it is in four tabs: **DISPLAY** (COLOR to LEDS), **CONTROL** (HOLD to
-BPM LOCK), **AUDIO** (SPEAKER EQ, USB LEVEL) and **SYSTEM** (USB SERIAL, HARDWARE CALIBRATION, ABOUT).
-ALGORITHM moves between the tabs and PRESETS through the rows of one; any of KNOB 1–4, or OCT+ / OCT−,
-changes the value (OCT+ opens HARDWARE CALIBRATION and ABOUT); press HOME to close the menu. Every new
-setting defaults to the earlier behaviour. From 1.0.4 the web editor's Settings tab reads and changes them
-too (COLOR to USB SERIAL), saved the same way as from the menu; with 1.0.5 it groups them in the same tabs.
+Peanut-GB (the processor, memory and screen) and minigb_apu (the four sound channels) run inside the firmware. The
+screen is drawn at 1.5x, the sound is made as the program writes it within the frame (notes land on their beat), and
+when the sound runs low a second Game Boy frame runs at once, so it does not stutter.
 
-- **COLOR:** the palette. GREY (grayscale, called MONO up to 1.0.1), GREEN, AMBER, ICE, VIOLET, ROSE,
-  PAPER (light), HI-CON (high contrast), NIGHT (the 0.9 look: true black, green-tinted text) and MONO
-  (black and white)
-- **STYLE:** FLAT (filled cards) or LINE (areas divided by thin lines)
-- **LARGE:** OFF or ON: on HOME and the value pages the four knob cards grow tall, marked K1–K4, with
-  larger labels and values about twice the size; the graph below becomes a strip. Lists, the piano roll,
-  the drum grid and the quick layers keep their layout with larger labels
-- **ANIM:** ON or OFF; OFF shows every change at once, without rolling digits or a gliding piano roll
-- **LEDS:** OFF (no glow), DIM LO, DIM HI (default) or INV (the idle LEDs lit, the active ones dark).
-  What can be pressed breathes up to about 60 % of a lit LED, about 30 % with DIM LO
-- **HOLD:** how long FX, GLO, SCL or EDIT is held before its map shows
-- **KNOB ACCEL:** OFF (one step per click) or ON: a fast, steady turn of a wide value moves 2 to 4 steps
-  per click; lists never jump
-- **FX LATCH:** ON, FX + an effect key turns the effect on until pressed again, the knob macros stay
-  where you leave them, and FX + OCT− turns everything off
-- **BPM LOCK:** ON, SELECT no longer changes the tempo; hold GLO and turn SELECT, tap F4 in the GLO
-  layer or use GLO > GLOBAL instead
-- **SPEAKER EQ:** FLAT, LOWCUT or BASS+, a tone setting for the built-in speaker (not a switch). It also
-  shapes the headphone out and USB audio, so keep it on FLAT when recording. The firmware cannot turn
-  the speaker off, but headphones in the jack do
-- **USB LEVEL:** MASTER (the MASTER knob sets the USB audio level too) or FIXED (USB always at full
-  level, MASTER sets only the speaker and headphones)
-- **USB SERIAL:** ON or OFF, applied when the menu closes (the FM-1 reconnects). OFF leaves out the
-  serial console, a developer tool, so the FM-1 is a plain audio + MIDI device; this lets macOS 13–15
-  see its USB audio input. MIDI, the editor and the installer work either way
-- **HARDWARE CALIBRATION** and **ABOUT**
+## Roadmap
 
-## Engines
+Next: the Game Boy's link port in the emulator, then sync by the FM-1's MIDI clock (LSDj's sync, DMGo's LINK /
+PULSE), then mGB as a third program. The whole list, with what is done and the known gaps:
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
-In the order the device lists them:
+## Building
 
-- **ANALOG**: virtual analog; two oscillators, noise, drive, resonant low-pass filter
-- **FM6**: classic 6-operator FM (Dexed-based): 32 algorithms, a full patch per track edited in the
-  web editor (which imports .syx files), macros on the device, an algorithm chart on screen; SLOT
-  picks a factory patch (F1–F8) or the track's own (OWN)
-- **PHASE**: phase distortion (ported from CrispyZebra)
-- **LOFI**: chiptune; pulse, triangle, saw, noise and a 4-bit wave RAM, stepped envelope, sweep, arpeggio
-- **SAMPLE**: multisampled instruments and 3 user sample slots
-- **VOICE**: formant oscillator, sung vowels
-- **TRIO**: 3 oscillators with ring modulation and sync, multimode filter
-- **WHEEL**: tonewheel-style organ; drawbar registrations, percussion, key click, drive, rotary speaker
-- **GRAIN**: granular textures from the built-in samples or a user slot
-- **PHYS**: physical models: modal resonators, strings, struck membranes, sympathetic strings
-- **NOISE**: noise from analog to digital: colours, crackle, shift-register and metallic tones
-- **SLICE**: a drum break, a piano note (both built in) or your own sample cut into slices, one per key;
-  set the slices by hand on the SLICES page
-- **DRUM**: an 8-lane kit of Felucca's own drum voices on the General MIDI key map. KIT picks the
-  standard kit or one of five virtual-analog (VA) kits in the manner of
-  classic analog drum machines (the numbers are a hint), every lane its own voice: **80** (deep sine kick with a long decay, noisy snare,
-  six-square hats), **10** (swept kick, white-noise snare, long-tailed claps, a cymbal), **66** (soft
-  round kick, bright snare, noise hats, a conga), **55** (dropping kick, high metal hats, a metal bell)
-  and **77** (swelling kick, multi-burst claps, claves, a cymbal). All of them are synthesized by
-  Felucca, no samples
+```sh
+FELUCCA_LSDJ=1 ./build.sh                       # build/lsdj-base.fwsc: the firmware without a ROM
+FELUCCA_LSDJ=1 LSDJ_ROM=your.gb ./build.sh      # also build/lsdj-private.fwsc, your ROM in it: never publish it
+sh tests/run_tests.sh                           # the tests (LSDJ_ROM=, DMGO_ROM= for those that need a ROM)
+tools/fmdj_publish.sh VERSION                   # the site onto GitHub Pages (the ROM-less firmware only)
+```
 
-The DIGITAL engine of 0.9 has been replaced by FM6: projects and presets with DIGITAL sounds load
-as FM6 sounds converted from them. The SAMPLE engine's PERC kit was removed in 1.0.2: sounds and
-projects that used it load as the DRUM engine's kit, on the same key map. FM6's patch bank (the B
-slots) was removed in 1.0.3: user presets keep their own FM6 patch, and presets that used a B slot get
-that patch on the first start of 1.0.3. SLICE gained a second built-in sound in 1.0.4, PIANO (the SAMPLE
-engine's middle C), next to BREAK. Since 1.0.4 a missing sample (an empty user slot, or a set missing
-from the build) plays a plain sine at the note's pitch on SAMPLE, GRAIN and SLICE, and the screen says
-NO SAMPLE once. DRUM's KIT variants HAND, CYM and H+CYM were retired in 1.0.5: sounds and projects that
-used them play the 66, 10 and 77 kits.
+The toolchain and the rest: [BUILDING.md](BUILDING.md) (written for Felucca, the firmware this is built on).
 
-**SLICER** (FX page, every track): a tempo-synced 16-step gate or stutter, with 16 patterns.
+## Risk
 
-## Scale keyboard
+Installing custom firmware is at your own risk. If an install fails and the FM-1 no longer starts, recovering it
+needs a [Transporter](https://github.com/kurogedelic/FM-1-transporter). The author accepts no responsibility if
+your FM-1 is damaged or misbehaves because of this firmware.
 
-On the **SCL** page, set **QNT** to WHITE to play the selected scale using only the
-white keys (SNAP keeps every key and rounds it down to the scale). C4 plays **ROOT**; consecutive white keys play consecutive scale notes
-above and below it. Black keys are silent, including during live recording and
-step entry. **TRN** transposes the resulting notes; the octave buttons shift them
-by full octaves. Set QNT to OFF for the normal chromatic keyboard. QNT SEQ snaps the keys like SNAP and
-also maps the sequenced notes onto the current ROOT / SCALE as they play (the steps are not changed; drum
-kits are never quantized).
+## Credits and licence
 
-Available scales: chromatic (CHR), major (MAJ), natural minor (MIN), Dorian (DOR),
-Mixolydian (MIX), major pentatonic (PEN), minor pentatonic (MPEN), harmonic minor
-(HARM), Phrygian (PHRY), Lydian (LYD), Locrian (LOC), ascending melodic minor (MEL),
-minor blues (BLUES), whole tone (WHOLE), half-whole diminished (DIMHW), and
-whole-half diminished (DIMWH). Scales with other than seven notes continue across
-the white keys without repeating notes; their roots need not fall on every C key.
-Drum kits and incoming MIDI keep their own note mapping.
+FMDj, the LSDj fork of [Felucca](https://github.com/hugelton/Felucca): DEADACTIVE. Felucca by Leo Kuroshita
+(@kurogedelic), Hügelton Instruments. Game Boy emulation: Peanut-GB (Mahyar Koshkouei, MIT) and minigb_apu (Alex
+Baines, Mahyar Koshkouei, MIT). The firmware package also holds three JieLi AC79 SDK files (JieLi Technology,
+Apache-2.0): [LICENSING.md](LICENSING.md).
 
-Press **SCL** again for the **CHORD** page: CHRD picks the chord keys (OFF, the scale's triads or
-sevenths, or a fixed shape) and VOIC the voicing.
+GPL-3.0-only, no warranty: [LICENSE](LICENSE).
 
-## Layout
-
-| Path | What |
-| --- | --- |
-| `firmware/` | firmware sources: `src/` app, `hal/` hardware layer, `loader/` update loader |
-| `tools/` | build script, generators, package maker, installer and sample uploader |
-| `assets/` | UI font, icon names, CC0 instrument samples |
-| `web/` | the web installer, the earlier editor and the browser emulator (`web/emu/`); the new editor: [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp) |
-| `tests/` | tests that run on the build machine |
-| `LICENSES/` | licence texts of the bundled fonts, icons, ported DSP and SDK files |
-
-## If the FM-1 does not start
-
-If an update is interrupted and the FM-1 stays black, check whether a computer sees it as a USB device named
-**WL80UBOOT** (or a USB mass-storage device with ID 4C4A:8057). That is the chip's built-in boot mode, and
-the FM-1 can be brought back:
-
-- First try another USB data cable, and close every other app that uses MIDI, then run the web installer again.
-- If it stays in boot mode, [FM-1 Transporter](https://github.com/kurogedelic/FM-1-transporter) reads and
-  writes the FM-1's flash from a Mac through a Seeed XIAO RP2040 (three wires to the FM-1's USB lines). Back up
-  the flash first, then write the official firmware (M-VAVE's FM-1.fwsc).
-- Questions: [Issues](https://github.com/hugelton/Felucca/issues).
-
-## Support
-
-If Felucca is useful to you, [sponsoring on GitHub](https://github.com/sponsors/hugelton) or a donation
-on [itch.io](https://hugelton.itch.io/felucca) helps keep its development going.
-
-Issues are for reproducible bugs (one per issue). Ideas and requests go to
-[Discussions](https://github.com/hugelton/Felucca/discussions), and feature requests posted as issues will be
-moved there. Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Credits
-
-- **[Hügelton Instruments](https://hugelton.com)** (Leo Kuroshita, [@kurogedelic](https://github.com/kurogedelic)):
-  Felucca itself; the PHASE engine's waveforms (a C port of the oscillator of
-  [CrispyZebra](https://github.com/hugelton/CrispyZebra), GPL-3.0); the DRUM voices and kits; the Hügelton Sample
-  Pack (the drum samples, GPL-3.0-only, not CC0); the [Fukiai](https://github.com/hugelton/Fukiai) icon
-  font ([MIT](LICENSES/MIT-Fukiai.txt))
-- Fonts: [Inter Tight](https://github.com/rsms/inter-tight) by The Inter Project Authors, [SIL OFL 1.1](LICENSES/OFL-InterTight.txt);
-  the browser emulator's labels: [DotGothic16](https://github.com/fontworks-fonts/DotGothic16) by The DotGothic16 Project Authors, [SIL OFL 1.1](LICENSES/OFL-DotGothic16.txt)
-- Samples: [Versilian Studios](https://versilian-studios.com/) [VSCO-2 Community Edition](https://github.com/sgossner/VSCO-2-CE) and [VCSL](https://github.com/sgossner/VCSL), CC0 1.0: the SAMPLE sets, also SLICE's PIANO ([attribution](assets/samples-cc0/ATTRIBUTION.txt))
-- VOICE engine: after [klattsch](https://github.com/tgies/klattsch) by Tony Gies (MIT); formant data from Klatt (1980) and Hillenbrand et al. (1995)
-- PHYS engine: models ported from [DaisySP](https://github.com/electro-smith/DaisySP) by Electrosmith and Emilie Gillet ([MIT](LICENSES/MIT-DaisySP.txt)) and from Emilie Gillet's [eurorack](https://github.com/pichenettes/eurorack) code ([MIT](LICENSES/MIT-Rings.txt))
-- FM6 engine: msfa from [Dexed](https://github.com/asb2m10/dexed) by Google Inc. and Pascal Gauthier ([Apache-2.0](LICENSES/Apache-2.0-msfa.txt))
-- Browser emulator: after [X0X](https://github.com/charlesvestal/fm1-x0x) by [charlesvestal](https://github.com/charlesvestal) (GPL-3.0), a Felucca fork whose browser build showed the way
-- Package format and boot files: [JieLi AC79 SDK](https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK) ([Apache-2.0](LICENSES/Apache-2.0.txt); three of its files are in every package, none in this tree)
-- Contributions: [keremimo](https://github.com/keremimo) (white-key scales, #2), [ChanceTheMaker](https://github.com/ChanceTheMaker)
-  (TRS MIDI, bend, sustain and clock, palettes, favourites, editor display settings: #8, #10, #11, #12),
-  [andreahaku](https://github.com/andreahaku) (sample recording and trim, #29; SLICE manual slices and tests, #27, #22),
-  [spinkham](https://github.com/spinkham) (the boot fix for 0.9 projects, #111),
-  [zednaked](https://github.com/zednaked) (ratchets, #100),
-  [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121)
-
-## Licence
-
-Free software: [GPL-3.0-only](LICENSE), the Hügelton Sample Pack included. The bundled fonts and the
-ported DSP keep their own licences ([LICENSES/](LICENSES/)); details in [LICENSING.md](LICENSING.md).
-
-M-VAVE and FM-1 are trademarks of their respective owners. Felucca is not affiliated with or endorsed by them.
-
-Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+M-VAVE and FM-1 are trademarks of their respective owners; Game Boy is a trademark of Nintendo. This project is not
+affiliated with any of them.
