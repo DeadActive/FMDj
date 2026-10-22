@@ -464,6 +464,56 @@ static void test_prog(void)
     CHECK(st.prog == LSDJ_PROG_LSDJ && load_is(1));
 }
 
+/* the GLO menu's settings (two bytes) ride in the layout record: 0, 0 in every record before them (their reserved
+ * bytes): the defaults. Writing them keeps K, the kits and the save, and a power cut leaves the old or the new */
+static void test_settings(void)
+{
+    static const uint8_t A[2] = {3, 0x15}, NEW[2] = {1, 0x10}, Z[2] = {0, 0};
+    lsdj_store_t st;
+    lsdj_lay_t l;
+    long total, c;
+    uint32_t wrong = 0, e;
+    memset(fl, 0xFF, sizeof fl);
+    power_on();
+    lsdj_store_scan(&F, &st);
+    CHECK(!st.formatted && !st.set[0] && !st.set[1]);         /* nothing in flash: the defaults */
+    CHECK(lsdj_store_settings(&F, &st, A) == LSDJ_ST_OK && st.formatted && st.k == 0 && !st.have);
+    lsdj_store_scan(&F, &st);
+    CHECK(st.formatted && !memcmp(st.set, A, 2));
+    e = erases;
+    CHECK(lsdj_store_settings(&F, &st, A) == LSDJ_ST_OK && erases == e);   /* the same again: nothing written */
+    CHECK(lsdj_store_save(&F, &st, sav[1], SAV_N) == LSDJ_ST_OK);
+    CHECK(lsdj_store_kits(&F, &st, 2, sav[1], SAV_N) == LSDJ_ST_OK);
+    lsdj_store_scan(&F, &st);
+    CHECK(st.k == 2 && !memcmp(st.set, A, 2) && load_is(1));  /* a save and a new layout: the settings stay */
+    memcpy(snap, fl, FL_N);                                   /* power cuts while they change */
+    power_on();
+    lsdj_store_scan(&F, &st);
+    CHECK(lsdj_store_settings(&F, &st, NEW) == LSDJ_ST_OK);
+    total = ops;
+    lsdj_store_scan(&F, &st);
+    CHECK(total >= 2 && !memcmp(st.set, NEW, 2) && st.k == 2 && load_is(1));
+    for (cut_mode = 0; cut_mode < 3; cut_mode++)
+        for (c = 0; c < total; c++) {
+            memcpy(fl, snap, FL_N);
+            power_on();
+            cut = c;
+            lsdj_store_scan(&F, &st);
+            lsdj_store_settings(&F, &st, NEW);
+            power_on();
+            lsdj_store_scan(&F, &st);
+            if (st.k != 2 || !load_is(1) || (memcmp(st.set, A, 2) && memcmp(st.set, NEW, 2)))
+                wrong++;
+        }
+    CHECK(wrong == 0);
+    cut_mode = 0;
+    power_on();
+    lsdj_store_scan(&F, &st);
+    CHECK(lsdj_store_settings(&F, &st, Z) == LSDJ_ST_OK);     /* the defaults: the record as one from before */
+    memcpy(&l, f_ptr(LSDJ_ST_BASE + st.lay_newest * LSDJ_ST_SECTOR), sizeof l);
+    CHECK(sizeof l == 32 && !l.set[0] && !l.set[1] && !l.rsv3[0] && !l.rsv3[1] && l.k == 2);
+}
+
 int main(void)
 {
     make_saves();
@@ -476,6 +526,7 @@ int main(void)
     test_kit_cuts();
     test_cuts_with_kits();
     test_prog();                              /* (last: it starts from an empty area) */
+    test_settings();                          /* (so does this) */
     CHECK(bad == 0);                                          /* nothing ever reached outside the area */
     printf(fails ? "lsdj_store_test: %d FAILED\n" : "lsdj_store_test: all passed\n", fails);
     return fails != 0;

@@ -233,6 +233,84 @@ static uint8_t lsdj_steps_frame(lsdj_steps_t *s, uint8_t *wram, uint8_t pad)
     return s->out = (uint8_t)~JOYPAD_B;
 }
 
+/* The GLO menu (the owner's, 2026-10-22): the screen's colours, the status bar, the emulator's four options (once
+ * the FX, LFO, EDIT, ENV buttons). Kept in flash as two bytes (lsdj_store.c, the layout record); 0, 0 is every
+ * default: DMG green, no status bar, every option on. */
+enum { LSDJ_THEME_DMG, LSDJ_THEME_POCKET, LSDJ_THEME_LIGHT, LSDJ_THEME_SGB, LSDJ_THEME_DARK, LSDJ_NTHEME };
+static const char LSDJ_THEME_NAME[LSDJ_NTHEME][8] = {"DMG", "POCKET", "LIGHT", "SGB", "DARK"};
+static const uint8_t LSDJ_THEME_RGB[LSDJ_NTHEME][4][3] = {   /* shade 0 (the Game Boy's lightest) .. 3 */
+    {{0x9B, 0xBC, 0x0F}, {0x8B, 0xAC, 0x0F}, {0x30, 0x62, 0x30}, {0x0F, 0x38, 0x0F}},   /* the first Game Boy */
+    {{232, 232, 224}, {160, 160, 152}, {88, 88, 84}, {16, 16, 16}},                     /* Pocket: the grey of before */
+    {{0x80, 0xE8, 0xD8}, {0x40, 0xB8, 0xA8}, {0x18, 0x70, 0x68}, {0x00, 0x30, 0x30}},   /* Light: the backlit one */
+    {{0xF8, 0xE8, 0xC8}, {0xD8, 0x90, 0x48}, {0xA8, 0x28, 0x20}, {0x30, 0x18, 0x50}},   /* Super Game Boy, 1-A */
+    {{16, 16, 20}, {72, 72, 80}, {150, 150, 160}, {232, 232, 224}}};                    /* Dark: light ink on black */
+
+typedef struct {
+    uint8_t theme;                            /* LSDJ_THEME_* */
+    uint8_t bar;                              /* the status bar under the picture */
+    uint8_t off;                              /* the emulator's options switched off: lsdj_emu.c emu_mode bits */
+} lsdj_set_t;
+static void lsdj_set_pack(const lsdj_set_t *s, uint8_t b[2])
+{
+    b[0] = s->theme;
+    b[1] = (uint8_t)((s->bar ? 0x10u : 0u) | (s->off & 0x0Fu));
+}
+static void lsdj_set_unpack(lsdj_set_t *s, const uint8_t b[2])
+{
+    s->theme = b[0] < LSDJ_NTHEME ? b[0] : LSDJ_THEME_DMG;
+    s->bar = (b[1] & 0x10u) != 0;
+    s->off = b[1] & 0x0Fu;
+}
+
+/* the lines, top to bottom; an emulator option's line is its emu_mode bit (EMU_FRAME_SKIP 2, EMU_FAST_ROM 1,
+ * EMU_WAIT_SKIP 4, EMU_SND_FINE 8) */
+enum { LSDJ_MI_SCREEN, LSDJ_MI_BAR, LSDJ_MI_DRAW, LSDJ_MI_ROM, LSDJ_MI_WAIT, LSDJ_MI_SOUND, LSDJ_NMI };
+static const uint8_t LSDJ_MI_BIT[LSDJ_NMI] = {0, 0, 2, 1, 4, 8};
+typedef struct {
+    uint8_t open, item;
+    lsdj_set_t set;
+} lsdj_menu_t;
+
+/* a key pressed in the menu (one JOYPAD bit): UP / DOWN the line, LEFT / RIGHT / A its value. 1: a value changed */
+static int lsdj_menu_key(lsdj_menu_t *m, uint8_t key)
+{
+    int step = key == JOYPAD_LEFT ? -1 : key == JOYPAD_RIGHT || key == JOYPAD_A ? 1 : 0;
+    if (key == JOYPAD_UP || key == JOYPAD_DOWN) {
+        m->item = (uint8_t)((m->item + (key == JOYPAD_UP ? LSDJ_NMI - 1u : 1u)) % LSDJ_NMI);
+        return 0;
+    }
+    if (!step)
+        return 0;
+    if (m->item == LSDJ_MI_SCREEN)
+        m->set.theme = (uint8_t)((m->set.theme + LSDJ_NTHEME + step) % LSDJ_NTHEME);
+    else if (m->item == LSDJ_MI_BAR)
+        m->set.bar ^= 1u;
+    else
+        m->set.off ^= LSDJ_MI_BIT[m->item];
+    return 1;
+}
+
+static void lsdj_menu_line(const lsdj_menu_t *m, uint32_t item, char *label, char *value)   /* (>= 16 bytes each) */
+{
+    static const char LABEL[LSDJ_NMI][12] = {"SCREEN", "STATUS BAR", "DRAW", "ROM READ", "WAIT LOOP", "SOUND"};
+    static const char ON[LSDJ_NMI][12] = {"", "ON", "EVERY 2ND", "FAST", "SKIP", "IN FRAME"};
+    static const char OFF[LSDJ_NMI][12] = {"", "OFF", "EVERY", "PLAIN", "RUN", "PER FRAME"};
+    const char *v;
+    uint32_t i;
+    if (item == LSDJ_MI_SCREEN)
+        v = LSDJ_THEME_NAME[m->set.theme];
+    else if (item == LSDJ_MI_BAR)
+        v = m->set.bar ? ON[item] : OFF[item];
+    else
+        v = m->set.off & LSDJ_MI_BIT[item] ? OFF[item] : ON[item];
+    for (i = 0; LABEL[item][i]; i++)
+        label[i] = LABEL[item][i];
+    label[i] = 0;
+    for (i = 0; v[i]; i++)
+        value[i] = v[i];
+    value[i] = 0;
+}
+
 /* the Game Boy keys held in pad (active low) as text, e.g. "START SEL R"; "-" if none (b: >= 22 bytes) */
 static void lsdj_pad_text(char *b, uint8_t pad)
 {

@@ -171,6 +171,89 @@ static uint32_t pad_presses(uint8_t key, uint8_t with, uint32_t passes)
     return n;
 }
 
+/* the GLO menu, as a hand at the FM-1 uses it: GLO opens and closes it; SCL / SAVE (UP / DOWN) choose a line,
+ * HOME / ARP (LEFT / RIGHT) or A change it, B closes it too */
+static void glo(void) { ble_key(core_button_bit(CORE_BTN_GLO), 0); pass(); }
+static void menu_press(int button) { buttons = core_button_bit(button); pass(); buttons = 0; pass(); }
+static void option(uint32_t item)             /* the menu's line `item` one value on (RIGHT), and closed */
+{
+    uint32_t i;
+    glo();
+    for (i = 0; i < item; i++)
+        menu_press(CORE_BTN_SAVE);
+    menu_press(CORE_BTN_ARP);
+    glo();
+    pass();                                   /* (its settings into flash) */
+}
+
+static void flash_clean(void)                 /* the store empty again, as the tests after the menu's expect it */
+{
+    memset(flash_sim, 0xFF, sizeof flash_sim);
+    lsdj_store_scan(&flash_ro, &store);
+    flash_erases = flash_progs = 0;
+    set_saved = menu.set;                     /* (the settings in use stay: they are not written again) */
+}
+
+static void test_menu(void)                   /* the menu over the picture's lower half; the Game Boy plays on */
+{
+    uint32_t i, f, e, y;
+    CHECK(!menu.open && menu.set.theme == LSDJ_THEME_DMG && !menu.set.bar && emu_mode == 15);   /* the defaults */
+    CHECK(pal[0] == RGB(0x9B, 0xBC, 0x0F) && pal[3] == RGB(0x0F, 0x38, 0x0F));   /* DMG green */
+    CHECK(keys_text[0] == 0);                 /* no status bar: nothing drawn under the picture */
+    glo();
+    CHECK(menu.open && !strcmp(small_text, "MENU  (GLO CLOSES)"));
+    for (i = 0, f = st.frames; i < 30; i++)
+        pass();
+    CHECK(st.frames > f + 25 && emu.errors == 0);   /* the Game Boy plays on */
+    notes = 1u << 24;                         /* A (LSDj's: the top F): the menu's, not the Game Boy's */
+    pass();
+    CHECK(st.pad == 0xFF && menu.set.theme == LSDJ_THEME_POCKET && pal[0] == RGB(232, 232, 224));
+    notes = 0;
+    pass();
+    for (i = 0; i < 300; i++)                 /* the new colours: only the picture above the menu is sent */
+        ble_draw();
+    for (y = 0, e = 0; y < 2u * MENU_G; y++)
+        e |= dirty[y];
+    CHECK(e == 0 && dirty[2u * MENU_G] && dirty[LSDJ_H - 1u]);
+    menu_press(CORE_BTN_SAVE);                /* DOWN: STATUS BAR; RIGHT: on */
+    menu_press(CORE_BTN_ARP);
+    CHECK(menu.item == LSDJ_MI_BAR && menu.set.bar && !strncmp(keys_text, "GAPS ", 5));
+    e = flash_progs;
+    CHECK(store.set[0] == 0 && store.set[1] == 0);
+    glo();                                    /* closed: the picture under it again, the settings into flash */
+    pass();
+    CHECK(!menu.open && flash_progs > e && store.set[0] == LSDJ_THEME_POCKET && store.set[1] == 0x10);
+    for (i = 0; i < 300; i++)
+        ble_draw();
+    for (y = 0, e = 0; y < LSDJ_H; y++)
+        e |= dirty[y];
+    CHECK(e == 0);
+    glo();                                    /* LEFT: back to DMG; B closes */
+    menu_press(CORE_BTN_HOME);
+    notes = 1u << 26;
+    pass();
+    notes = 0;
+    pass();
+    CHECK(!menu.open && store.set[0] == LSDJ_THEME_DMG && pal[0] == RGB(0x9B, 0xBC, 0x0F));
+    e = flash_erases;                         /* opened and closed, nothing changed: nothing written */
+    glo();
+    glo();
+    pass();
+    CHECK(flash_erases == e && !menu.open);
+    option(LSDJ_MI_SOUND);                    /* an emulator option: SOUND per frame */
+    CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP) && strstr(keys_text, " OLD"));
+    ble_key(core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_ENV), 0);   /* the old buttons: nothing now */
+    CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP) && !menu.open);
+    lsdj_start();                             /* power-on and PLAY: the settings from flash */
+    CHECK(menu.set.bar && menu.set.theme == LSDJ_THEME_DMG && menu.set.off == EMU_SND_FINE && emu_mode == 7);
+    option(LSDJ_MI_SOUND);                    /* (the sound in the frame again) */
+    CHECK(emu_mode == 15);
+    for (i = 0; i < 50; i++)
+        pass();
+    CHECK(emu.errors == 0);
+    flash_clean();                            /* (the status bar stays on for the tests after this one) */
+}
+
 static void test_knobs_and_shortcuts(void)    /* the knobs are the cursor; PRESETS and OCT- / OCT+ change LSDj's screen */
 {
     uint32_t i;
@@ -626,7 +709,9 @@ int main(int argc, char **argv)
     CHECK(ble_started() && st.error == 0);
     for (i = 0; i < 150; i++)                 /* 3 s */
         pass();
-    CHECK(st.gaps == 0 && !strcmp(keys_text, "GAPS 0"));   /* no gap: the empty ring at the start is not one */
+    CHECK(st.gaps == 0 && keys_text[0] == 0);   /* no gap (the empty ring at the start is not one); no status bar */
+    test_menu();                              /* (the status bar on from here) */
+    CHECK(st.gaps == 0);
     for (i = 0; i < 300; i++)                 /* 6 s */
         pass();
     CHECK(st.frames > 250 && emu.errors == 0);
@@ -660,7 +745,7 @@ int main(int argc, char **argv)
         notes = 1u << 24;
         pass();
         CHECK(st.pad == (uint8_t)~(JOYPAD_UP | JOYPAD_A));
-        buttons = core_rec_bit() | core_button_bit(CORE_BTN_GLO) | core_button_bit(CORE_BTN_EDIT);   /* free now */
+        buttons = core_rec_bit() | core_button_bit(CORE_BTN_EDIT);                  /* free now */
         notes = 1u << 26;                                                            /* B (the top G) */
         pass();
         CHECK(st.pad == (uint8_t)~JOYPAD_B);
@@ -672,16 +757,15 @@ int main(int argc, char **argv)
         buttons = 0;
         pass();
         CHECK(!strncmp(keys_text, "GAPS ", 5) && !strchr(keys_text + 5, ' '));       /* ... and then not named */
-        ble_key(core_button_bit(CORE_BTN_FX), 0);                                    /* FX: frame skip off */
-        CHECK(emu_mode == (EMU_FAST_ROM | EMU_WAIT_SKIP | EMU_SND_FINE));
         t = texts;
-        pass();
+        option(LSDJ_MI_DRAW);                                                        /* DRAW: frame skip off */
+        CHECK(emu_mode == (EMU_FAST_ROM | EMU_WAIT_SKIP | EMU_SND_FINE));
         CHECK(texts > t && strstr(keys_text, " FULL") && !strstr(keys_text, "SLOW"));   /* the options redrawn */
-        ble_key(core_button_bit(CORE_BTN_LFO), 0);                                   /* LFO: fast ROM read off */
+        option(LSDJ_MI_ROM);                                                         /* ROM READ: fast off */
         CHECK(emu_mode == (EMU_WAIT_SKIP | EMU_SND_FINE));
-        ble_key(core_button_bit(CORE_BTN_EDIT), 0);                                  /* EDIT: the wait loop run */
+        option(LSDJ_MI_WAIT);                                                        /* WAIT LOOP: run */
         CHECK(emu_mode == EMU_SND_FINE);
-        ble_key(core_button_bit(CORE_BTN_ENV), 0);                                   /* ENV: the sound per frame */
+        option(LSDJ_MI_SOUND);                                                       /* SOUND: per frame */
         CHECK(emu_mode == 0);
         pass();
         CHECK(strstr(keys_text, " SLOW FULL SPIN OLD") != 0);
@@ -690,13 +774,16 @@ int main(int argc, char **argv)
             for (i = 0; i < 20; i++)
                 pass();
             CHECK(st.frames >= f + 20 && emu.skipped == k0 && emu.errors == 0);     /* LSDj runs so too */
-            ble_key(core_button_bit(CORE_BTN_EDIT) | core_button_bit(CORE_BTN_ENV), 0);
+            option(LSDJ_MI_WAIT);
+            option(LSDJ_MI_SOUND);
             for (i = 0; i < 20; i++)
                 pass();
             CHECK(emu.skipped > k0 + 20u * 1500u && emu.errors == 0);               /* the wait loop skipped again */
         }
-        ble_key(core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO), 0);
+        option(LSDJ_MI_DRAW);
+        option(LSDJ_MI_ROM);
         CHECK(emu_mode == (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE));
+        flash_clean();                                                               /* (for test_flash) */
         buttons = 0;
         pass();
         pass();
@@ -724,7 +811,7 @@ int main(int argc, char **argv)
     CHECK(bad_blits == 0);
     for (y = 0; y < LSDJ_H; y++)              /* every Game Boy pixel on the screen, 1.5x */
         for (x = 0; x < LSDJ_W; x++)
-            diff += screen[Y0 + y * 3u / 2u + (y & 1u)][x * 3u / 2u + (x & 1u)] != PAL[fb[y][x]];
+            diff += screen[Y0 + y * 3u / 2u + (y & 1u)][x * 3u / 2u + (x & 1u)] != pal[fb[y][x]];
     CHECK(diff == 0);
     CHECK(memcmp(fb, shown, sizeof fb) == 0);
     {

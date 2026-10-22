@@ -27,22 +27,23 @@ export const KEYS = Array.from({ length: 27 }, (_, n) => {
 export const GB = {
   [`btn:${B.SEQ}`]: 'SELECT', [`btn:${B.PLAY}`]: 'START', [`btn:${B.HOME}`]: '\u25C0', [`btn:${B.ARP}`]: '\u25B6',
   [`btn:${B.SEL}`]: '\u25B2', [`btn:${B.SAVE}`]: '\u25BC', [`btn:${B.REC}`]: 'SAVE', [`btn:${B['OCT+']}`]: 'SEL+\u25B2',
-  [`btn:${B['OCT-']}`]: 'SEL+\u25BC', [`btn:${B.FX}`]: 'DRAW', [`btn:${B.LFO}`]: 'ROM', [`btn:${B.EDIT}`]: 'WAIT',
-  [`btn:${B.ENV}`]: 'SOUND', 'key:24': 'A', 'key:26': 'B',
+  [`btn:${B['OCT-']}`]: 'SEL+\u25BC',
+  [`btn:${B.GLO}`]: 'MENU', 'key:24': 'A', 'key:26': 'B',
   'enc:0': '\u25C0 \u25B6', 'enc:1': '\u25B2 \u25BC', 'enc:2': 'SEL + \u25C0 \u25B6', 'enc:master': 'VOLUME',
 };
 
 // KeyboardEvent.code (the physical key, any layout) -> control, as Game Boy emulators have it: the arrows, X = A,
 // Z = B, Enter = START, Shift = SELECT (so Shift + an arrow changes LSDj's screen, X + an arrow a value). S held: save.
+// M: GLO, the menu (the screen's colours, the status bar, the emulator's options).
 export const KEYBOARD = {
   ArrowLeft: { kind: 'btn', id: B.HOME }, ArrowRight: { kind: 'btn', id: B.ARP },
   ArrowUp: { kind: 'btn', id: B.SEL }, ArrowDown: { kind: 'btn', id: B.SAVE },
   KeyX: { kind: 'key', id: 24 }, KeyZ: { kind: 'key', id: 26 },
   Enter: { kind: 'btn', id: B.PLAY }, ShiftLeft: { kind: 'btn', id: B.SEQ }, ShiftRight: { kind: 'btn', id: B.SEQ },
-  KeyS: { kind: 'btn', id: B.REC },
+  KeyS: { kind: 'btn', id: B.REC }, KeyM: { kind: 'btn', id: B.GLO },
 };
 const SHOWN = { ArrowLeft: '\u2190', ArrowRight: '\u2192', ArrowUp: '\u2191', ArrowDown: '\u2193', KeyX: 'X', KeyZ: 'Z',
-  Enter: 'Enter', ShiftLeft: 'Shift', KeyS: 'S' };
+  Enter: 'Enter', ShiftLeft: 'Shift', KeyS: 'S', KeyM: 'M' };
 export const keyHint = {};
 const hints = () => {
   for (const k of Object.keys(keyHint)) delete keyHint[k];

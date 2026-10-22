@@ -6,7 +6,9 @@
  * Include lsdj_gb.c (lsdj_unpack) and lsdj_xfer.c (lsdj_crc32_add) first. No name here starts with st_ or fl_:
  * gate 2b (tools/check_update_path.py) takes those for the core's storage and flash driver.
  *
- *   sectors 0, 1   the layout record, two copies: K, the number of kit banks. The newer whole copy counts.
+ *   sectors 0, 1   the layout record, two copies: K, the number of kit banks, and the GLO menu's settings (two
+ *                  bytes, lsdj_gb.c lsdj_set_pack; 0, 0 in records from before them: the defaults). The newer whole
+ *                  copy counts.
  *   kit banks      K of them (0..12), 16 KiB each, a ROM bank as it is, from the top down; an erased one reads 0xFF,
  *                  which LSDj takes for a free bank
  *   the save       two slots of 29 - 2K sectors between them: A from sector 2 (it never moves), B right after. A
@@ -55,7 +57,8 @@ typedef struct {
     uint16_t version;
     uint8_t k, rsv;
     uint32_t seq;
-    uint32_t rsv2[4];
+    uint8_t set[2], rsv3[2];                  /* the menu's settings (once reserved: 0) */
+    uint32_t rsv2[3];
     uint32_t hcrc;
 } lsdj_lay_t;
 
@@ -64,6 +67,7 @@ typedef struct {
     uint8_t formatted, lay_newest;            /* a layout record is there; the copy (0 / 1) that is the newer */
     uint8_t have, newest;                     /* a whole save is in flash; the slot (0 = A) that holds the newest */
     uint8_t prog;                             /* whose it is (LSDJ_PROG_*); what the next save is written as */
+    uint8_t set[2];                           /* the menu's settings: the layout record's (0, 0 without one) */
     uint32_t lay_seq, seq, len;               /* the highest sequence numbers seen; the newest save's packed length */
 } lsdj_store_t;
 
@@ -184,6 +188,7 @@ static void lsdj_store_scan(const lsdj_flash_t *f, lsdj_store_t *st)
             st->lay_newest = (uint8_t)c;
             st->lay_seq = l.seq;
             st->k = l.k;
+            memcpy(st->set, l.set, sizeof st->set);
         }
     }
     for (s = 0; s < 2u; s++) {
@@ -226,6 +231,7 @@ static int lsdj_st_layout(const lsdj_flash_t *f, lsdj_store_t *st, uint32_t k)
         l.magic = LSDJ_ST_LAYOUT;
         l.version = LSDJ_ST_VERSION;
         l.k = (uint8_t)k;
+        memcpy(l.set, st->set, sizeof l.set);
         l.seq = st->lay_seq + 1u;
         l.hcrc = lsdj_st_crc((const uint8_t *)&l, sizeof l - 4u);
         if (f->erase(off) || f->prog(off, &l, sizeof l) || memcmp(f->ptr(off), &l, sizeof l))
@@ -335,6 +341,26 @@ static int lsdj_st_kits(const lsdj_flash_t *f, lsdj_store_t *st, uint32_t k, con
         return LSDJ_ST_FAIL;
     lsdj_store_scan(f, st);
     return in_a ? LSDJ_ST_OK : lsdj_st_save(f, st, src, n);
+}
+
+/* the menu's settings into the layout record (K, the kits and the save stay as they are): nothing written if they
+ * are what it holds. The first write lays the store out, as the first save does. After a flash error st is read
+ * from the flash again */
+LSDJ_STORE_FN int lsdj_store_settings(const lsdj_flash_t *f, lsdj_store_t *st, const uint8_t set[2])
+{
+    int r = LSDJ_ST_OK;
+    if (st->formatted && !memcmp(st->set, set, sizeof st->set))
+        return LSDJ_ST_OK;
+    memcpy(st->set, set, sizeof st->set);
+    if (!st->formatted && !st->seq &&          /* nothing of ours here yet: Hortator's USR2 / USR3 headers go (as in
+                                                * lsdj_st_save) */
+        (f->erase(LSDJ_ST_BASE + 20u * LSDJ_ST_SECTOR) || f->erase(LSDJ_ST_BASE + 40u * LSDJ_ST_SECTOR)))
+        r = LSDJ_ST_FAIL;
+    if (r == LSDJ_ST_OK)
+        r = lsdj_st_layout(f, st, st->k);
+    if (r == LSDJ_ST_FAIL)
+        lsdj_store_scan(f, st);
+    return r;
 }
 
 /* K kit banks from now on (src: the save RAM, which must fit the new slots). See the top for what a power cut

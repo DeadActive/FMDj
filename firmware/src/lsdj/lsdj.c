@@ -7,7 +7,7 @@
  *
  * Nothing runs at boot: PLAY starts the Game Boy (ble_key). From then on, each main-loop pass runs one Game Boy
  * frame when the audio ring has room for its sound (the audio ISR plays the ring: lsdj_audio), then sends a few
- * changed line pairs to the screen (1.5x: 240 x 216). The status line tells how it keeps up: SPD, LOAD, and GAPS,
+ * changed line pairs to the screen (1.5x: 240 x 216). The status bar (GLO menu) tells how it keeps up: FPS, CPU, GAPS,
  * the seconds in which the ring ran dry. The emulator is reached only through function pointers set
  * by lsdj_start (gate 4, tools/check_ble_boot.py --lsdj, walks the direct calls from boot).
  *
@@ -41,6 +41,10 @@
 #define GROUPS (LSDJ_H / 2u)                  /* line pairs: 3 screen rows each */
 #define PUSH_MAX 8u                           /* line pairs merged into one transfer (24 rows, <= 11.5 KB) */
 #define STATUS_Y 223u
+#define MENU_G 34u                            /* the GLO menu covers line pairs 34.. (screen rows 106..219); the
+                                               * picture above it runs on */
+#define MENU_Y (Y0 + 3u * MENU_G)
+#define MENU_LINE 16u
 
 static uint8_t sram[LSDJ_SRAM] LSDJ_POOL;
 static uint8_t fb[LSDJ_H][LSDJ_W] LSDJ_POOL, shown[LSDJ_H][LSDJ_W] LSDJ_POOL;
@@ -84,12 +88,20 @@ static uint8_t kit_buf[LSDJ_BANK] LSDJ_POOL;  /* a kit bank on its way from the 
 /* RGB565, byte-swapped as the panel takes them: shade 0 (light) .. 3 (dark) */
 #define SW(c) ((uint16_t)(((c) >> 8) | ((c) << 8)))
 #define RGB(r, g, b) SW((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3))
-static const uint16_t PAL[4] = {RGB(232, 232, 224), RGB(160, 160, 152), RGB(88, 88, 84), RGB(16, 16, 16)};
+static uint16_t pal[4];                       /* the screen theme's (the GLO menu; lsdj_gb.c LSDJ_THEME_RGB) */
+
+/* The GLO menu (lsdj_gb.c lsdj_menu_*): open, it covers the picture's lower half and takes the keys; the Game Boy
+ * plays on. Its settings are the layout record's in flash (lsdj_store.c), read at PLAY, written in the step when
+ * the menu closes with something changed (never from the key handler: gate 4). */
+static lsdj_menu_t menu;
+static lsdj_set_t set_saved;                  /* what flash holds */
+static uint8_t menu_paint_req, menu_last, set_req, bar_shown;
 
 static struct {
     uint32_t frames, waits, doubles, frame_max_us, frame_us_sum, pushes, start_ms, push_ticks, push_calls;
     uint32_t sec_ms, sec_frames, sec_under, last_fps, last_under, sec_us, last_load;
     uint32_t win_ms, win_frames, last_speed;  /* SPD: over 4 s windows (whole frames in 1 s jitter by 1.7 %) */
+    uint32_t last_fps10;                      /* FPS on the status bar, tenths: over the same windows */
     uint32_t buttons, notes;                  /* as read for the last frame (console `ble`) */
     int32_t pot, knob;                        /* the MASTER pot: last reading, its filter state */
     volatile uint32_t master_q12;             /* its gain, applied by the audio ISR */
@@ -155,17 +167,23 @@ static char *put_hex(char *b, uint32_t v)
     return b;
 }
 
-/* left: SPD = Game Boy frames per second against 60; LOAD = the emulator's time per frame against a Game Boy frame
- * (16.74 ms): over 100 % it cannot keep up, under 100 % it waits for the audio */
+/* the status bar (the GLO menu's STATUS BAR, off at first). Left: FPS = Game Boy frames per second (59.7 is real
+ * time); CPU = the emulator's time per frame against a Game Boy frame (16.74 ms): over 100 % it cannot keep up,
+ * under 100 % it waits for the audio */
 static void status_line(void)
 {
     char b[48], *p = b;
-    p = put_s(p, "SPD ");
-    p = put_u(p, st.last_speed);
-    p = put_s(p, "% LOAD ");
+    if (!menu.set.bar)
+        return;
+    p = put_s(p, "FPS ");
+    p = put_u(p, st.last_fps10 / 10u);
+    p = put_s(p, ".");
+    p = put_u(p, st.last_fps10 % 10u);
+    p = put_s(p, " CPU ");
     p = put_u(p, st.last_load);
     put_s(p, "%");
     core_text(0, (int)STATUS_Y, 112, CORE_FONT_S, b, CORE_MID, CORE_BG, 0);
+    bar_shown = 1;
 }
 
 /* right: USB while the host holds the Game Boy; else the Game Boy keys held, or with none GAPS: the seconds so far
@@ -175,6 +193,15 @@ static void status_line(void)
 static void keys_line(void)
 {
     char b[40], *p;
+    st.pad_shown = st.pad;
+    st.held_shown = xfer.held;
+    if (!menu.set.bar && !st.note[0]) {       /* no status bar: the strip blank (a note shows there for its time) */
+        if (bar_shown)
+            core_fill(0, (int)STATUS_Y, 240, 240 - (int)STATUS_Y, CORE_BG);
+        bar_shown = 0;
+        return;
+    }
+    bar_shown = 1;
     if (st.note[0]) {
         put_s(b, st.note);
     } else if (xfer.held) {
@@ -193,8 +220,81 @@ static void keys_line(void)
         lsdj_pad_text(b, st.pad);
     }
     core_text(112, (int)STATUS_Y, 128, CORE_FONT_S, b, CORE_THEME, CORE_BG, 0);
-    st.pad_shown = st.pad;
-    st.held_shown = xfer.held;
+}
+
+/* ---- the GLO menu ---- */
+static void theme_apply(void)                  /* the theme's colours; the whole picture is sent again */
+{
+    uint32_t i;
+    const uint8_t (*c)[3] = LSDJ_THEME_RGB[menu.set.theme];
+    for (i = 0; i < 4u; i++)
+        pal[i] = RGB(c[i][0], c[i][1], c[i][2]);
+    memset(shown, 0xFF, sizeof shown);
+    memset(dirty, 1, sizeof dirty);
+}
+
+static void settings_apply(void)               /* the menu's settings into the emulator, the screen, the status bar */
+{
+    emu_mode = (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE) & ~(uint32_t)menu.set.off;
+    theme_apply();
+    if (menu.set.bar) {
+        status_line();
+        keys_line();
+    } else {
+        keys_line();                          /* (blanks the strip) */
+    }
+}
+
+static void menu_paint(void)                   /* the box over the picture's lower half: a title, a line a setting */
+{
+    char label[16], value[16];
+    uint32_t i, y;
+    core_fill(0, (int)MENU_Y, 240, (int)(Y0 + 3u * GROUPS - MENU_Y), CORE_BG);
+    core_text(0, (int)MENU_Y + 1, 240, CORE_FONT_S, "MENU  (GLO CLOSES)", CORE_THEME, CORE_BG, 1);
+    for (i = 0; i < LSDJ_NMI; i++) {
+        int sel = i == menu.item;
+        y = MENU_Y + 1u + MENU_LINE * (i + 1u);
+        lsdj_menu_line(&menu, i, label, value);
+        core_fill(0, (int)y, 240, (int)MENU_LINE, sel ? CORE_SEL : CORE_BG);
+        core_text(8, (int)y, 112, CORE_FONT_S, label, sel ? CORE_TEXT : CORE_MID, sel ? CORE_SEL : CORE_BG, 0);
+        core_text(120, (int)y, 112, CORE_FONT_S, value, CORE_TEXT, sel ? CORE_SEL : CORE_BG, 0);
+    }
+    menu_paint_req = 0;
+}
+
+static void menu_open(void)
+{
+    menu.open = 1;
+    menu.item = 0;
+    menu_last = 0xFFu;                        /* keys held now count once let go and pressed again */
+    memset(&knobs, 0, sizeof knobs);          /* (turns meant for the Game Boy) */
+    menu_paint_req = 1;
+}
+
+static void menu_close(void)
+{
+    menu.open = 0;
+    memset(shown[2u * MENU_G], 0xFF, sizeof shown - sizeof shown[0] * 2u * MENU_G);   /* the picture under it again */
+    memset(dirty + 2u * MENU_G, 1, sizeof dirty - 2u * MENU_G);
+    if (memcmp(&menu.set, &set_saved, sizeof set_saved))
+        set_req = 1;                          /* into flash, in the next step */
+}
+
+static void menu_keys(uint8_t pad)             /* a frame's keys (active low) while the menu is open: presses only */
+{
+    uint8_t down = (uint8_t)~pad, now = (uint8_t)(down & ~menu_last), b;
+    menu_last = down;
+    for (b = 1; b; b = (uint8_t)(b << 1)) {
+        if (!(now & b))
+            continue;
+        if (b == JOYPAD_B) {
+            menu_close();
+            return;
+        }
+        if (lsdj_menu_key(&menu, b))
+            settings_apply();
+        menu_paint_req = 1;
+    }
 }
 
 /* ---- running ---- */
@@ -315,6 +415,7 @@ static void lsdj_step(void)
         st.sec_us = 0;
         if (st.sec_ms - st.win_ms >= 4000u) {
             st.last_speed = lsdj_speed(st.frames - st.win_frames, st.sec_ms - st.win_ms);
+            st.last_fps10 = (st.frames - st.win_frames) * 10000u / (st.sec_ms - st.win_ms);
             st.win_ms = st.sec_ms;
             st.win_frames = st.frames;
         }
@@ -329,6 +430,14 @@ static void lsdj_step(void)
         keys_line();
     if (xfer.req)
         lsdj_flash_req();
+    if (set_req && !xfer.held) {              /* the menu closed with something changed: into flash */
+        uint8_t b[2];
+        set_req = 0;
+        lsdj_set_pack(&menu.set, b);
+        st.gap_off = 1;
+        if (flash_on && lsdj_store_settings(&flash, &store, b) == LSDJ_ST_OK)
+            set_saved = menu.set;
+    }
     if (!(core_buttons() & core_rec_bit())) { /* REC held for a second: save (once a press; not under the host) */
         st.rec_ms = 0;
         st.rec_done = 0;
@@ -361,7 +470,14 @@ static void lsdj_step(void)
         st.buttons = core_buttons();
         st.notes = core_notes();
         st.pad = lsdj_pad_ab(st.buttons, st.notes, pad_map, note_a, note_b) & (uint8_t)~lsdj_knobs_frame(&knobs);
-        if (with_steps) {                     /* DMGo's step keys: its cursor on the step and B, for a frame */
+        if (menu.open) {                      /* the menu takes the keys; the Game Boy gets none, and plays on */
+            menu_keys(st.pad);
+            if (with_steps) {
+                lsdj_steps_keys(&steps, st.notes);   /* (white keys held now are not pressed when it closes) */
+                steps.n = 0;
+            }
+            st.pad = 0xFF;
+        } else if (with_steps) {              /* DMGo's step keys: its cursor on the step and B, for a frame */
             lsdj_steps_keys(&steps, st.notes);
             st.pad = lsdj_steps_frame(&steps, emu.gb.wram, st.pad);
         }
@@ -383,6 +499,8 @@ static void lsdj_step(void)
             break;
         st.doubles += n == 0;
     }
+    if (menu.open && menu_paint_req && core_lcd_idle())
+        menu_paint();
 }
 
 /* changed line pairs to the screen, round robin, never waiting: while the last transfer runs, nothing; else one
@@ -396,7 +514,7 @@ static void lsdj_push(void)
     for (k = 0; k < GROUPS; k++) {            /* only rows marked changed are compared */
         g0 = group;
         group = group + 1u == GROUPS ? 0 : group + 1u;
-        if (!(dirty[2u * g0] | dirty[2u * g0 + 1u]))
+        if (!(dirty[2u * g0] | dirty[2u * g0 + 1u]) || (menu.open && g0 >= MENU_G))   /* (under the menu: later) */
             continue;
         if (lsdj_span(fb[2u * g0], shown[2u * g0], &x0, &x1))
             break;
@@ -404,13 +522,13 @@ static void lsdj_push(void)
     }
     if (k == GROUPS)
         return;                               /* the screen shows the frame */
-    for (n = 1; n < PUSH_MAX && g0 + n < GROUPS && (dirty[2u * (g0 + n)] | dirty[2u * (g0 + n) + 1u]) &&
+    for (n = 1; n < PUSH_MAX && g0 + n < (menu.open ? MENU_G : GROUPS) && (dirty[2u * (g0 + n)] | dirty[2u * (g0 + n) + 1u]) &&
                 lsdj_span(fb[2u * (g0 + n)], shown[2u * (g0 + n)], &a, &b); n++) {
         x0 = a < x0 ? a : x0;
         x1 = b > x1 ? b : x1;
     }
     for (k = 0; k < n; k++)
-        lsdj_scale(pushbuf[buf_i] + k * 3u * LSDJ_SX(x1 - x0), fb[2u * (g0 + k)], x0, x1, PAL);
+        lsdj_scale(pushbuf[buf_i] + k * 3u * LSDJ_SX(x1 - x0), fb[2u * (g0 + k)], x0, x1, pal);
     core_lcd_blit((int)LSDJ_SX(x0), (int)(Y0 + 3u * g0), (int)LSDJ_SX(x1 - x0), (int)(3u * n), pushbuf[buf_i]);
     buf_i ^= 1u;
     for (r = 2u * g0; r < 2u * (g0 + n); r++) {
@@ -450,8 +568,10 @@ static __attribute__((noinline)) void lsdj_start(void)
     }
     r = -1;
     flash_on = core_flash_ptr(LSDJ_ST_BASE) != 0;
+    memset(&menu, 0, sizeof menu);            /* the menu's defaults: DMG green, no status bar, every option on */
     if (flash_on) {                           /* (reading only: flash is written on REC or a console request) */
         lsdj_store_scan(&flash_ro, &store);
+        lsdj_set_unpack(&menu.set, store.set);
         if (store.have && store.prog == prog) /* the other program's save stays, unread, until REC saves over it */
             r = lsdj_store_load(&flash_ro, &store, sram, save_n);
     }
@@ -465,8 +585,11 @@ static __attribute__((noinline)) void lsdj_start(void)
         return;
     }
     memset(fb, 0, sizeof fb);
-    memset(shown, 0xFF, sizeof shown);        /* no shade: every line pair is sent once */
-    memset(dirty, 1, sizeof dirty);
+    set_saved = menu.set;
+    set_req = 0;
+    bar_shown = 0;
+    emu_mode = (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE) & ~(uint32_t)menu.set.off;
+    theme_apply();                            /* (no shade sent yet: every line pair is sent once) */
     lsdj_ring_init(&ring, ring_buf, RING_N);
     r = emu_init(rom_tab, cart.nbanks, sram, fb);
     emu.dirty = dirty;
@@ -514,17 +637,12 @@ void ble_key(uint32_t pressed_buttons, int32_t select_steps)
                 lsdj_knobs_add(&knobs, LSDJ_AX_NAV_UD, 1);
         }
     }
-    if (pressed_buttons & core_button_bit(CORE_BTN_FX))           /* the options, switched while running */
-        emu_mode ^= EMU_FRAME_SKIP;
-    if (pressed_buttons & core_button_bit(CORE_BTN_LFO))
-        emu_mode ^= EMU_FAST_ROM;
-    if (pressed_buttons & core_button_bit(CORE_BTN_EDIT))         /* (LOAD shows what the wait loop costs) */
-        emu_mode ^= EMU_WAIT_SKIP;
-    if (pressed_buttons & core_button_bit(CORE_BTN_ENV))          /* (to hear the sound per frame against it) */
-        emu_mode ^= EMU_SND_FINE;
-    if (pressed_buttons & (core_button_bit(CORE_BTN_FX) | core_button_bit(CORE_BTN_LFO) |
-                           core_button_bit(CORE_BTN_EDIT) | core_button_bit(CORE_BTN_ENV)))
-        st.pad_shown = (uint8_t)~st.pad;     /* redraw the options */
+    if (pressed_buttons & core_button_bit(CORE_BTN_GLO)) {        /* GLO: the menu (the emulator's options are in it) */
+        if (menu.open)
+            menu_close();
+        else
+            menu_open();
+    }
 }
 
 void ble_service(void)

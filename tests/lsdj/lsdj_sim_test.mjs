@@ -26,7 +26,8 @@ const root = new URL("../../", import.meta.url);
   ok(Object.values(LAYOUTS).every((L) => BTN.every((_, i) => L.ctl[`btn:${i}`]) && [...Array(27).keys()].every((n) => L.ctl[`key:${n}`])),
      "every button and key has a place in both layouts");
   ok(KEYBOARD.Enter.id === B.PLAY && KEYBOARD.KeyX.id === 24 && KEYBOARD.KeyZ.id === 26 && KEYBOARD.ShiftLeft.id === B.SEQ &&
-     GB[`btn:${B.PLAY}`] === "START" && GB["key:24"] === "A", "the keyboard: Enter START, X A, Z B, Shift SELECT");
+     GB[`btn:${B.PLAY}`] === "START" && GB["key:24"] === "A" && KEYBOARD.KeyM.id === B.GLO && GB[`btn:${B.GLO}`] === "MENU" &&
+     !GB[`btn:${B.FX}`], "the keyboard: Enter START, X A, Z B, Shift SELECT, M the menu (GLO); FX no option now");
 }
 
 const WASM = new URL("build/web/sim/lsdjsim.wasm", root), EMU = new URL("build/web/lsdj_emu.wasm", root);
@@ -85,7 +86,12 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     ok(sim.frames() - f0 >= 176 && sim.frames() - f0 <= 183, `it runs at the Game Boy's speed (${sim.frames() - f0} frames in 3 s of sound)`);
     ok(peak > 0.02 && peak <= 1, `with sound (peak ${peak.toFixed(3)})`);
     const fb = sim.fb();
-    ok(colours(fb, 4, 220) >= 2 && colours(fb, 222, 240) > 2, "its picture on the screen, the status line under it");
+    ok(colours(fb, 4, 220) >= 2 && colours(fb, 222, 240) === 1, "its picture on the screen, nothing under it (no status bar)");
+    tap(sim, B.GLO);                               // GLO: the menu over the picture's lower half
+    run(sim, 0.3);
+    ok(colours(sim.fb(), 108, 218) > 2 && sim.playing(), "GLO opens the menu; the Game Boy plays on");
+    tap(sim, B.GLO);
+    run(sim, 0.5);
     sim.enc(0, 3); sim.enc(1, -2); sim.enc(2, 1); sim.key(24, true); sim.master(300);
     run(sim, 0.5);
     sim.releaseAll();

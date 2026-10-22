@@ -396,8 +396,65 @@ static void test_steps(void)
     CHECK(n == 16 && CURSOR(3, 5));
 }
 
+/* the GLO menu's model: its lines, the keys that move through them, the settings as two bytes (0, 0: defaults) */
+static void test_menu(void)
+{
+    lsdj_menu_t m;
+    uint8_t b[2], i;
+    char label[16], value[16];
+    memset(&m, 0, sizeof m);
+    CHECK(m.set.theme == LSDJ_THEME_DMG && !m.set.bar && !m.set.off);   /* zero: DMG green, no bar, all options on */
+    lsdj_set_pack(&m.set, b);
+    CHECK(b[0] == 0 && b[1] == 0);
+    for (i = 0; i < LSDJ_NMI; i++) {                            /* every line has a label and a value */
+        lsdj_menu_line(&m, i, label, value);
+        CHECK(label[0] && value[0]);
+    }
+    lsdj_menu_line(&m, LSDJ_MI_SCREEN, label, value);
+    CHECK(!strcmp(label, "SCREEN") && !strcmp(value, "DMG"));
+    lsdj_menu_line(&m, LSDJ_MI_BAR, label, value);
+    CHECK(!strcmp(label, "STATUS BAR") && !strcmp(value, "OFF"));
+    CHECK(lsdj_menu_key(&m, JOYPAD_RIGHT) && m.set.theme == LSDJ_THEME_POCKET);   /* RIGHT: the next theme */
+    CHECK(lsdj_menu_key(&m, JOYPAD_LEFT) && lsdj_menu_key(&m, JOYPAD_LEFT) && m.set.theme == LSDJ_NTHEME - 1);   /* wraps */
+    CHECK(lsdj_menu_key(&m, JOYPAD_A) && m.set.theme == LSDJ_THEME_DMG);   /* A: the next value too */
+    CHECK(!lsdj_menu_key(&m, JOYPAD_UP) && m.item == LSDJ_NMI - 1);       /* UP from the first: the last line */
+    CHECK(!lsdj_menu_key(&m, JOYPAD_DOWN) && m.item == 0);
+    lsdj_menu_key(&m, JOYPAD_DOWN);                            /* STATUS BAR */
+    CHECK(lsdj_menu_key(&m, JOYPAD_RIGHT) && m.set.bar == 1);
+    lsdj_menu_line(&m, LSDJ_MI_BAR, label, value);
+    CHECK(!strcmp(value, "ON"));
+    for (i = LSDJ_MI_DRAW; i <= LSDJ_MI_SOUND; i++) {          /* each emulator option: its bit off, then on again */
+        m.item = i;
+        CHECK(lsdj_menu_key(&m, JOYPAD_LEFT) && m.set.off == LSDJ_MI_BIT[i]);
+        CHECK(lsdj_menu_key(&m, JOYPAD_RIGHT) && m.set.off == 0);
+    }
+    m.item = LSDJ_MI_DRAW;
+    lsdj_menu_key(&m, JOYPAD_A);
+    lsdj_menu_line(&m, LSDJ_MI_DRAW, label, value);
+    CHECK(!strcmp(label, "DRAW") && !strcmp(value, "EVERY"));   /* frame skip off: every frame drawn */
+    m.set.theme = LSDJ_THEME_DARK;
+    lsdj_set_pack(&m.set, b);
+    {
+        lsdj_set_t t;
+        lsdj_set_unpack(&t, b);
+        CHECK(t.theme == LSDJ_THEME_DARK && t.bar == 1 && t.off == LSDJ_MI_BIT[LSDJ_MI_DRAW]);
+        b[0] = 0x7F;                                           /* a theme this firmware does not have: DMG */
+        lsdj_set_unpack(&t, b);
+        CHECK(t.theme == LSDJ_THEME_DMG);
+    }
+    CHECK(!lsdj_menu_key(&m, JOYPAD_START) && !lsdj_menu_key(&m, JOYPAD_SELECT));   /* nothing else changes it */
+    CHECK(LSDJ_THEME_RGB[LSDJ_THEME_DMG][0][1] == 0xBC && LSDJ_THEME_RGB[LSDJ_THEME_POCKET][3][0] == 16);
+    for (i = 0; i < LSDJ_NTHEME; i++) {                        /* shade 0 .. 3: light to dark, but DARK the other way */
+        uint32_t l0 = LSDJ_THEME_RGB[i][0][0] + LSDJ_THEME_RGB[i][0][1] + LSDJ_THEME_RGB[i][0][2];
+        uint32_t l3 = LSDJ_THEME_RGB[i][3][0] + LSDJ_THEME_RGB[i][3][1] + LSDJ_THEME_RGB[i][3][2];
+        CHECK(i == LSDJ_THEME_DARK ? l0 < l3 : l0 > l3);
+        CHECK(LSDJ_THEME_NAME[i][0] != 0);
+    }
+}
+
 int main(void)
 {
+    test_menu();
     test_rom();
     test_prog();
     test_pad();

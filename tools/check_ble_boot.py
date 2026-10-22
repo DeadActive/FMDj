@@ -17,7 +17,7 @@ ALLOWED = {"ble_key"}                  # ble_ui.c: the PLAY handler; the only wa
 # the LSDj build's flash writers (core_ble_api.c, lsdj/lsdj_store.c): not reachable from boot at all, not even
 # through the key handler: lsdj_step calls them, and the core reaches that only through its pointer
 LSDJ_FLASH = {"core_flash_erase", "core_flash_prog", "lsdj_store_save", "lsdj_store_kits", "lsdj_store_kit_write",
-              "lsdj_store_kit_erase"}
+              "lsdj_store_kit_erase", "lsdj_store_settings"}
 # ... and their helpers, if the compiler kept them out of line
 LSDJ_FLASH_MORE = {"lsdj_st_save", "lsdj_st_kits", "lsdj_st_layout", "lsdj_st_flush", "lsdj_st_out", "lsdj_save",
                    "lsdj_flash_req"}
