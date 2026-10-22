@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     LSDj fork: 2026 DEADACTIVE -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FMDj: simulator</title>
+<link rel="stylesheet" href="sim.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1><i>FMDj</i> <span>simulator</span></h1>
+    <p class="lead">The FM-1's FMDj firmware, running in this page with your own LSDj or DMGo! ROM.</p>
+  </header>
+
+  <div class="stage"><div id="fit" class="fit"><div id="device" class="device"></div></div></div>
+  <p id="note" class="note" role="status"></p>
+
+  <section class="setup">
+    <p id="rom-line">Loading…</p>
+    <p id="rom-pick" hidden><label class="file">Choose your LSDj or DMGo ROM (.gb) <input id="rom" type="file" accept=".gb,.gbc"></label></p>
+    <progress id="rom-bar" max="100" value="0" hidden></progress>
+    <p class="small">The ROM is read by this page only and kept in this browser; it is sent nowhere. LSDj is by Johan
+      Kotlinski, DMGo! by Audiowanderer (free from
+      <a href="https://audiowanderer.com/AW/drum-machina-go-or/" target="_blank" rel="noopener">audiowanderer.com</a>);
+      neither is part of this page: you need your own copy.</p>
+    <p class="small"><button id="forget-rom" class="link" hidden>Use another ROM</button>
+      <button id="forget-save" class="link" hidden>Forget the save</button>
+      <label class="link"><input id="hints" type="checkbox" checked> show the keyboard keys</label></p>
+  </section>
+
+  <section id="songs" class="songs" hidden>
+    <h2>Songs and saves</h2>
+    <p id="songs-line" role="status"></p>
+    <progress id="songs-bar" max="100" value="0" hidden></progress>
+    <p>
+      <label class="act">Load a project or song (.lsdprj, .lsdsng)<input id="song-files" type="file" accept=".lsdprj,.lsdsng" multiple hidden></label>
+      <label class="act">Restore a save (.sav)<input id="sav-file" type="file" accept=".sav" hidden></label>
+      <button id="sav-get" class="act">Download the save (.sav)</button>
+      <button id="save-now" class="act">Save now</button>
+      <button id="songs-refresh" class="act">Refresh</button>
+    </p>
+    <table id="songs-table"><tbody></tbody></table>
+    <p class="small">A loaded project goes into LSDj's song list and LSDj starts again; open it there: PROJECT,
+      LOAD/SAVE SONG, LOAD. Its kits come with it. The song you are editing is in the list only after you save it
+      in LSDj (PROJECT, LOAD/SAVE SONG, SAVE). A .sav is the whole memory: every song and the one being edited.
+      Everything is kept in this browser, as REC held does.</p>
+  </section>
+
+  <section class="help">
+    <h2>Controls</h2>
+    <table>
+      <tr><th>Game Boy</th><th>FM-1</th><th>Keyboard</th></tr>
+      <tr><td>◀ ▶</td><td>SELECT knob; HOME / ARP buttons</td><td>← →</td></tr>
+      <tr><td>▲ ▼</td><td>ALGORITHM knob; SEL / SAVE buttons</td><td>↑ ↓</td></tr>
+      <tr><td>A</td><td>the top F key</td><td>X</td></tr>
+      <tr><td>B</td><td>the top G key</td><td>Z</td></tr>
+      <tr><td>START</td><td>PLAY (the first press starts LSDj)</td><td>Enter</td></tr>
+      <tr><td>SELECT</td><td>SEQ</td><td>Shift</td></tr>
+      <tr><td>SELECT + ◀ ▶ ▲ ▼ (LSDj's screens)</td><td>PRESETS knob; OCT+ / OCT-</td><td>Shift + arrows</td></tr>
+      <tr><td>save to flash</td><td>REC held for a second</td><td>S held</td></tr>
+      <tr><td>volume</td><td>MASTER knob</td><td></td></tr>
+    </table>
+    <p class="small">Knobs: drag up and down, or use the wheel. Right-click a button to hold it. Saving goes to this
+      browser instead of the FM-1's flash. The status line under the picture is the firmware's own; its LOAD is 0 %
+      here because the page does not model the FM-1's processor.</p>
+  </section>
+
+  <footer class="small">
+    LSDj fork of Felucca: DEADACTIVE. Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. Game Boy
+    emulation: Peanut-GB (Mahyar Koshkouei, MIT) and minigb_apu (Alex Baines, Mahyar Koshkouei, MIT). Font on the
+    screen: Inter Tight (The Inter Project Authors, SIL OFL 1.1). Game Boy is a trademark of Nintendo; this page is
+    not affiliated with it. GPL-3.0, no warranty.
+    <a href="../lsdj-install/">Install on an FM-1</a> · <a href="../lsdj/">Song page</a>
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

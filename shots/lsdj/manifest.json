@@ -1,0 +1,56 @@
+[
+ {
+  "prog": "lsdj",
+  "name": "song",
+  "title": "SONG",
+  "file": "song.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "chain",
+  "title": "CHAIN",
+  "file": "chain.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "phrase",
+  "title": "PHRASE",
+  "file": "phrase.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "instr",
+  "title": "INSTR",
+  "file": "instr.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "table",
+  "title": "TABLE",
+  "file": "table.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "synth",
+  "title": "SYNTH",
+  "file": "synth.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "wave",
+  "title": "WAVE",
+  "file": "wave.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "groove",
+  "title": "GROOVE",
+  "file": "groove.png"
+ },
+ {
+  "prog": "lsdj",
+  "name": "project",
+  "title": "PROJECT",
+  "file": "project.png"
+ }
+]

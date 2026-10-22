@@ -1,0 +1,50 @@
+[
+ {
+  "prog": "dmgo",
+  "name": "title",
+  "title": "TITLE",
+  "file": "title.png"
+ },
+ {
+  "prog": "dmgo",
+  "name": "ch1",
+  "title": "CH1 PULSE",
+  "file": "ch1.png"
+ },
+ {
+  "prog": "dmgo",
+  "name": "ch3",
+  "title": "CH3 WAVE",
+  "file": "ch3.png"
+ },
+ {
+  "prog": "dmgo",
+  "name": "ch4",
+  "title": "CH4 NOISE",
+  "file": "ch4.png"
+ },
+ {
+  "prog": "dmgo",
+  "name": "pick",
+  "title": "PICK A PAT",
+  "file": "pick.png"
+ },
+ {
+  "prog": "dmgo",
+  "name": "patterns",
+  "title": "PATTERNS",
+  "file": "patterns.png"
+ },
+ {
+  "prog": "dmgo",
+  "name": "save",
+  "title": "SAVE",
+  "file": "save.png"
+ },
+ {
+  "prog": "dmgo",
+  "name": "setup",
+  "title": "SETUP",
+  "file": "setup.png"
+ }
+]

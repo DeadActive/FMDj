@@ -1,0 +1,840 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     LSDj fork: 2026 DEADACTIVE -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FMDj: install</title>
+<style>
+  :root { --bg: #fff; --fg: #000; --dim: #777; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #000; --fg: #fff; --dim: #888; } }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 24px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 32px 0 8px; }
+  p { margin: 0 0 16px; }
+  a { color: inherit; }
+  button { font: inherit; background: var(--fg); color: var(--bg); border: 0; padding: 8px 20px; cursor: pointer; }
+  button:disabled { opacity: .3; cursor: default; }
+  .small { color: var(--dim); font-size: 13px; }
+  progress { width: 100%; height: 4px; }
+  canvas { display: block; width: 320px; height: 288px; margin: 16px 0; image-rendering: pixelated; border: 1px solid var(--dim); }
+  #rom-status, #status { min-height: 1.6em; }
+  pre { color: var(--dim); font-size: 12px; white-space: pre-wrap; margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FMDj</h1>
+  <p>This page puts your own LSDj or DMGo! ROM into the FM-1's FMDj firmware and installs it over USB. It works in
+     Chrome or Edge. One of them is on the FM-1 at a time: to change, install the other one.</p>
+  <p class="small">The firmware here holds nothing of LSDj or DMGo. Your ROM file is read by this page only: it is
+     not sent anywhere, and the firmware made with it is for your FM-1 alone. DMGo! is free from
+     <a href="https://audiowanderer.com/AW/drum-machina-go-or/" target="_blank" rel="noopener">Audiowanderer</a>.</p>
+
+  <h2>1. Your LSDj or DMGo ROM</h2>
+  <p><input id="rom" type="file" accept=".gb,.gbc" disabled></p>
+  <canvas id="screen" width="160" height="144" hidden></canvas>
+  <progress id="rom-bar" max="100" value="0" hidden></progress>
+  <p id="rom-status"></p>
+
+  <h2>2. Install</h2>
+  <p>Connect the FM-1 by USB, directly to the computer. Do not unplug it while writing.</p>
+  <p class="small">Changing from LSDj to DMGo or back: the FM-1 keeps the other one's save in its flash, unused,
+     until the new one saves (REC held, or a change made on the song page). Back it up first on the
+     <a href="../lsdj/">song page</a>, before you install.</p>
+  <p><button id="go" disabled>Install</button></p>
+  <progress id="bar" max="100" value="0"></progress>
+  <p id="status"></p>
+  <p class="small">After the install, PLAY starts it. In LSDj PLAY again plays the demo song; songs and kits go in
+     and out with the <a href="../lsdj/">song page</a>. In DMGo the 16 white keys are the steps of the channel shown,
+     A is D#5 and B is F#5; its save goes in and out with the song page.</p>
+  <p class="small">If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:
+     <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>.
+     The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware.
+     Use it at your own risk.</p>
+  <pre id="log"></pre>
+
+  <p class="small">LSDj fork of Felucca: DEADACTIVE. Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments.
+     Game Boy emulation: Peanut-GB (Mahyar Koshkouei, MIT) and minigb_apu (Alex Baines, Mahyar Koshkouei, MIT).
+     LSDj is by Johan Kotlinski and DMGo! by Audiowanderer; neither is part of this page or of the firmware here,
+     and you need your own copy.
+     The package also holds three JieLi AC79 SDK files (JieLi Technology, Apache-2.0):
+     <a href="../../firmware/LICENSES/">licences</a>. GPL-3.0, no warranty.</p>
+</main>
+<script type="module">
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+//
+// FM-1 .fwsc packages in the browser: the package identity and the image the
+// device reads during an update.
+
+const BLOCKS = 20, BLK = 0x30, KEEP = 0x2F;
+const STOCK_V15_SHA256 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a";
+const STOCK_APP_SIZE = 0x8DFBC;
+const STOCK_V15_SIZE = 699956;
+
+const T = new Uint16Array(256);
+for (let i = 0; i < 256; i++) {
+  let c = i << 8;
+  for (let k = 0; k < 8; k++) c = c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1;
+  T[i] = c & 0xFFFF;
+}
+
+function crc16(d, crc = 0) {
+  for (let i = 0; i < d.length; i++) crc = ((crc << 8) & 0xFFFF) ^ T[((crc >> 8) ^ d[i]) & 0xFF];
+  return crc;
+}
+
+function enc(buf, off, size, key = 0xFFFF) {
+  for (let i = 0; i < size; i++) {
+    buf[off + i] ^= key & 0xFF;
+    key = ((key * 2) ^ (key & 0x8000 ? 0x1021 : 0)) & 0xFFFF;
+  }
+}
+
+function sfc(buf, off, size, base, key) {
+  for (let i = 0; i < size; i += 32) enc(buf, off + i, Math.min(size - i, 32), key ^ ((off + i - base) >> 2));
+}
+
+function chipkeyDecode(d) {
+  let sum = 0;
+  for (let i = 0; i < 16; i++) sum += d[i];
+  sum &= 0xFF;
+  sum = sum >= 0xE0 ? 0xAA : sum <= 0x10 ? 0x55 : sum;
+  let k = 0;
+  for (let i = 0; i < 16; i++) if ((d[16 + i] ^ d[15 - i]) < sum) k |= 1 << i;
+  return k;
+}
+
+const align32 = (v) => (v + 31) & ~31;
+const u16 = (b, o) => b[o] | (b[o + 1] << 8);
+const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+function w16(b, o, v) { b[o] = v & 0xFF; b[o + 1] = (v >> 8) & 0xFF; }
+function w32(b, o, v) { w16(b, o, v & 0xFFFF); w16(b, o + 2, (v >>> 16) & 0xFFFF); }
+
+class Entry {                                   // JLFS head, 32 bytes
+  constructor(raw, off) {
+    this.hdrOff = off;
+    this.hcrc = u16(raw, off);
+    this.dcrc = u16(raw, off + 2);
+    this.offset = u32(raw, off + 4);
+    this.size = u32(raw, off + 8);
+    this.flags = raw[off + 12];
+    this.resvd = raw[off + 13];
+    this.index = u16(raw, off + 14);
+    this.rawName = raw.slice(off + 16, off + 32);
+    const z = this.rawName.indexOf(0);
+    this.name = String.fromCharCode(...this.rawName.slice(0, z < 0 ? 16 : z));
+    if (crc16(raw.subarray(off + 2, off + 32)) !== this.hcrc) throw new Error(`JLFS header CRC mismatch @${off.toString(16)}`);
+  }
+  packInto(buf) {
+    const o = this.hdrOff;
+    w16(buf, o + 2, this.dcrc); w32(buf, o + 4, this.offset); w32(buf, o + 8, this.size);
+    buf[o + 12] = this.flags; buf[o + 13] = this.resvd; w16(buf, o + 14, this.index);
+    buf.set(this.rawName, o + 16);
+    this.hcrc = crc16(buf.subarray(o + 2, o + 32));
+    w16(buf, o, this.hcrc);
+  }
+}
+
+class Package {
+  constructor(bytes) {
+    this.raw = new Uint8Array(bytes);
+    this.parseUfw();
+    this.flash = this.raw.slice(this.flashFileOff, this.flashFileOff + this.flashSize);
+    this.parseFlash();
+  }
+
+  get product() { return productOf(this.raw); }
+
+  setProduct(name) {
+    if (name.length > BLOCKS) throw new Error("product name too long");
+    for (let i = 0; i < BLOCKS; i++) {
+      const m = i < name.length ? (name.charCodeAt(i) + i + 1) & 0xFF : 0x7D;
+      if (i < name.length && m === 0x7D) throw new Error("product name encodes to the unused marker");
+      this.raw[i * BLK + KEEP] = m;
+    }
+  }
+
+  headerBytes() {
+    const h = new Uint8Array(BLOCKS * KEEP);
+    for (let i = 0; i < BLOCKS; i++) h.set(this.raw.subarray(i * BLK, i * BLK + KEEP), i * KEEP);
+    return h;
+  }
+
+  hdrFileOff(i) { return Math.floor(i / KEEP) * BLK + (i % KEEP); }
+
+  parseUfw() {
+    const h = this.headerBytes();
+    enc(h, 0, 0x40);
+    const hcrc = u16(h, 0), lcrc = u16(h, 2), nent = u16(h, 8);
+    if (crc16(h.subarray(2, 0x40)) !== hcrc) throw new Error("not an FM-1 .fwsc (UFW header CRC mismatch)");
+    this.skew = BLOCKS * BLK - h.length;
+    this.ufw = h;
+    this.nent = nent;
+    const hsize = 0x40 + nent * 0x50;
+    if (crc16(h.subarray(0x40, hsize)) !== lcrc) throw new Error("UFW entry list CRC mismatch");
+    this.entries = [];
+    for (let off = 0x40; off < hsize; off += 0x50) {
+      const e = h.slice(off, off + 0x50);
+      enc(e, 0, 0x50);
+      const z = e.subarray(0x40, 0x50).indexOf(0);
+      this.entries.push({ off, type: u16(e, 0), dcrc: u16(e, 4), dataOff: u32(e, 8), size: u32(e, 12),
+        name: String.fromCharCode(...e.subarray(0x40, z < 0 ? 0x50 : 0x40 + z)), plain: e });
+    }
+    const fl = this.entries.find((e) => e.type === 0);
+    if (!fl) throw new Error("no flash.bin in the package");
+    this.flashEntry = fl;
+    this.flashFileOff = fl.dataOff + this.skew;
+    this.flashSize = fl.size;
+    if (crc16(this.raw.subarray(this.flashFileOff, this.flashFileOff + fl.size)) !== fl.dcrc) throw new Error("flash.bin CRC mismatch");
+  }
+
+  parseFlash() {
+    const dec = this.flash.slice();
+    const h = dec.slice(0, 32);
+    enc(h, 0, 32);
+    if (crc16(h.subarray(2, 32)) !== u16(h, 0)) throw new Error("flash header CRC mismatch");
+    this.chipKey = null; this.appBase = null;
+    for (let off = 32; ; off += 32) {
+      enc(dec, off, 32);
+      const e = new Entry(dec, off);
+      if (e.name === "isd_config.ini") {
+        const blob = dec.subarray(e.offset, e.offset + 34);
+        if (crc16(blob.subarray(0, 32)) === u16(blob, 32)) this.chipKey = chipkeyDecode(blob.subarray(0, 32));
+      }
+      if (e.flags === 0x81 && e.name === "app_dir_head" && this.appBase === null) this.appBase = e.offset;
+      if (e.index) break;
+    }
+    if (this.chipKey === null || this.appBase === null) throw new Error("chip key or app_dir_head not found");
+    const b = this.appBase, k = this.chipKey, end = align32(b + 32);
+    sfc(dec, b, end - b, b, k);
+    const head = new Entry(dec, b);
+    const blkEnd = b + head.size;
+    if (blkEnd > end) sfc(dec, end, blkEnd - end, b, k);
+    this.sfcEnd = Math.max(end, blkEnd);
+    this.cfgLen = 0;
+    const probe = this.flash.slice(b, align32(blkEnd) + 32);
+    sfc(probe, 0, probe.length, 0, k);
+    try {
+      const cfg = new Entry(probe, blkEnd - b);
+      if (cfg.name === "cfg" && blkEnd + cfg.size <= this.flash.length) this.cfgLen = cfg.size;
+    } catch (_) { /* no cfg block */ }
+    if (this.cfgLen) {
+      const region = this.flash.slice(b, blkEnd + this.cfgLen);
+      sfc(region, 0, region.length, 0, k);
+      dec.set(region, b);
+      this.sfcEnd = blkEnd + this.cfgLen;
+    }
+    this.head = head;
+    this.app = null;
+    for (let off = b + 32; ; off += 32) {
+      const e = new Entry(dec, off);
+      if (e.flags === 0x82 && e.name === "app.bin") this.app = e;
+      if (e.index) break;
+    }
+    if (!this.app) throw new Error("app.bin not found in app area");
+    this.appOff = b + this.app.offset;
+    this.dec = dec;
+  }
+
+  // the new app, padded to the stock size (Felucca never changes the layout)
+  setApp(app) {
+    if (app.length > this.app.size) throw new Error(`app is ${app.length} B, the slot is ${this.app.size} B`);
+    const nw = new Uint8Array(this.app.size).fill(0xFF);
+    nw.set(app);
+    const a = this.app, h = this.head, b = this.appBase;
+    this.dec.set(nw, this.appOff);
+    a.dcrc = crc16(nw);
+    a.packInto(this.dec);
+    h.dcrc = crc16(this.dec.subarray(h.hdrOff + 32, h.hdrOff + h.size));
+    h.packInto(this.dec);
+    this.sfcEnd = Math.max(align32(b + 32), b + h.size + this.cfgLen);
+    const region = this.dec.slice(b, this.sfcEnd);
+    sfc(region, 0, region.length, 0, this.chipKey);
+    this.flash.set(region, b);
+  }
+
+  serialize() {
+    const out = this.raw.slice();
+    out.set(this.flash, this.flashFileOff);
+    const fl = this.flashEntry, e = fl.plain.slice();
+    w16(e, 4, crc16(this.flash));
+    enc(e, 0, 0x50);
+    const h = this.ufw.slice();
+    h.set(e, fl.off);
+    const hsize = 0x40 + this.nent * 0x50;
+    w16(h, 2, crc16(h.subarray(0x40, hsize)));
+    w16(h, 0, crc16(h.subarray(2, 0x40)));
+    enc(h, 0, 0x40);
+    for (let i = 0; i < hsize; i++) out[this.hdrFileOff(i)] = h[i];
+    return out;
+  }
+}
+
+// the package identity ("FM-1_904"): one marker byte after each of the first 20 blocks
+function productOf(fwsc) {
+  if (fwsc.length < BLOCKS * BLK) throw new Error("not an FM-1 package (too short)");
+  let s = "";
+  for (let i = 0; i < BLOCKS; i++) {
+    const m = fwsc[i * BLK + KEEP];
+    if (m !== 0x7D) s += String.fromCharCode((m - i - 1) & 0xFF);
+  }
+  return s;
+}
+
+// the image the device addresses during an update: the .fwsc without the 20 marker bytes
+function logicalImage(fwsc) {
+  const out = new Uint8Array(fwsc.length - BLOCKS);
+  for (let i = 0; i < BLOCKS; i++) out.set(fwsc.subarray(i * BLK, i * BLK + KEEP), i * KEEP);
+  out.set(fwsc.subarray(BLOCKS * BLK), BLOCKS * KEEP);
+  return out;
+}
+
+async function sha256hex(bytes) {
+  const d = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+// Only the user's unmodified official V15 is accepted for a return to stock.
+// The digest pins every file, loader and flash layout; filenames are not evidence.
+async function validateStockPackage(bytes) {
+  if (bytes.length !== STOCK_V15_SIZE || await sha256hex(bytes) !== STOCK_V15_SHA256)
+    throw new Error("Select the unmodified official FM-1 V15 file (FM-1.fwsc).");
+  const pkg = new Package(bytes);
+  if (pkg.product !== "FM-1_015" || pkg.flashFileOff !== 1044 || pkg.flashSize !== 602112 ||
+      pkg.appBase !== 16384 || pkg.appOff !== 16672 || pkg.app.size !== STOCK_APP_SIZE ||
+      !pkg.entries.some((e) => e.type === 100 && e.name === "ota.bin" && e.size === 19969))
+    throw new Error("The official firmware has an unsupported FM-1 layout.");
+  return { product: pkg.product, image: logicalImage(bytes), sha256: STOCK_V15_SHA256 };
+}
+
+// official V15 + Felucca app -> installable package (Uint8Array)
+async function buildFeluccaPackage(stockBytes, appBytes, product) {
+  const sha = await sha256hex(stockBytes);
+  if (sha !== STOCK_V15_SHA256) throw new Error("this is not the official FM-1 V15 firmware file (FM-1.fwsc)");
+  const pkg = new Package(stockBytes);
+  pkg.setApp(appBytes);
+  pkg.setProduct(product);
+  return pkg.serialize();
+}
+
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+//
+// The FM-1 USB-MIDI update protocol over WebMIDI (after tools/fm1_install.py).
+// Step 1: the running firmware (official
+// or Felucca) reads parts of the package and stages the update loader. Step 2:
+// the loader reads the whole image and writes it. Both steps are "the device
+// asks, we answer": cmd 0x30 read requests on the logical image.
+
+const HS_QUERY = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7];
+const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
+const MAXDATA = 512;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const IS_OTA = (id) => /^ota-/i.test(id.model);
+
+// errors carry a code the pages translate: notfound, model, stopped, noloader, lost, noreturn,
+// mismatch (detail: the identity the device reports), badreq
+function fail(code, msg, detail = "") { const e = new Error(msg); e.code = code; e.detail = detail; return e; }
+
+function pack7(data) {
+  const out = []; let acc = 0, nb = 0;
+  for (const b of data) {
+    acc |= b << nb; nb += 8;
+    while (nb >= 7) { out.push(acc & 0x7F); acc >>>= 7; nb -= 7; }
+  }
+  if (nb) out.push(acc & 0x7F);
+  return out;
+}
+
+function unpack7(s) {
+  const out = []; let acc = 0, nb = 0;
+  for (const b of s) {
+    acc |= (b & 0x7F) << nb; nb += 7;
+    while (nb >= 8) { out.push(acc & 0xFF); acc >>>= 8; nb -= 8; }
+  }
+  return out;
+}
+
+function response(addr, data, fl = 0) {
+  const len = data.length;
+  const body = [0x00, 0x59, 0x30, (len + 8) & 0xFF, ((len + 8) >> 8) & 0xFF, 0, fl,
+    addr & 0xFF, (addr >>> 8) & 0xFF, (addr >>> 16) & 0xFF, (addr >>> 24) & 0xFF,
+    len & 0xFF, (len >> 8) & 0xFF, 0, ...data];
+  let s = 0;
+  for (let i = 6; i < body.length; i++) s += body[i];
+  body.push(~s & 0xFF);
+  return [0xF0, ...pack7(body), 0xF7];
+}
+
+function parseRequest(pkt) {
+  if (pkt[0] !== 0xF0 || pkt[pkt.length - 1] !== 0xF7) return null;
+  const u = unpack7(pkt.slice(1, -1));
+  if (u.length !== 15 || u[0] !== 0 || u[1] !== 0x59 || u[2] !== 0x30) return null;
+  let s = 0;
+  for (let i = 6; i < 14; i++) s += u[i];
+  if ((~s & 0xFF) !== u[14]) return null;
+  return { fl: u[6], addr: (u[7] | (u[8] << 8) | (u[9] << 16) | (u[10] << 24)) >>> 0, len: u[11] | (u[12] << 8) | (u[13] << 16) };
+}
+
+function parseIdentity(pkt) {
+  const d = unpack7(pkt.slice(1, -1));
+  if (d.length !== 34 || d[0] !== 0 || d[1] !== 0x59 || d[2] !== 0x11) return null;
+  const txt = String.fromCharCode(...d.slice(6, 33)).replace(/\0+$/, "");
+  const m = /^([^_]+)_(\d+)$/.exec(txt);
+  return m ? { text: txt, model: m[1], version: parseInt(m[2], 10) } : null;
+}
+
+// one MIDI in/out pair with a SysEx queue
+class Link {
+  constructor(input, output) {
+    this.input = input; this.output = output; this.q = []; this.waiter = null;
+    input.onmidimessage = (ev) => {
+      if (ev.data[0] !== 0xF0) return;
+      this.q.push(Array.from(ev.data));
+      if (this.waiter) { const w = this.waiter; this.waiter = null; w(); }
+    };
+  }
+  get lost() { return this.input.state === "disconnected" || this.output.state === "disconnected"; }
+  // false when the port is gone (unplugged): WebMIDI throws on a disconnected output
+  send(bytes) {
+    try { this.output.send(bytes); return true; } catch (_) { return false; }
+  }
+  drain() { this.q.length = 0; }
+  async read(ms) {
+    if (!this.q.length) {
+      let tm;
+      await Promise.race([new Promise((r) => { this.waiter = r; }), new Promise((r) => { tm = setTimeout(r, ms); })]);
+      clearTimeout(tm);
+      this.waiter = null;
+    }
+    return this.q.shift() || null;
+  }
+  close() { this.input.onmidimessage = null; }
+}
+
+async function handshake(link, tries = 3) {
+  link.drain();
+  for (let t = 0; t < tries; t++) {
+    if (!link.send(HS_QUERY)) return null;
+    const end = Date.now() + 1000;
+    while (Date.now() < end) {
+      const p = await link.read(end - Date.now());
+      if (!p) break;
+      const id = parseIdentity(p);
+      if (id) return id;
+    }
+  }
+  return null;
+}
+
+class Updater {
+  constructor(access, log) {
+    this.access = access;
+    this.log = log || (() => {});
+  }
+
+  // every in/out pair with the same port name that answers the handshake
+  async find(filter) {
+    const outs = [...this.access.outputs.values()];
+    for (const input of this.access.inputs.values()) {
+      if (input.state === "disconnected") continue;
+      if (!/fm-1|felucca|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // never probe other gear
+      const output = outs.find((o) => o.name === input.name && o.state !== "disconnected");
+      if (!output) continue;
+      try { await input.open(); await output.open(); } catch (_) { continue; }
+      const link = new Link(input, output);
+      const id = await handshake(link, 2);
+      if (id && (!filter || filter(id))) return { link, id, name: input.name };
+      link.close();
+    }
+    return null;
+  }
+
+  async waitFor(filter, ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      const dev = await this.find(filter);
+      if (dev) return dev;
+      await sleep(1000);
+    }
+    return null;
+  }
+
+  // serve read requests until the device asks for one of the finish addresses; stops early
+  // when the port disappears (lost: true) instead of waiting out idleMs
+  async serve(link, image, finishAddr, idleMs, onProgress) {
+    let served = 0, last = Date.now();
+    for (;;) {
+      const pkt = await link.read(1000);
+      if (!pkt) {
+        if (link.lost) return { served, finished: false, lost: true };
+        if (Date.now() - last > idleMs) return { served, finished: false };
+        continue;
+      }
+      const r = parseRequest(pkt);
+      if (!r) continue;
+      last = Date.now();
+      if (r.addr === 0xE0000000 || r.addr === 0xF0000000) {
+        link.send(response(r.addr, [...new TextEncoder().encode("success"), 0]));
+        if (r.addr === finishAddr) return { served, finished: true };
+        continue;
+      }
+      if (r.len > MAXDATA || r.addr + r.len > image.length) throw fail("badreq", `bad request ${r.addr.toString(16)}+${r.len}`);
+      await sleep(10);
+      if (!link.send(response(r.addr, Array.from(image.subarray(r.addr, r.addr + r.len)), r.fl))) {
+        return { served, finished: false, lost: true };
+      }
+      served++;
+      if (onProgress) onProgress(served, r.addr);
+    }
+  }
+
+  // full install: running firmware -> loader -> new firmware
+  async install(image, product, onStep) {
+    const step = onStep || (() => {});
+    const dev = await this.find((id) => !IS_OTA(id));
+    if (!dev) throw fail("notfound", "FM-1 not found (USB cable, and no other app using it?)");
+    const [model] = product.split("_");
+    if (dev.id.model !== model) { dev.link.close(); throw fail("model", `the device is ${dev.id.text}, the package is for ${product}`); }
+    step("start", dev.id.text);
+    dev.link.send(UPGRADE);
+    await sleep(2000);
+    const s1 = await this.serve(dev.link, image, 0xE0000000, 8000, (n) => step("verify", n));
+    dev.link.close();
+    if (!s1.finished) throw fail(s1.lost ? "lost" : "stopped", `the device ${s1.lost ? "was disconnected" : "stopped"} after ${s1.served} requests: nothing was written`);
+    step("loader");
+    await sleep(3000);
+    const ota = await this.waitFor((id) => id.model === "ota-" + model, 30000);
+    if (!ota) throw fail("noloader", "the update loader did not appear. Replug the USB cable and press Install again: the device stays in update mode until it is finished.");
+    const s2 = await this.write(ota, image, step);
+    if (!s2.finished) throw fail(s2.lost ? "lost" : "stopped", `the loader ${s2.lost ? "was disconnected" : "stopped"} after ${s2.served} requests. Replug and press Install again to resume.`);
+    step("reboot");
+    await sleep(3000);
+    const back = await this.waitFor((id) => !IS_OTA(id), 40000);
+    if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
+    back.link.close();
+    if (back.id.text !== product) throw fail("mismatch", `installed, but the device reports ${back.id.text}`, back.id.text);
+    step("done", back.id.text);
+    return back.id.text;
+  }
+
+  // step 2 with the loader found by find()/waitFor()
+  async write(ota, image, step) {
+    ota.link.send(UPGRADE);
+    await sleep(2000);
+    const s2 = await this.serve(ota.link, image, 0xF0000000, 180000, (n) => step("write", n));
+    ota.link.close();
+    return s2;
+  }
+
+  // resume: the device is already in update mode (loader) -> true when the write finished
+  async resume(image, onStep, product = null) {
+    const model = product && product.split("_")[0];
+    const ota = await this.find((id) => model ? id.model === "ota-" + model : IS_OTA(id));
+    if (!ota) return false;
+    const step = onStep || (() => {});
+    const result = await this.write(ota, image, step);
+    if (!result.finished) return false;
+    if (product) {
+      step("reboot");
+      await sleep(3000);
+      const back = await this.waitFor((id) => id.model === model, 40000);
+      if (!back) throw fail("noreturn", "The FM-1 did not return after resuming the write.");
+      back.link.close();
+      if (back.id.text !== product) throw fail("mismatch", "The FM-1 reports a different firmware after resuming.", back.id.text);
+      step("done", back.id.text);
+    }
+    return true;
+  }
+}
+
+// SPDX-License-Identifier: GPL-3.0-only
+// LSDj fork: 2026 DEADACTIVE
+// The LSDj install page's logic (web/lsdj_install.html; node-tested by web/test_lsdjinstall.mjs and
+// tests/lsdj/lsdj_install_test.py): the user's own ROM file -> the cartridge block -> an installable package, all
+// in the browser. The firmware it starts from holds nothing of LSDj (tools/build.py: lsdj-base.fwsc).
+//   loadEmu(wasm)       the firmware's emulator and the block's maker as WebAssembly (web/lsdj_wasm.c)
+//   makeCart(...)       runs the ROM as the Mac build does (tools/lsdj_rom.py): LSDj's first start from an empty
+//                       save, the demo song typed in, a short play; then the block. The same C code, the same bytes.
+//                       DMGo! (the owner's own, 2026-10-17): its first start, then a step set and played (that
+//                       run's save is not kept); no demo
+//   baseInfo(pkg)       how much of the app's flash slot the firmware leaves free
+//   withCart(base, c)   the package with the block at the end of the slot, parsed again and checked
+
+const BOOT_FRAMES = 3000;                // 50 s of Game Boy time: past LSDj's first-start check
+const PLAY_FRAMES = 600, PLAY_PEAK = 2000;
+const DMGO_FRAMES = 600;                 // DMGo's first start: its title screen and its empty save
+// DMGo's check: past its title (START), the cursor to step 1 (10 x DOWN), B sets it, START plays it
+const DMGO_CHECK = [[300, 304, "t"], ...Array.from({ length: 10 }, (_, i) => [400 + 12 * i, 404 + 12 * i, "d"]),
+                           [520, 524, "b"], [560, 564, "t"]], DMGO_CHECK_FRAMES = 800;
+const KEY = { a: 1, b: 2, s: 4, t: 8, r: 16, l: 32, u: 64, d: 128 };   // Peanut-GB's joypad bits
+const NOT_ROM = { "-3": "it is not 1 to 64 whole banks of 16 KiB",
+  "-4": "it is neither LSDj's kind of cartridge (MBC5, a 128 KiB save) nor DMGo's (its title, MBC5, a 32 KiB save)",
+  "-5": "its header checksum is wrong" };
+
+async function loadEmu(wasm) {
+  const { instance } = await WebAssembly.instantiate(wasm, {});
+  const x = instance.exports;
+  if (x._initialize) x._initialize();
+  const mem = (at, n) => new Uint8Array(x.memory.buffer, at, n);
+  let len = 0;
+  return {
+    setRom(rom) {
+      if (rom.length > 0x100000) return -3;
+      mem(x.lw_rom(), rom.length).set(rom);
+      len = rom.length;
+      return x.lw_check(len);
+    },
+    start: () => x.lw_start(len),
+    prog: () => ["lsdj", "dmgo"][x.lw_prog()] || null,   // the ROM's program (after setRom)
+    saveSize: () => x.lw_save_n() >>> 0,
+    frames: (n, pad) => x.lw_frames(n, pad),
+    errors: () => x.lw_errors() >>> 0,
+    peak: () => x.lw_peak() >>> 0,
+    ink: () => x.lw_ink() >>> 0,
+    sram: () => mem(x.lw_sram(), x.lw_save_n() || 0x20000).slice(),
+    setSram: (s) => mem(x.lw_sram(), 0x20000).set(s),
+    screen: () => mem(x.lw_fb(), 160 * 144),
+    need: () => x.lw_need() >>> 0,
+    cart(max) {
+      const n = x.lw_cart(max);
+      return n < 0 ? n : mem(x.lw_out(), n).slice();
+    },
+  };
+}
+
+// the keys of every frame (Peanut-GB's byte: a 0 bit is a key down) from the demo's list: [from, to, letters]
+// as tests/lsdj/lsdj_host.c takes them (-k FROM:TO:KEYS; letters of l r u d a b s(elect) t(start))
+function padsFor(keys, frames) {
+  const p = new Uint8Array(frames).fill(0xFF);
+  for (const [from, to, letters] of keys) {
+    let m = 0;
+    for (const c of letters) m |= KEY[c] || 0;
+    for (let f = from; f < to && f < frames; f++) p[f] &= ~m;
+  }
+  return p;
+}
+
+async function run(emu, pads, what, say, pause) {
+  const r = emu.start();
+  if (r) throw new Error(`The emulator does not take this ROM (error ${r}).`);
+  for (let f = 0, last = 0; f < pads.length;) {
+    let n = 1;
+    while (f + n < pads.length && pads[f + n] === pads[f] && n < 600) n++;
+    emu.frames(n, pads[f]);
+    f += n;
+    if (f - last >= 1500 || f === pads.length) {
+      last = f;
+      say(what, f, pads.length);
+      await pause();
+    }
+  }
+  if (emu.errors()) throw new Error(`This ROM does not run in the emulator (${what}: ${emu.errors()} errors).`);
+  if (!emu.ink()) throw new Error(`This ROM does not run in the emulator (${what}: the screen stays blank).`);
+}
+
+// rom: the file's bytes; demo: { keys, frames } (tools/lsdj_demo.py key_args(60): its list, its end + 60), or null
+// for an empty song; room: the slot's free bytes. -> the block. Throws an Error that says why not.
+async function makeCart(emu, rom, demo, room, say = () => {}, pause = async () => {}) {
+  const why = emu.setRom(rom);
+  if (why) throw new Error(`This file is not an LSDj or DMGo ROM: ${NOT_ROM[why] || "error " + why}.`);
+  emu.setSram(new Uint8Array(0x20000));
+  const full = (need) => new Error(`This ROM needs ${need} bytes and the FM-1's firmware leaves ${room}: ${need - room} too ` +
+    "many. A ROM with fewer kits fits; the kits can go in with the song page afterwards.");
+  if (emu.need() > room) throw full(emu.need());                     // (the least it can need: with an empty save)
+  if (emu.prog() === "dmgo") return dmgoCart(emu, room, full, say, pause);
+  await run(emu, new Uint8Array(BOOT_FRAMES).fill(0xFF), "LSDj's first start", say, pause);
+  let save = emu.sram();
+  if (demo) {
+    emu.setSram(save);
+    await run(emu, padsFor(demo.keys, demo.frames), "typing the demo song", say, pause);
+    save = emu.sram();
+    emu.setSram(save);
+    await run(emu, padsFor([[60, 64, "t"]], PLAY_FRAMES), "playing it", say, pause);
+    if (emu.peak() < PLAY_PEAK) throw new Error("This ROM runs, but the demo song typed into it makes no sound.");
+  }
+  emu.setSram(save);
+  const cart = emu.cart(room);
+  if (cart === -6) throw full(emu.need());
+  if (typeof cart === "number") throw new Error(`The cartridge block could not be made (error ${cart}).`);
+  return cart;
+}
+
+async function dmgoCart(emu, room, full, say, pause) {
+  await run(emu, new Uint8Array(DMGO_FRAMES).fill(0xFF), "DMGo's first start", say, pause);
+  const save = emu.sram();
+  emu.setSram(save);
+  await run(emu, padsFor(DMGO_CHECK, DMGO_CHECK_FRAMES), "playing a step", say, pause);
+  if (emu.peak() < PLAY_PEAK) throw new Error("This ROM runs, but a step set in DMGo and played makes no sound.");
+  emu.setSram(save);
+  const cart = emu.cart(room);
+  if (cart === -6) throw full(emu.need());
+  if (typeof cart === "number") throw new Error(`The cartridge block could not be made (error ${cart}).`);
+  return cart;
+}
+
+// a cartridge block (lsdj_cart.c's layout) -> the program of the ROM in it: "lsdj", "dmgo" or null (as lsdj_gb.c
+// lsdj_prog: by the header of bank 0)
+function cartProg(cart) {
+  if (!cart || cart.length < 16) return null;
+  const u16 = (a) => cart[a] | cart[a + 1] << 8, u32 = (a) => (u16(a) | u16(a + 2) << 16) >>> 0;
+  const t = cart.length - 16, n = u16(t + 6), body = t - u32(t + 8);
+  if (String.fromCharCode(...cart.subarray(t, t + 4)) !== "LSDC" || !n || body < 0 || u16(body) < 0x150) return null;
+  const h = body + 2 * n + 4 + u32(body + 2 * n);
+  if (h + 0x150 > t) return null;
+  const type = cart[h + 0x147], ram = cart[h + 0x149];
+  if (type === 0x1B && ram === 0x04) return "lsdj";
+  const title = String.fromCharCode(...cart.subarray(h + 0x134, h + 0x140));
+  return type === 0x1E && ram === 0x03 && title === "DRUMMACHINA\0" ? "dmgo" : null;
+}
+
+const slotOf = (p) => p.dec.subarray(p.appOff, p.appOff + p.app.size);
+
+// pkg: a parsed lsdj-base package. -> { size, appLen, room }: the slot, the firmware's own bytes, what is free.
+// tools/build.py ends the firmware with "LSDE" and its length; anything else is not an LSDj base (or has a ROM in)
+function baseInfo(pkg) {
+  const s = slotOf(pkg);
+  let e = s.length;
+  while (e && s[e - 1] === 0xFF) e--;
+  const mark = e >= 8 && String.fromCharCode(...s.subarray(e - 8, e - 4)) === "LSDE";
+  const len = mark ? (s[e - 4] | s[e - 3] << 8 | s[e - 2] << 16 | s[e - 1] << 24) >>> 0 : 0;
+  if (!mark || len !== e) throw new Error("This is not the LSDj firmware without a ROM (no end mark in it).");
+  return { size: s.length, appLen: e, room: s.length - e };
+}
+
+// base: the lsdj-base package's bytes; cart: the block. -> the package to install. Everything is checked on the
+// result parsed again: the FM-1's loader writes the app without checking the app's own checksum.
+function withCart(base, cart) {
+  const pkg = new Package(base), info = baseInfo(pkg);
+  if (cart.length > info.room) throw new Error(`the block is ${cart.length} bytes and ${info.room} are free`);
+  if (String.fromCharCode(...cart.subarray(cart.length - 16, cart.length - 12)) !== "LSDC") throw new Error("not a cartridge block");
+  const slot = slotOf(pkg).slice();
+  slot.set(cart, slot.length - cart.length);
+  pkg.setApp(slot);
+  const out = pkg.serialize(), back = new Package(out), got = slotOf(back), h = back.head;
+  const same = got.length === slot.length && got.every((v, i) => v === slot[i]);
+  if (!same || crc16(got) !== back.app.dcrc || crc16(back.dec.subarray(h.hdrOff + 32, h.hdrOff + h.size)) !== h.dcrc ||
+      productOf(out) !== productOf(base) || out.length !== base.length)
+    throw new Error("The package made here does not check out; nothing was sent to the FM-1.");
+  return out;
+}
+
+const $ = (id) => document.getElementById(id);
+const meta = {"version": "fmdj-2026.10.22", "product": "FM-1_900", "pkg": "../../firmware/lsdj-base-fmdj-2026.10.22.fwsc", "wasm": "lsdj_emu.wasm", "demo": {"keys": [[60, 64, "a"], [70, 80, "a"], [73, 77, "ad"], [86, 96, "a"], [89, 93, "ad"], [102, 112, "a"], [105, 109, "ad"], [118, 128, "a"], [121, 125, "ad"], [134, 144, "a"], [137, 141, "ad"], [150, 160, "a"], [153, 157, "ad"], [166, 176, "a"], [169, 173, "ad"], [182, 192, "a"], [185, 189, "ad"], [198, 208, "a"], [201, 205, "ad"], [214, 224, "a"], [217, 221, "ad"], [230, 240, "a"], [233, 237, "ad"], [246, 256, "a"], [249, 253, "ad"], [262, 272, "a"], [265, 269, "ad"], [278, 288, "a"], [281, 285, "ad"], [294, 304, "a"], [297, 301, "ad"], [310, 320, "a"], [313, 317, "ad"], [326, 336, "a"], [329, 333, "al"], [342, 352, "a"], [345, 349, "al"], [358, 368, "a"], [361, 365, "al"], [374, 384, "a"], [377, 381, "al"], [390, 400, "a"], [393, 397, "al"], [406, 416, "a"], [409, 413, "al"], [422, 432, "a"], [425, 429, "al"], [438, 448, "a"], [441, 445, "al"], [454, 464, "a"], [457, 461, "al"], [470, 480, "a"], [473, 477, "al"], [486, 496, "a"], [489, 493, "al"], [502, 512, "a"], [505, 509, "al"], [518, 528, "a"], [521, 525, "al"], [534, 544, "a"], [537, 541, "al"], [550, 560, "a"], [553, 557, "al"], [566, 576, "s"], [569, 573, "sr"], [582, 586, "a"], [592, 602, "a"], [595, 599, "ad"], [608, 618, "a"], [611, 615, "ad"], [624, 634, "a"], [627, 631, "ad"], [640, 650, "a"], [643, 647, "ad"], [656, 666, "a"], [659, 663, "ad"], [672, 682, "a"], [675, 679, "ad"], [688, 698, "a"], [691, 695, "ad"], [704, 714, "a"], [707, 711, "ad"], [720, 730, "a"], [723, 727, "ad"], [736, 746, "a"], [739, 743, "ad"], [752, 762, "a"], [755, 759, "ad"], [768, 778, "a"], [771, 775, "ad"], [784, 794, "a"], [787, 791, "ad"], [800, 810, "a"], [803, 807, "ad"], [816, 826, "a"], [819, 823, "ad"], [832, 842, "a"], [835, 839, "ad"], [848, 858, "a"], [851, 855, "al"], [864, 874, "a"], [867, 871, "al"], [880, 890, "a"], [883, 887, "al"], [896, 906, "a"], [899, 903, "al"], [912, 922, "a"], [915, 919, "al"], [928, 938, "a"], [931, 935, "al"], [944, 954, "a"], [947, 951, "al"], [960, 970, "a"], [963, 967, "al"], [976, 986, "a"], [979, 983, "al"], [992, 1002, "a"], [995, 999, "al"], [1008, 1018, "a"], [1011, 1015, "al"], [1024, 1034, "a"], [1027, 1031, "al"], [1040, 1050, "a"], [1043, 1047, "al"], [1056, 1066, "a"], [1059, 1063, "al"], [1072, 1082, "a"], [1075, 1079, "al"], [1088, 1098, "s"], [1091, 1095, "sr"], [1104, 1108, "a"], [1114, 1124, "a"], [1117, 1121, "ad"], [1130, 1140, "a"], [1133, 1137, "ad"], [1146, 1156, "a"], [1149, 1153, "ad"], [1162, 1172, "a"], [1165, 1169, "ad"], [1178, 1188, "a"], [1181, 1185, "ad"], [1194, 1204, "a"], [1197, 1201, "ad"], [1210, 1220, "a"], [1213, 1217, "ad"], [1226, 1236, "a"], [1229, 1233, "al"], [1242, 1252, "a"], [1245, 1249, "al"], [1258, 1268, "a"], [1261, 1265, "al"], [1274, 1284, "a"], [1277, 1281, "al"], [1290, 1300, "a"], [1293, 1297, "al"], [1306, 1316, "a"], [1309, 1313, "al"], [1322, 1332, "a"], [1325, 1329, "al"], [1338, 1348, "a"], [1341, 1345, "al"], [1354, 1364, "a"], [1357, 1361, "al"], [1370, 1380, "a"], [1373, 1377, "al"], [1386, 1396, "a"], [1389, 1393, "al"], [1402, 1412, "a"], [1405, 1409, "au"], [1418, 1428, "a"], [1421, 1425, "ar"], [1434, 1444, "a"], [1437, 1441, "ar"], [1450, 1460, "a"], [1453, 1457, "ar"], [1466, 1476, "a"], [1469, 1473, "ar"], [1482, 1492, "a"], [1485, 1489, "ar"], [1498, 1508, "a"], [1501, 1505, "ar"], [1514, 1524, "a"], [1517, 1521, "ar"], [1530, 1540, "a"], [1533, 1537, "ar"], [1546, 1556, "a"], [1549, 1553, "ar"], [1562, 1566, "d"], [1572, 1576, "d"], [1582, 1586, "d"], [1592, 1596, "a"], [1602, 1612, "a"], [1605, 1609, "ad"], [1618, 1628, "a"], [1621, 1625, "ad"], [1634, 1644, "a"], [1637, 1641, "ad"], [1650, 1660, "a"], [1653, 1657, "ad"], [1666, 1676, "a"], [1669, 1673, "ad"], [1682, 1692, "a"], [1685, 1689, "ad"], [1698, 1708, "a"], [1701, 1705, "ad"], [1714, 1724, "a"], [1717, 1721, "al"], [1730, 1740, "a"], [1733, 1737, "al"], [1746, 1756, "a"], [1749, 1753, "al"], [1762, 1772, "a"], [1765, 1769, "al"], [1778, 1788, "a"], [1781, 1785, "al"], [1794, 1804, "a"], [1797, 1801, "al"], [1810, 1820, "a"], [1813, 1817, "al"], [1826, 1836, "a"], [1829, 1833, "al"], [1842, 1852, "a"], [1845, 1849, "al"], [1858, 1868, "a"], [1861, 1865, "al"], [1874, 1884, "a"], [1877, 1881, "al"], [1890, 1900, "a"], [1893, 1897, "au"], [1906, 1916, "a"], [1909, 1913, "au"], [1922, 1926, "d"], [1932, 1936, "d"], [1942, 1946, "d"], [1952, 1956, "a"], [1962, 1972, "a"], [1965, 1969, "ad"], [1978, 1988, "a"], [1981, 1985, "ad"], [1994, 2004, "a"], [1997, 2001, "ad"], [2010, 2020, "a"], [2013, 2017, "ad"], [2026, 2036, "a"], [2029, 2033, "ad"], [2042, 2052, "a"], [2045, 2049, "ad"], [2058, 2068, "a"], [2061, 2065, "ad"], [2074, 2084, "a"], [2077, 2081, "al"], [2090, 2100, "a"], [2093, 2097, "al"], [2106, 2116, "a"], [2109, 2113, "al"], [2122, 2132, "a"], [2125, 2129, "al"], [2138, 2148, "a"], [2141, 2145, "al"], [2154, 2164, "a"], [2157, 2161, "al"], [2170, 2180, "a"], [2173, 2177, "al"], [2186, 2196, "a"], [2189, 2193, "al"], [2202, 2212, "a"], [2205, 2209, "al"], [2218, 2228, "a"], [2221, 2225, "al"], [2234, 2244, "a"], [2237, 2241, "al"], [2250, 2260, "a"], [2253, 2257, "au"], [2266, 2276, "a"], [2269, 2273, "au"], [2282, 2292, "a"], [2285, 2289, "ar"], [2298, 2308, "a"], [2301, 2305, "ar"], [2314, 2324, "a"], [2317, 2321, "ar"], [2330, 2340, "a"], [2333, 2337, "ar"], [2346, 2350, "d"], [2356, 2360, "d"], [2366, 2370, "a"], [2376, 2386, "a"], [2379, 2383, "ad"], [2392, 2402, "a"], [2395, 2399, "ad"], [2408, 2418, "a"], [2411, 2415, "ad"], [2424, 2434, "a"], [2427, 2431, "ad"], [2440, 2450, "a"], [2443, 2447, "ad"], [2456, 2466, "a"], [2459, 2463, "ad"], [2472, 2482, "a"], [2475, 2479, "ad"], [2488, 2498, "a"], [2491, 2495, "al"], [2504, 2514, "a"], [2507, 2511, "al"], [2520, 2530, "a"], [2523, 2527, "al"], [2536, 2546, "a"], [2539, 2543, "al"], [2552, 2562, "a"], [2555, 2559, "al"], [2568, 2578, "a"], [2571, 2575, "al"], [2584, 2594, "a"], [2587, 2591, "al"], [2600, 2610, "a"], [2603, 2607, "al"], [2616, 2626, "a"], [2619, 2623, "al"], [2632, 2642, "a"], [2635, 2639, "al"], [2648, 2658, "a"], [2651, 2655, "al"], [2664, 2674, "a"], [2667, 2671, "au"], [2680, 2690, "a"], [2683, 2687, "au"], [2696, 2706, "a"], [2699, 2703, "ar"], [2712, 2722, "a"], [2715, 2719, "ar"], [2728, 2732, "d"], [2738, 2742, "d"], [2748, 2752, "a"], [2758, 2768, "a"], [2761, 2765, "ad"], [2774, 2784, "a"], [2777, 2781, "ad"], [2790, 2800, "a"], [2793, 2797, "ad"], [2806, 2816, "a"], [2809, 2813, "ad"], [2822, 2832, "a"], [2825, 2829, "ad"], [2838, 2848, "a"], [2841, 2845, "ad"], [2854, 2864, "a"], [2857, 2861, "ad"], [2870, 2880, "a"], [2873, 2877, "al"], [2886, 2896, "a"], [2889, 2893, "al"], [2902, 2912, "a"], [2905, 2909, "al"], [2918, 2928, "a"], [2921, 2925, "al"], [2934, 2944, "a"], [2937, 2941, "al"], [2950, 2960, "a"], [2953, 2957, "al"], [2966, 2976, "a"], [2969, 2973, "al"], [2982, 2992, "a"], [2985, 2989, "al"], [2998, 3008, "a"], [3001, 3005, "al"], [3014, 3024, "a"], [3017, 3021, "al"], [3030, 3040, "a"], [3033, 3037, "al"], [3046, 3056, "a"], [3049, 3053, "au"], [3062, 3072, "a"], [3065, 3069, "au"], [3078, 3082, "d"], [3088, 3092, "d"], [3098, 3102, "a"], [3108, 3118, "a"], [3111, 3115, "ad"], [3124, 3134, "a"], [3127, 3131, "ad"], [3140, 3150, "a"], [3143, 3147, "ad"], [3156, 3166, "a"], [3159, 3163, "ad"], [3172, 3182, "a"], [3175, 3179, "ad"], [3188, 3198, "a"], [3191, 3195, "ad"], [3204, 3214, "a"], [3207, 3211, "ad"], [3220, 3230, "a"], [3223, 3227, "al"], [3236, 3246, "a"], [3239, 3243, "al"], [3252, 3262, "a"], [3255, 3259, "al"], [3268, 3278, "a"], [3271, 3275, "al"], [3284, 3294, "a"], [3287, 3291, "al"], [3300, 3310, "a"], [3303, 3307, "al"], [3316, 3326, "a"], [3319, 3323, "al"], [3332, 3342, "a"], [3335, 3339, "al"], [3348, 3358, "a"], [3351, 3355, "al"], [3364, 3374, "a"], [3367, 3371, "al"], [3380, 3390, "a"], [3383, 3387, "al"], [3396, 3406, "a"], [3399, 3403, "au"], [3412, 3422, "a"], [3415, 3419, "ar"], [3428, 3438, "a"], [3431, 3435, "ar"], [3444, 3454, "a"], [3447, 3451, "ar"], [3460, 3470, "a"], [3463, 3467, "ar"], [3476, 3486, "a"], [3479, 3483, "ar"], [3492, 3502, "a"], [3495, 3499, "ar"], [3508, 3518, "a"], [3511, 3515, "ar"], [3524, 3534, "a"], [3527, 3531, "ar"], [3540, 3550, "a"], [3543, 3547, "ar"], [3556, 3566, "a"], [3559, 3563, "ar"], [3572, 3582, "a"], [3575, 3579, "ar"], [3588, 3592, "d"], [3598, 3602, "d"], [3608, 3612, "a"], [3618, 3628, "a"], [3621, 3625, "ad"], [3634, 3644, "a"], [3637, 3641, "ad"], [3650, 3660, "a"], [3653, 3657, "ad"], [3666, 3676, "a"], [3669, 3673, "ad"], [3682, 3692, "a"], [3685, 3689, "ad"], [3698, 3708, "a"], [3701, 3705, "ad"], [3714, 3724, "a"], [3717, 3721, "ad"], [3730, 3740, "a"], [3733, 3737, "al"], [3746, 3756, "a"], [3749, 3753, "al"], [3762, 3772, "a"], [3765, 3769, "al"], [3778, 3788, "a"], [3781, 3785, "al"], [3794, 3804, "a"], [3797, 3801, "al"], [3810, 3820, "a"], [3813, 3817, "al"], [3826, 3836, "a"], [3829, 3833, "al"], [3842, 3852, "a"], [3845, 3849, "al"], [3858, 3868, "a"], [3861, 3865, "al"], [3874, 3884, "a"], [3877, 3881, "al"], [3890, 3900, "a"], [3893, 3897, "al"], [3906, 3916, "a"], [3909, 3913, "au"], [3922, 3932, "a"], [3925, 3929, "ar"], [3938, 3948, "a"], [3941, 3945, "ar"], [3954, 3964, "a"], [3957, 3961, "ar"], [3970, 3980, "a"], [3973, 3977, "ar"], [3986, 3996, "a"], [3989, 3993, "ar"], [4002, 4012, "a"], [4005, 4009, "ar"], [4018, 4028, "a"], [4021, 4025, "ar"], [4034, 4038, "u"], [4044, 4048, "u"], [4054, 4058, "u"], [4064, 4068, "u"], [4074, 4078, "u"], [4084, 4088, "u"], [4094, 4098, "u"], [4104, 4108, "u"], [4114, 4118, "u"], [4124, 4128, "u"], [4134, 4138, "u"], [4144, 4148, "u"], [4154, 4158, "u"], [4164, 4168, "u"], [4174, 4184, "s"], [4177, 4181, "sl"], [4190, 4194, "d"], [4200, 4204, "a"], [4210, 4220, "a"], [4213, 4217, "ad"], [4226, 4236, "a"], [4229, 4233, "ad"], [4242, 4252, "a"], [4245, 4249, "ad"], [4258, 4268, "a"], [4261, 4265, "ad"], [4274, 4284, "a"], [4277, 4281, "ad"], [4290, 4300, "a"], [4293, 4297, "ad"], [4306, 4316, "a"], [4309, 4313, "ad"], [4322, 4332, "a"], [4325, 4329, "ad"], [4338, 4348, "a"], [4341, 4345, "ad"], [4354, 4364, "a"], [4357, 4361, "ad"], [4370, 4380, "a"], [4373, 4377, "ad"], [4386, 4396, "a"], [4389, 4393, "ad"], [4402, 4412, "a"], [4405, 4409, "ad"], [4418, 4428, "a"], [4421, 4425, "ad"], [4434, 4444, "a"], [4437, 4441, "ad"], [4450, 4460, "a"], [4453, 4457, "ad"], [4466, 4476, "a"], [4469, 4473, "al"], [4482, 4492, "a"], [4485, 4489, "al"], [4498, 4508, "a"], [4501, 4505, "al"], [4514, 4524, "a"], [4517, 4521, "al"], [4530, 4540, "a"], [4533, 4537, "al"], [4546, 4556, "a"], [4549, 4553, "al"], [4562, 4572, "a"], [4565, 4569, "al"], [4578, 4588, "a"], [4581, 4585, "al"], [4594, 4604, "a"], [4597, 4601, "al"], [4610, 4620, "a"], [4613, 4617, "al"], [4626, 4636, "a"], [4629, 4633, "al"], [4642, 4652, "a"], [4645, 4649, "al"], [4658, 4668, "a"], [4661, 4665, "al"], [4674, 4684, "a"], [4677, 4681, "al"], [4690, 4700, "a"], [4693, 4697, "al"], [4706, 4716, "a"], [4709, 4713, "ar"], [4722, 4732, "s"], [4725, 4729, "sr"], [4738, 4742, "a"], [4748, 4758, "a"], [4751, 4755, "ad"], [4764, 4774, "a"], [4767, 4771, "ad"], [4780, 4790, "a"], [4783, 4787, "ad"], [4796, 4806, "a"], [4799, 4803, "ad"], [4812, 4822, "a"], [4815, 4819, "ad"], [4828, 4838, "a"], [4831, 4835, "ad"], [4844, 4854, "a"], [4847, 4851, "ad"], [4860, 4870, "a"], [4863, 4867, "al"], [4876, 4886, "a"], [4879, 4883, "al"], [4892, 4902, "a"], [4895, 4899, "al"], [4908, 4918, "a"], [4911, 4915, "al"], [4924, 4934, "a"], [4927, 4931, "al"], [4940, 4950, "a"], [4943, 4947, "al"], [4956, 4966, "a"], [4959, 4963, "al"], [4972, 4982, "a"], [4975, 4979, "al"], [4988, 4998, "a"], [4991, 4995, "al"], [5004, 5014, "a"], [5007, 5011, "al"], [5020, 5030, "a"], [5023, 5027, "al"], [5036, 5046, "a"], [5039, 5043, "au"], [5052, 5062, "a"], [5055, 5059, "ar"], [5068, 5078, "a"], [5071, 5075, "ar"], [5084, 5094, "a"], [5087, 5091, "ar"], [5100, 5110, "a"], [5103, 5107, "ar"], [5116, 5126, "a"], [5119, 5123, "ar"], [5132, 5136, "d"], [5142, 5146, "d"], [5152, 5156, "d"], [5162, 5166, "a"], [5172, 5182, "a"], [5175, 5179, "ad"], [5188, 5198, "a"], [5191, 5195, "ad"], [5204, 5214, "a"], [5207, 5211, "ad"], [5220, 5230, "a"], [5223, 5227, "ad"], [5236, 5246, "a"], [5239, 5243, "ad"], [5252, 5262, "a"], [5255, 5259, "ad"], [5268, 5278, "a"], [5271, 5275, "ad"], [5284, 5294, "a"], [5287, 5291, "al"], [5300, 5310, "a"], [5303, 5307, "al"], [5316, 5326, "a"], [5319, 5323, "al"], [5332, 5342, "a"], [5335, 5339, "al"], [5348, 5358, "a"], [5351, 5355, "al"], [5364, 5374, "a"], [5367, 5371, "al"], [5380, 5390, "a"], [5383, 5387, "al"], [5396, 5406, "a"], [5399, 5403, "al"], [5412, 5422, "a"], [5415, 5419, "al"], [5428, 5438, "a"], [5431, 5435, "al"], [5444, 5454, "a"], [5447, 5451, "al"], [5460, 5470, "a"], [5463, 5467, "au"], [5476, 5486, "a"], [5479, 5483, "ar"], [5492, 5502, "a"], [5495, 5499, "ar"], [5508, 5518, "a"], [5511, 5515, "ar"], [5524, 5534, "a"], [5527, 5531, "ar"], [5540, 5550, "a"], [5543, 5547, "ar"], [5556, 5566, "a"], [5559, 5563, "ar"], [5572, 5582, "a"], [5575, 5579, "ar"], [5588, 5598, "a"], [5591, 5595, "ar"], [5604, 5614, "a"], [5607, 5611, "ar"], [5620, 5624, "d"], [5630, 5634, "d"], [5640, 5644, "d"], [5650, 5654, "a"], [5660, 5670, "a"], [5663, 5667, "ad"], [5676, 5686, "a"], [5679, 5683, "ad"], [5692, 5702, "a"], [5695, 5699, "ad"], [5708, 5718, "a"], [5711, 5715, "ad"], [5724, 5734, "a"], [5727, 5731, "ad"], [5740, 5750, "a"], [5743, 5747, "ad"], [5756, 5766, "a"], [5759, 5763, "ad"], [5772, 5782, "a"], [5775, 5779, "al"], [5788, 5798, "a"], [5791, 5795, "al"], [5804, 5814, "a"], [5807, 5811, "al"], [5820, 5830, "a"], [5823, 5827, "al"], [5836, 5846, "a"], [5839, 5843, "al"], [5852, 5862, "a"], [5855, 5859, "al"], [5868, 5878, "a"], [5871, 5875, "al"], [5884, 5894, "a"], [5887, 5891, "al"], [5900, 5910, "a"], [5903, 5907, "al"], [5916, 5926, "a"], [5919, 5923, "al"], [5932, 5942, "a"], [5935, 5939, "al"], [5948, 5958, "a"], [5951, 5955, "au"], [5964, 5974, "a"], [5967, 5971, "au"], [5980, 5984, "d"], [5990, 5994, "d"], [6000, 6004, "a"], [6010, 6020, "a"], [6013, 6017, "ad"], [6026, 6036, "a"], [6029, 6033, "ad"], [6042, 6052, "a"], [6045, 6049, "ad"], [6058, 6068, "a"], [6061, 6065, "ad"], [6074, 6084, "a"], [6077, 6081, "ad"], [6090, 6100, "a"], [6093, 6097, "ad"], [6106, 6116, "a"], [6109, 6113, "ad"], [6122, 6132, "a"], [6125, 6129, "al"], [6138, 6148, "a"], [6141, 6145, "al"], [6154, 6164, "a"], [6157, 6161, "al"], [6170, 6180, "a"], [6173, 6177, "al"], [6186, 6196, "a"], [6189, 6193, "al"], [6202, 6212, "a"], [6205, 6209, "al"], [6218, 6228, "a"], [6221, 6225, "al"], [6234, 6244, "a"], [6237, 6241, "al"], [6250, 6260, "a"], [6253, 6257, "al"], [6266, 6276, "a"], [6269, 6273, "al"], [6282, 6292, "a"], [6285, 6289, "al"], [6298, 6308, "a"], [6301, 6305, "au"], [6314, 6324, "a"], [6317, 6321, "ar"], [6330, 6340, "a"], [6333, 6337, "ar"], [6346, 6356, "a"], [6349, 6353, "ar"], [6362, 6372, "a"], [6365, 6369, "ar"], [6378, 6388, "a"], [6381, 6385, "ar"], [6394, 6404, "a"], [6397, 6401, "ar"], [6410, 6420, "a"], [6413, 6417, "ar"], [6426, 6436, "a"], [6429, 6433, "ar"], [6442, 6452, "a"], [6445, 6449, "ar"], [6458, 6468, "a"], [6461, 6465, "ar"], [6474, 6484, "a"], [6477, 6481, "ar"], [6490, 6494, "d"], [6500, 6504, "d"], [6510, 6514, "a"], [6520, 6530, "a"], [6523, 6527, "ad"], [6536, 6546, "a"], [6539, 6543, "ad"], [6552, 6562, "a"], [6555, 6559, "ad"], [6568, 6578, "a"], [6571, 6575, "ad"], [6584, 6594, "a"], [6587, 6591, "ad"], [6600, 6610, "a"], [6603, 6607, "ad"], [6616, 6626, "a"], [6619, 6623, "ad"], [6632, 6642, "a"], [6635, 6639, "al"], [6648, 6658, "a"], [6651, 6655, "al"], [6664, 6674, "a"], [6667, 6671, "al"], [6680, 6690, "a"], [6683, 6687, "al"], [6696, 6706, "a"], [6699, 6703, "al"], [6712, 6722, "a"], [6715, 6719, "al"], [6728, 6738, "a"], [6731, 6735, "al"], [6744, 6754, "a"], [6747, 6751, "al"], [6760, 6770, "a"], [6763, 6767, "al"], [6776, 6786, "a"], [6779, 6783, "al"], [6792, 6802, "a"], [6795, 6799, "al"], [6808, 6818, "a"], [6811, 6815, "au"], [6824, 6834, "a"], [6827, 6831, "ar"], [6840, 6850, "a"], [6843, 6847, "ar"], [6856, 6866, "a"], [6859, 6863, "ar"], [6872, 6882, "a"], [6875, 6879, "ar"], [6888, 6898, "a"], [6891, 6895, "ar"], [6904, 6914, "a"], [6907, 6911, "ar"], [6920, 6930, "a"], [6923, 6927, "ar"], [6936, 6946, "a"], [6939, 6943, "ar"], [6952, 6962, "a"], [6955, 6959, "ar"], [6968, 6972, "d"], [6978, 6982, "d"], [6988, 6992, "a"], [6998, 7008, "a"], [7001, 7005, "ad"], [7014, 7024, "a"], [7017, 7021, "ad"], [7030, 7040, "a"], [7033, 7037, "ad"], [7046, 7056, "a"], [7049, 7053, "ad"], [7062, 7072, "a"], [7065, 7069, "ad"], [7078, 7088, "a"], [7081, 7085, "ad"], [7094, 7104, "a"], [7097, 7101, "ad"], [7110, 7120, "a"], [7113, 7117, "al"], [7126, 7136, "a"], [7129, 7133, "al"], [7142, 7152, "a"], [7145, 7149, "al"], [7158, 7168, "a"], [7161, 7165, "al"], [7174, 7184, "a"], [7177, 7181, "al"], [7190, 7200, "a"], [7193, 7197, "al"], [7206, 7216, "a"], [7209, 7213, "al"], [7222, 7232, "a"], [7225, 7229, "al"], [7238, 7248, "a"], [7241, 7245, "al"], [7254, 7264, "a"], [7257, 7261, "al"], [7270, 7280, "a"], [7273, 7277, "al"], [7286, 7296, "a"], [7289, 7293, "au"], [7302, 7312, "a"], [7305, 7309, "ar"], [7318, 7328, "a"], [7321, 7325, "ar"], [7334, 7344, "a"], [7337, 7341, "ar"], [7350, 7360, "a"], [7353, 7357, "ar"], [7366, 7376, "a"], [7369, 7373, "ar"], [7382, 7392, "a"], [7385, 7389, "ar"], [7398, 7408, "a"], [7401, 7405, "ar"], [7414, 7418, "d"], [7424, 7428, "d"], [7434, 7438, "a"], [7444, 7454, "a"], [7447, 7451, "ad"], [7460, 7470, "a"], [7463, 7467, "ad"], [7476, 7486, "a"], [7479, 7483, "ad"], [7492, 7502, "a"], [7495, 7499, "ad"], [7508, 7518, "a"], [7511, 7515, "ad"], [7524, 7534, "a"], [7527, 7531, "ad"], [7540, 7550, "a"], [7543, 7547, "ad"], [7556, 7566, "a"], [7559, 7563, "al"], [7572, 7582, "a"], [7575, 7579, "al"], [7588, 7598, "a"], [7591, 7595, "al"], [7604, 7614, "a"], [7607, 7611, "al"], [7620, 7630, "a"], [7623, 7627, "al"], [7636, 7646, "a"], [7639, 7643, "al"], [7652, 7662, "a"], [7655, 7659, "al"], [7668, 7678, "a"], [7671, 7675, "al"], [7684, 7694, "a"], [7687, 7691, "al"], [7700, 7710, "a"], [7703, 7707, "al"], [7716, 7726, "a"], [7719, 7723, "al"], [7732, 7742, "a"], [7735, 7739, "au"], [7748, 7758, "a"], [7751, 7755, "ar"], [7764, 7774, "a"], [7767, 7771, "ar"], [7780, 7790, "a"], [7783, 7787, "ar"], [7796, 7806, "a"], [7799, 7803, "ar"], [7812, 7816, "u"], [7822, 7826, "u"], [7832, 7836, "u"], [7842, 7846, "u"], [7852, 7856, "u"], [7862, 7866, "u"], [7872, 7876, "u"], [7882, 7886, "u"], [7892, 7896, "u"], [7902, 7906, "u"], [7912, 7916, "u"], [7922, 7926, "u"], [7932, 7936, "u"], [7942, 7946, "u"], [7952, 7962, "s"], [7955, 7959, "sl"], [7968, 7972, "d"], [7978, 7982, "u"], [7988, 7992, "u"], [7998, 8008, "s"], [8001, 8005, "sl"], [8014, 8018, "r"], [8024, 8028, "a"], [8034, 8044, "a"], [8037, 8041, "ad"], [8050, 8060, "a"], [8053, 8057, "ad"], [8066, 8076, "a"], [8069, 8073, "ad"], [8082, 8092, "a"], [8085, 8089, "ad"], [8098, 8108, "a"], [8101, 8105, "ad"], [8114, 8124, "a"], [8117, 8121, "ad"], [8130, 8140, "a"], [8133, 8137, "ad"], [8146, 8156, "a"], [8149, 8153, "ad"], [8162, 8172, "a"], [8165, 8169, "ad"], [8178, 8188, "a"], [8181, 8185, "ad"], [8194, 8204, "a"], [8197, 8201, "ad"], [8210, 8220, "a"], [8213, 8217, "ad"], [8226, 8236, "a"], [8229, 8233, "ad"], [8242, 8252, "a"], [8245, 8249, "ad"], [8258, 8268, "a"], [8261, 8265, "ad"], [8274, 8284, "a"], [8277, 8281, "ad"], [8290, 8300, "a"], [8293, 8297, "al"], [8306, 8316, "a"], [8309, 8313, "al"], [8322, 8332, "a"], [8325, 8329, "al"], [8338, 8348, "a"], [8341, 8345, "al"], [8354, 8364, "a"], [8357, 8361, "al"], [8370, 8380, "a"], [8373, 8377, "al"], [8386, 8396, "a"], [8389, 8393, "al"], [8402, 8412, "a"], [8405, 8409, "al"], [8418, 8428, "a"], [8421, 8425, "al"], [8434, 8444, "a"], [8437, 8441, "al"], [8450, 8460, "a"], [8453, 8457, "al"], [8466, 8476, "a"], [8469, 8473, "al"], [8482, 8492, "a"], [8485, 8489, "al"], [8498, 8508, "a"], [8501, 8505, "al"], [8514, 8524, "a"], [8517, 8521, "al"], [8530, 8540, "a"], [8533, 8537, "ar"], [8546, 8556, "s"], [8549, 8553, "sr"], [8562, 8566, "a"], [8572, 8582, "a"], [8575, 8579, "ad"], [8588, 8598, "a"], [8591, 8595, "ad"], [8604, 8614, "a"], [8607, 8611, "ad"], [8620, 8630, "a"], [8623, 8627, "ad"], [8636, 8646, "a"], [8639, 8643, "ad"], [8652, 8662, "a"], [8655, 8659, "ad"], [8668, 8678, "a"], [8671, 8675, "ad"], [8684, 8694, "a"], [8687, 8691, "ad"], [8700, 8710, "a"], [8703, 8707, "ad"], [8716, 8726, "a"], [8719, 8723, "ad"], [8732, 8742, "a"], [8735, 8739, "ad"], [8748, 8758, "a"], [8751, 8755, "ad"], [8764, 8774, "a"], [8767, 8771, "ad"], [8780, 8790, "a"], [8783, 8787, "ad"], [8796, 8806, "a"], [8799, 8803, "ad"], [8812, 8822, "a"], [8815, 8819, "ad"], [8828, 8838, "a"], [8831, 8835, "al"], [8844, 8854, "a"], [8847, 8851, "al"], [8860, 8870, "a"], [8863, 8867, "al"], [8876, 8886, "a"], [8879, 8883, "al"], [8892, 8902, "a"], [8895, 8899, "al"], [8908, 8918, "a"], [8911, 8915, "al"], [8924, 8934, "a"], [8927, 8931, "al"], [8940, 8950, "a"], [8943, 8947, "al"], [8956, 8966, "a"], [8959, 8963, "al"], [8972, 8982, "a"], [8975, 8979, "al"], [8988, 8998, "a"], [8991, 8995, "al"], [9004, 9014, "a"], [9007, 9011, "al"], [9020, 9030, "a"], [9023, 9027, "al"], [9036, 9046, "a"], [9039, 9043, "al"], [9052, 9062, "a"], [9055, 9059, "al"], [9068, 9078, "a"], [9071, 9075, "ar"], [9084, 9094, "a"], [9087, 9091, "ar"], [9100, 9110, "s"], [9103, 9107, "sr"], [9116, 9120, "a"], [9126, 9136, "a"], [9129, 9133, "ad"], [9142, 9152, "a"], [9145, 9149, "ad"], [9158, 9168, "a"], [9161, 9165, "ad"], [9174, 9184, "a"], [9177, 9181, "ad"], [9190, 9200, "a"], [9193, 9197, "ad"], [9206, 9216, "a"], [9209, 9213, "ad"], [9222, 9232, "a"], [9225, 9229, "ad"], [9238, 9248, "a"], [9241, 9245, "al"], [9254, 9264, "a"], [9257, 9261, "al"], [9270, 9280, "a"], [9273, 9277, "al"], [9286, 9296, "a"], [9289, 9293, "al"], [9302, 9312, "a"], [9305, 9309, "al"], [9318, 9328, "a"], [9321, 9325, "al"], [9334, 9344, "a"], [9337, 9341, "al"], [9350, 9360, "a"], [9353, 9357, "al"], [9366, 9376, "a"], [9369, 9373, "al"], [9382, 9392, "a"], [9385, 9389, "al"], [9398, 9408, "a"], [9401, 9405, "al"], [9414, 9424, "a"], [9417, 9421, "ar"], [9430, 9440, "a"], [9433, 9437, "ar"], [9446, 9456, "a"], [9449, 9453, "ar"], [9462, 9472, "a"], [9465, 9469, "ar"], [9478, 9488, "a"], [9481, 9485, "ar"], [9494, 9504, "a"], [9497, 9501, "ar"], [9510, 9520, "a"], [9513, 9517, "ar"], [9526, 9536, "a"], [9529, 9533, "ar"], [9542, 9552, "a"], [9545, 9549, "ar"], [9558, 9562, "d"], [9568, 9572, "d"], [9578, 9582, "a"], [9588, 9598, "a"], [9591, 9595, "ad"], [9604, 9614, "a"], [9607, 9611, "ad"], [9620, 9630, "a"], [9623, 9627, "ad"], [9636, 9646, "a"], [9639, 9643, "ad"], [9652, 9662, "a"], [9655, 9659, "ad"], [9668, 9678, "a"], [9671, 9675, "ad"], [9684, 9694, "a"], [9687, 9691, "ad"], [9700, 9710, "a"], [9703, 9707, "al"], [9716, 9726, "a"], [9719, 9723, "al"], [9732, 9742, "a"], [9735, 9739, "al"], [9748, 9758, "a"], [9751, 9755, "al"], [9764, 9774, "a"], [9767, 9771, "al"], [9780, 9790, "a"], [9783, 9787, "al"], [9796, 9806, "a"], [9799, 9803, "al"], [9812, 9822, "a"], [9815, 9819, "al"], [9828, 9838, "a"], [9831, 9835, "al"], [9844, 9854, "a"], [9847, 9851, "al"], [9860, 9870, "a"], [9863, 9867, "al"], [9876, 9886, "a"], [9879, 9883, "au"], [9892, 9902, "a"], [9895, 9899, "ar"], [9908, 9918, "a"], [9911, 9915, "ar"], [9924, 9934, "a"], [9927, 9931, "ar"], [9940, 9950, "a"], [9943, 9947, "ar"], [9956, 9966, "a"], [9959, 9963, "ar"], [9972, 9982, "a"], [9975, 9979, "ar"], [9988, 9998, "a"], [9991, 9995, "ar"], [10004, 10014, "a"], [10007, 10011, "ar"], [10020, 10030, "a"], [10023, 10027, "ar"], [10036, 10040, "d"], [10046, 10050, "d"], [10056, 10060, "a"], [10066, 10076, "a"], [10069, 10073, "ad"], [10082, 10092, "a"], [10085, 10089, "ad"], [10098, 10108, "a"], [10101, 10105, "ad"], [10114, 10124, "a"], [10117, 10121, "ad"], [10130, 10140, "a"], [10133, 10137, "ad"], [10146, 10156, "a"], [10149, 10153, "ad"], [10162, 10172, "a"], [10165, 10169, "ad"], [10178, 10188, "a"], [10181, 10185, "al"], [10194, 10204, "a"], [10197, 10201, "al"], [10210, 10220, "a"], [10213, 10217, "al"], [10226, 10236, "a"], [10229, 10233, "al"], [10242, 10252, "a"], [10245, 10249, "al"], [10258, 10268, "a"], [10261, 10265, "al"], [10274, 10284, "a"], [10277, 10281, "al"], [10290, 10300, "a"], [10293, 10297, "al"], [10306, 10316, "a"], [10309, 10313, "al"], [10322, 10332, "a"], [10325, 10329, "al"], [10338, 10348, "a"], [10341, 10345, "al"], [10354, 10364, "a"], [10357, 10361, "ar"], [10370, 10380, "a"], [10373, 10377, "ar"], [10386, 10396, "a"], [10389, 10393, "ar"], [10402, 10412, "a"], [10405, 10409, "ar"], [10418, 10428, "a"], [10421, 10425, "ar"], [10434, 10444, "a"], [10437, 10441, "ar"], [10450, 10460, "a"], [10453, 10457, "ar"], [10466, 10476, "a"], [10469, 10473, "ar"], [10482, 10492, "a"], [10485, 10489, "ar"], [10498, 10502, "d"], [10508, 10512, "d"], [10518, 10522, "a"], [10528, 10538, "a"], [10531, 10535, "ad"], [10544, 10554, "a"], [10547, 10551, "ad"], [10560, 10570, "a"], [10563, 10567, "ad"], [10576, 10586, "a"], [10579, 10583, "ad"], [10592, 10602, "a"], [10595, 10599, "ad"], [10608, 10618, "a"], [10611, 10615, "ad"], [10624, 10634, "a"], [10627, 10631, "ad"], [10640, 10650, "a"], [10643, 10647, "al"], [10656, 10666, "a"], [10659, 10663, "al"], [10672, 10682, "a"], [10675, 10679, "al"], [10688, 10698, "a"], [10691, 10695, "al"], [10704, 10714, "a"], [10707, 10711, "al"], [10720, 10730, "a"], [10723, 10727, "al"], [10736, 10746, "a"], [10739, 10743, "al"], [10752, 10762, "a"], [10755, 10759, "al"], [10768, 10778, "a"], [10771, 10775, "al"], [10784, 10794, "a"], [10787, 10791, "al"], [10800, 10810, "a"], [10803, 10807, "al"], [10816, 10826, "a"], [10819, 10823, "au"], [10832, 10842, "a"], [10835, 10839, "ar"], [10848, 10858, "a"], [10851, 10855, "ar"], [10864, 10874, "a"], [10867, 10871, "ar"], [10880, 10890, "a"], [10883, 10887, "ar"], [10896, 10906, "a"], [10899, 10903, "ar"], [10912, 10922, "a"], [10915, 10919, "ar"], [10928, 10938, "a"], [10931, 10935, "ar"], [10944, 10954, "a"], [10947, 10951, "ar"], [10960, 10970, "a"], [10963, 10967, "ar"], [10976, 10980, "d"], [10986, 10990, "d"], [10996, 11000, "a"], [11006, 11016, "a"], [11009, 11013, "ad"], [11022, 11032, "a"], [11025, 11029, "ad"], [11038, 11048, "a"], [11041, 11045, "ad"], [11054, 11064, "a"], [11057, 11061, "ad"], [11070, 11080, "a"], [11073, 11077, "ad"], [11086, 11096, "a"], [11089, 11093, "ad"], [11102, 11112, "a"], [11105, 11109, "ad"], [11118, 11128, "a"], [11121, 11125, "al"], [11134, 11144, "a"], [11137, 11141, "al"], [11150, 11160, "a"], [11153, 11157, "al"], [11166, 11176, "a"], [11169, 11173, "al"], [11182, 11192, "a"], [11185, 11189, "al"], [11198, 11208, "a"], [11201, 11205, "al"], [11214, 11224, "a"], [11217, 11221, "al"], [11230, 11240, "a"], [11233, 11237, "al"], [11246, 11256, "a"], [11249, 11253, "al"], [11262, 11272, "a"], [11265, 11269, "al"], [11278, 11288, "a"], [11281, 11285, "al"], [11294, 11304, "a"], [11297, 11301, "ar"], [11310, 11320, "a"], [11313, 11317, "ar"], [11326, 11336, "a"], [11329, 11333, "ar"], [11342, 11352, "a"], [11345, 11349, "ar"], [11358, 11368, "a"], [11361, 11365, "ar"], [11374, 11384, "a"], [11377, 11381, "ar"], [11390, 11400, "a"], [11393, 11397, "ar"], [11406, 11416, "a"], [11409, 11413, "ar"], [11422, 11432, "a"], [11425, 11429, "ar"], [11438, 11442, "d"], [11448, 11452, "d"], [11458, 11462, "a"], [11468, 11478, "a"], [11471, 11475, "ad"], [11484, 11494, "a"], [11487, 11491, "ad"], [11500, 11510, "a"], [11503, 11507, "ad"], [11516, 11526, "a"], [11519, 11523, "ad"], [11532, 11542, "a"], [11535, 11539, "ad"], [11548, 11558, "a"], [11551, 11555, "ad"], [11564, 11574, "a"], [11567, 11571, "ad"], [11580, 11590, "a"], [11583, 11587, "al"], [11596, 11606, "a"], [11599, 11603, "al"], [11612, 11622, "a"], [11615, 11619, "al"], [11628, 11638, "a"], [11631, 11635, "al"], [11644, 11654, "a"], [11647, 11651, "al"], [11660, 11670, "a"], [11663, 11667, "al"], [11676, 11686, "a"], [11679, 11683, "al"], [11692, 11702, "a"], [11695, 11699, "al"], [11708, 11718, "a"], [11711, 11715, "al"], [11724, 11734, "a"], [11727, 11731, "al"], [11740, 11750, "a"], [11743, 11747, "al"], [11756, 11766, "a"], [11759, 11763, "au"], [11772, 11782, "a"], [11775, 11779, "ar"], [11788, 11798, "a"], [11791, 11795, "ar"], [11804, 11814, "a"], [11807, 11811, "ar"], [11820, 11830, "a"], [11823, 11827, "ar"], [11836, 11846, "a"], [11839, 11843, "ar"], [11852, 11862, "a"], [11855, 11859, "ar"], [11868, 11878, "a"], [11871, 11875, "ar"], [11884, 11894, "a"], [11887, 11891, "ar"], [11900, 11910, "a"], [11903, 11907, "ar"], [11916, 11920, "d"], [11926, 11930, "d"], [11936, 11940, "a"], [11946, 11956, "a"], [11949, 11953, "ad"], [11962, 11972, "a"], [11965, 11969, "ad"], [11978, 11988, "a"], [11981, 11985, "ad"], [11994, 12004, "a"], [11997, 12001, "ad"], [12010, 12020, "a"], [12013, 12017, "ad"], [12026, 12036, "a"], [12029, 12033, "ad"], [12042, 12052, "a"], [12045, 12049, "ad"], [12058, 12068, "a"], [12061, 12065, "al"], [12074, 12084, "a"], [12077, 12081, "al"], [12090, 12100, "a"], [12093, 12097, "al"], [12106, 12116, "a"], [12109, 12113, "al"], [12122, 12132, "a"], [12125, 12129, "al"], [12138, 12148, "a"], [12141, 12145, "al"], [12154, 12164, "a"], [12157, 12161, "al"], [12170, 12180, "a"], [12173, 12177, "al"], [12186, 12196, "a"], [12189, 12193, "al"], [12202, 12212, "a"], [12205, 12209, "al"], [12218, 12228, "a"], [12221, 12225, "al"], [12234, 12244, "a"], [12237, 12241, "ar"], [12250, 12260, "a"], [12253, 12257, "ar"], [12266, 12276, "a"], [12269, 12273, "ar"], [12282, 12292, "a"], [12285, 12289, "ar"], [12298, 12308, "a"], [12301, 12305, "ar"], [12314, 12324, "a"], [12317, 12321, "ar"], [12330, 12340, "a"], [12333, 12337, "ar"], [12346, 12350, "d"], [12356, 12360, "d"], [12366, 12370, "a"], [12376, 12386, "a"], [12379, 12383, "ad"], [12392, 12402, "a"], [12395, 12399, "ad"], [12408, 12418, "a"], [12411, 12415, "ad"], [12424, 12434, "a"], [12427, 12431, "ad"], [12440, 12450, "a"], [12443, 12447, "ad"], [12456, 12466, "a"], [12459, 12463, "ad"], [12472, 12482, "a"], [12475, 12479, "ad"], [12488, 12498, "a"], [12491, 12495, "al"], [12504, 12514, "a"], [12507, 12511, "al"], [12520, 12530, "a"], [12523, 12527, "al"], [12536, 12546, "a"], [12539, 12543, "al"], [12552, 12562, "a"], [12555, 12559, "al"], [12568, 12578, "a"], [12571, 12575, "al"], [12584, 12594, "a"], [12587, 12591, "al"], [12600, 12610, "a"], [12603, 12607, "al"], [12616, 12626, "a"], [12619, 12623, "al"], [12632, 12642, "a"], [12635, 12639, "al"], [12648, 12658, "a"], [12651, 12655, "al"], [12664, 12674, "a"], [12667, 12671, "au"], [12680, 12690, "a"], [12683, 12687, "ar"], [12696, 12706, "a"], [12699, 12703, "ar"], [12712, 12722, "a"], [12715, 12719, "ar"], [12728, 12738, "a"], [12731, 12735, "ar"], [12744, 12754, "a"], [12747, 12751, "ar"], [12760, 12770, "a"], [12763, 12767, "ar"], [12776, 12786, "a"], [12779, 12783, "ar"], [12792, 12796, "u"], [12802, 12806, "u"], [12812, 12816, "u"], [12822, 12826, "u"], [12832, 12836, "u"], [12842, 12846, "u"], [12852, 12856, "u"], [12862, 12866, "u"], [12872, 12876, "u"], [12882, 12886, "u"], [12892, 12896, "u"], [12902, 12906, "u"], [12912, 12916, "u"], [12922, 12926, "u"], [12932, 12942, "s"], [12935, 12939, "sl"], [12948, 12952, "d"], [12958, 12962, "a"], [12968, 12978, "a"], [12971, 12975, "ad"], [12984, 12994, "a"], [12987, 12991, "ad"], [13000, 13010, "a"], [13003, 13007, "ad"], [13016, 13026, "a"], [13019, 13023, "ad"], [13032, 13042, "a"], [13035, 13039, "ad"], [13048, 13058, "a"], [13051, 13055, "ad"], [13064, 13074, "a"], [13067, 13071, "ad"], [13080, 13090, "a"], [13083, 13087, "ad"], [13096, 13106, "a"], [13099, 13103, "ad"], [13112, 13122, "a"], [13115, 13119, "ad"], [13128, 13138, "a"], [13131, 13135, "ad"], [13144, 13154, "a"], [13147, 13151, "ad"], [13160, 13170, "a"], [13163, 13167, "ad"], [13176, 13186, "a"], [13179, 13183, "ad"], [13192, 13202, "a"], [13195, 13199, "ad"], [13208, 13218, "a"], [13211, 13215, "ad"], [13224, 13234, "a"], [13227, 13231, "al"], [13240, 13250, "a"], [13243, 13247, "al"], [13256, 13266, "a"], [13259, 13263, "al"], [13272, 13282, "a"], [13275, 13279, "al"], [13288, 13298, "a"], [13291, 13295, "al"], [13304, 13314, "a"], [13307, 13311, "al"], [13320, 13330, "a"], [13323, 13327, "al"], [13336, 13346, "a"], [13339, 13343, "al"], [13352, 13362, "a"], [13355, 13359, "al"], [13368, 13378, "a"], [13371, 13375, "al"], [13384, 13394, "a"], [13387, 13391, "al"], [13400, 13410, "a"], [13403, 13407, "al"], [13416, 13426, "a"], [13419, 13423, "al"], [13432, 13442, "a"], [13435, 13439, "al"], [13448, 13458, "a"], [13451, 13455, "al"], [13464, 13474, "a"], [13467, 13471, "ar"], [13480, 13490, "a"], [13483, 13487, "ar"], [13496, 13506, "a"], [13499, 13503, "ar"], [13512, 13522, "s"], [13515, 13519, "sr"], [13528, 13532, "a"], [13538, 13548, "a"], [13541, 13545, "ad"], [13554, 13564, "a"], [13557, 13561, "ad"], [13570, 13580, "a"], [13573, 13577, "ad"], [13586, 13596, "a"], [13589, 13593, "ad"], [13602, 13612, "a"], [13605, 13609, "ad"], [13618, 13628, "a"], [13621, 13625, "ad"], [13634, 13644, "a"], [13637, 13641, "ad"], [13650, 13660, "a"], [13653, 13657, "al"], [13666, 13676, "a"], [13669, 13673, "al"], [13682, 13692, "a"], [13685, 13689, "al"], [13698, 13708, "a"], [13701, 13705, "al"], [13714, 13724, "a"], [13717, 13721, "al"], [13730, 13740, "a"], [13733, 13737, "al"], [13746, 13756, "a"], [13749, 13753, "al"], [13762, 13772, "a"], [13765, 13769, "al"], [13778, 13788, "a"], [13781, 13785, "al"], [13794, 13804, "a"], [13797, 13801, "al"], [13810, 13820, "a"], [13813, 13817, "al"], [13826, 13836, "a"], [13829, 13833, "ar"], [13842, 13852, "a"], [13845, 13849, "ar"], [13858, 13868, "a"], [13861, 13865, "ar"], [13874, 13884, "a"], [13877, 13881, "ar"], [13890, 13900, "a"], [13893, 13897, "ar"], [13906, 13910, "d"], [13916, 13920, "d"], [13926, 13930, "a"], [13936, 13946, "a"], [13939, 13943, "ad"], [13952, 13962, "a"], [13955, 13959, "ad"], [13968, 13978, "a"], [13971, 13975, "ad"], [13984, 13994, "a"], [13987, 13991, "ad"], [14000, 14010, "a"], [14003, 14007, "ad"], [14016, 14026, "a"], [14019, 14023, "ad"], [14032, 14042, "a"], [14035, 14039, "ad"], [14048, 14058, "a"], [14051, 14055, "al"], [14064, 14074, "a"], [14067, 14071, "al"], [14080, 14090, "a"], [14083, 14087, "al"], [14096, 14106, "a"], [14099, 14103, "al"], [14112, 14122, "a"], [14115, 14119, "al"], [14128, 14138, "a"], [14131, 14135, "al"], [14144, 14154, "a"], [14147, 14151, "al"], [14160, 14170, "a"], [14163, 14167, "al"], [14176, 14186, "a"], [14179, 14183, "al"], [14192, 14202, "a"], [14195, 14199, "al"], [14208, 14218, "a"], [14211, 14215, "al"], [14224, 14234, "a"], [14227, 14231, "au"], [14240, 14250, "a"], [14243, 14247, "ar"], [14256, 14266, "a"], [14259, 14263, "ar"], [14272, 14282, "a"], [14275, 14279, "ar"], [14288, 14298, "a"], [14291, 14295, "ar"], [14304, 14314, "a"], [14307, 14311, "ar"], [14320, 14324, "d"], [14330, 14334, "d"], [14340, 14344, "a"], [14350, 14360, "a"], [14353, 14357, "ad"], [14366, 14376, "a"], [14369, 14373, "ad"], [14382, 14392, "a"], [14385, 14389, "ad"], [14398, 14408, "a"], [14401, 14405, "ad"], [14414, 14424, "a"], [14417, 14421, "ad"], [14430, 14440, "a"], [14433, 14437, "ad"], [14446, 14456, "a"], [14449, 14453, "ad"], [14462, 14472, "a"], [14465, 14469, "al"], [14478, 14488, "a"], [14481, 14485, "al"], [14494, 14504, "a"], [14497, 14501, "al"], [14510, 14520, "a"], [14513, 14517, "al"], [14526, 14536, "a"], [14529, 14533, "al"], [14542, 14552, "a"], [14545, 14549, "al"], [14558, 14568, "a"], [14561, 14565, "al"], [14574, 14584, "a"], [14577, 14581, "al"], [14590, 14600, "a"], [14593, 14597, "al"], [14606, 14616, "a"], [14609, 14613, "al"], [14622, 14632, "a"], [14625, 14629, "al"], [14638, 14648, "a"], [14641, 14645, "ar"], [14654, 14664, "a"], [14657, 14661, "ar"], [14670, 14680, "a"], [14673, 14677, "ar"], [14686, 14696, "a"], [14689, 14693, "ar"], [14702, 14712, "a"], [14705, 14709, "ar"], [14718, 14722, "d"], [14728, 14732, "d"], [14738, 14742, "a"], [14748, 14758, "a"], [14751, 14755, "ad"], [14764, 14774, "a"], [14767, 14771, "ad"], [14780, 14790, "a"], [14783, 14787, "ad"], [14796, 14806, "a"], [14799, 14803, "ad"], [14812, 14822, "a"], [14815, 14819, "ad"], [14828, 14838, "a"], [14831, 14835, "ad"], [14844, 14854, "a"], [14847, 14851, "ad"], [14860, 14870, "a"], [14863, 14867, "al"], [14876, 14886, "a"], [14879, 14883, "al"], [14892, 14902, "a"], [14895, 14899, "al"], [14908, 14918, "a"], [14911, 14915, "al"], [14924, 14934, "a"], [14927, 14931, "al"], [14940, 14950, "a"], [14943, 14947, "al"], [14956, 14966, "a"], [14959, 14963, "al"], [14972, 14982, "a"], [14975, 14979, "al"], [14988, 14998, "a"], [14991, 14995, "al"], [15004, 15014, "a"], [15007, 15011, "al"], [15020, 15030, "a"], [15023, 15027, "al"], [15036, 15046, "a"], [15039, 15043, "au"], [15052, 15062, "a"], [15055, 15059, "ar"], [15068, 15078, "a"], [15071, 15075, "ar"], [15084, 15094, "a"], [15087, 15091, "ar"], [15100, 15110, "a"], [15103, 15107, "ar"], [15116, 15126, "a"], [15119, 15123, "ar"], [15132, 15136, "d"], [15142, 15146, "d"], [15152, 15156, "a"], [15162, 15172, "a"], [15165, 15169, "ad"], [15178, 15188, "a"], [15181, 15185, "ad"], [15194, 15204, "a"], [15197, 15201, "ad"], [15210, 15220, "a"], [15213, 15217, "ad"], [15226, 15236, "a"], [15229, 15233, "ad"], [15242, 15252, "a"], [15245, 15249, "ad"], [15258, 15268, "a"], [15261, 15265, "ad"], [15274, 15284, "a"], [15277, 15281, "al"], [15290, 15300, "a"], [15293, 15297, "al"], [15306, 15316, "a"], [15309, 15313, "al"], [15322, 15332, "a"], [15325, 15329, "al"], [15338, 15348, "a"], [15341, 15345, "al"], [15354, 15364, "a"], [15357, 15361, "al"], [15370, 15380, "a"], [15373, 15377, "al"], [15386, 15396, "a"], [15389, 15393, "al"], [15402, 15412, "a"], [15405, 15409, "al"], [15418, 15428, "a"], [15421, 15425, "al"], [15434, 15444, "a"], [15437, 15441, "al"], [15450, 15460, "a"], [15453, 15457, "ar"], [15466, 15476, "a"], [15469, 15473, "ar"], [15482, 15492, "a"], [15485, 15489, "ar"], [15498, 15508, "a"], [15501, 15505, "ar"], [15514, 15524, "a"], [15517, 15521, "ar"], [15530, 15534, "d"], [15540, 15544, "d"], [15550, 15554, "a"], [15560, 15570, "a"], [15563, 15567, "ad"], [15576, 15586, "a"], [15579, 15583, "ad"], [15592, 15602, "a"], [15595, 15599, "ad"], [15608, 15618, "a"], [15611, 15615, "ad"], [15624, 15634, "a"], [15627, 15631, "ad"], [15640, 15650, "a"], [15643, 15647, "ad"], [15656, 15666, "a"], [15659, 15663, "ad"], [15672, 15682, "a"], [15675, 15679, "al"], [15688, 15698, "a"], [15691, 15695, "al"], [15704, 15714, "a"], [15707, 15711, "al"], [15720, 15730, "a"], [15723, 15727, "al"], [15736, 15746, "a"], [15739, 15743, "al"], [15752, 15762, "a"], [15755, 15759, "al"], [15768, 15778, "a"], [15771, 15775, "al"], [15784, 15794, "a"], [15787, 15791, "al"], [15800, 15810, "a"], [15803, 15807, "al"], [15816, 15826, "a"], [15819, 15823, "al"], [15832, 15842, "a"], [15835, 15839, "al"], [15848, 15858, "a"], [15851, 15855, "au"], [15864, 15874, "a"], [15867, 15871, "ar"], [15880, 15890, "a"], [15883, 15887, "ar"], [15896, 15906, "a"], [15899, 15903, "ar"], [15912, 15922, "a"], [15915, 15919, "ar"], [15928, 15938, "a"], [15931, 15935, "ar"], [15944, 15948, "d"], [15954, 15958, "d"], [15964, 15968, "a"], [15974, 15984, "a"], [15977, 15981, "ad"], [15990, 16000, "a"], [15993, 15997, "ad"], [16006, 16016, "a"], [16009, 16013, "ad"], [16022, 16032, "a"], [16025, 16029, "ad"], [16038, 16048, "a"], [16041, 16045, "ad"], [16054, 16064, "a"], [16057, 16061, "ad"], [16070, 16080, "a"], [16073, 16077, "ad"], [16086, 16096, "a"], [16089, 16093, "al"], [16102, 16112, "a"], [16105, 16109, "al"], [16118, 16128, "a"], [16121, 16125, "al"], [16134, 16144, "a"], [16137, 16141, "al"], [16150, 16160, "a"], [16153, 16157, "al"], [16166, 16176, "a"], [16169, 16173, "al"], [16182, 16192, "a"], [16185, 16189, "al"], [16198, 16208, "a"], [16201, 16205, "al"], [16214, 16224, "a"], [16217, 16221, "al"], [16230, 16240, "a"], [16233, 16237, "al"], [16246, 16256, "a"], [16249, 16253, "al"], [16262, 16272, "a"], [16265, 16269, "ar"], [16278, 16288, "a"], [16281, 16285, "ar"], [16294, 16304, "a"], [16297, 16301, "ar"], [16310, 16320, "a"], [16313, 16317, "ar"], [16326, 16336, "a"], [16329, 16333, "ar"], [16342, 16352, "a"], [16345, 16349, "ar"], [16358, 16368, "a"], [16361, 16365, "ar"], [16374, 16378, "d"], [16384, 16388, "d"], [16394, 16398, "a"], [16404, 16414, "a"], [16407, 16411, "ad"], [16420, 16430, "a"], [16423, 16427, "ad"], [16436, 16446, "a"], [16439, 16443, "ad"], [16452, 16462, "a"], [16455, 16459, "ad"], [16468, 16478, "a"], [16471, 16475, "ad"], [16484, 16494, "a"], [16487, 16491, "ad"], [16500, 16510, "a"], [16503, 16507, "ad"], [16516, 16526, "a"], [16519, 16523, "al"], [16532, 16542, "a"], [16535, 16539, "al"], [16548, 16558, "a"], [16551, 16555, "al"], [16564, 16574, "a"], [16567, 16571, "al"], [16580, 16590, "a"], [16583, 16587, "al"], [16596, 16606, "a"], [16599, 16603, "al"], [16612, 16622, "a"], [16615, 16619, "al"], [16628, 16638, "a"], [16631, 16635, "al"], [16644, 16654, "a"], [16647, 16651, "al"], [16660, 16670, "a"], [16663, 16667, "al"], [16676, 16686, "a"], [16679, 16683, "al"], [16692, 16702, "a"], [16695, 16699, "au"], [16708, 16718, "a"], [16711, 16715, "ar"], [16724, 16734, "a"], [16727, 16731, "ar"], [16740, 16750, "a"], [16743, 16747, "ar"], [16756, 16766, "a"], [16759, 16763, "ar"], [16772, 16782, "a"], [16775, 16779, "ar"], [16788, 16798, "a"], [16791, 16795, "ar"], [16804, 16814, "a"], [16807, 16811, "ar"], [16820, 16824, "u"], [16830, 16834, "u"], [16840, 16844, "u"], [16850, 16854, "u"], [16860, 16864, "u"], [16870, 16874, "u"], [16880, 16884, "u"], [16890, 16894, "u"], [16900, 16904, "u"], [16910, 16914, "u"], [16920, 16924, "u"], [16930, 16934, "u"], [16940, 16944, "u"], [16950, 16954, "u"], [16960, 16970, "s"], [16963, 16967, "sl"], [16976, 16980, "d"], [16986, 16990, "u"], [16996, 17000, "u"], [17006, 17016, "s"], [17009, 17013, "sl"], [17022, 17026, "r"], [17032, 17036, "a"], [17042, 17052, "a"], [17045, 17049, "ad"], [17058, 17068, "a"], [17061, 17065, "ad"], [17074, 17084, "a"], [17077, 17081, "ad"], [17090, 17100, "a"], [17093, 17097, "ad"], [17106, 17116, "a"], [17109, 17113, "ad"], [17122, 17132, "a"], [17125, 17129, "ad"], [17138, 17148, "a"], [17141, 17145, "ad"], [17154, 17164, "a"], [17157, 17161, "ad"], [17170, 17180, "a"], [17173, 17177, "ad"], [17186, 17196, "a"], [17189, 17193, "ad"], [17202, 17212, "a"], [17205, 17209, "ad"], [17218, 17228, "a"], [17221, 17225, "ad"], [17234, 17244, "a"], [17237, 17241, "ad"], [17250, 17260, "a"], [17253, 17257, "ad"], [17266, 17276, "a"], [17269, 17273, "ad"], [17282, 17292, "a"], [17285, 17289, "ad"], [17298, 17308, "a"], [17301, 17305, "al"], [17314, 17324, "a"], [17317, 17321, "al"], [17330, 17340, "a"], [17333, 17337, "al"], [17346, 17356, "a"], [17349, 17353, "al"], [17362, 17372, "a"], [17365, 17369, "al"], [17378, 17388, "a"], [17381, 17385, "al"], [17394, 17404, "a"], [17397, 17401, "al"], [17410, 17420, "a"], [17413, 17417, "al"], [17426, 17436, "a"], [17429, 17433, "al"], [17442, 17452, "a"], [17445, 17449, "al"], [17458, 17468, "a"], [17461, 17465, "al"], [17474, 17484, "a"], [17477, 17481, "al"], [17490, 17500, "a"], [17493, 17497, "al"], [17506, 17516, "a"], [17509, 17513, "al"], [17522, 17532, "a"], [17525, 17529, "al"], [17538, 17548, "a"], [17541, 17545, "ar"], [17554, 17564, "a"], [17557, 17561, "ar"], [17570, 17580, "s"], [17573, 17577, "sr"], [17586, 17590, "a"], [17596, 17606, "a"], [17599, 17603, "ad"], [17612, 17622, "a"], [17615, 17619, "ad"], [17628, 17638, "a"], [17631, 17635, "ad"], [17644, 17654, "a"], [17647, 17651, "ad"], [17660, 17670, "a"], [17663, 17667, "ad"], [17676, 17686, "a"], [17679, 17683, "ad"], [17692, 17702, "a"], [17695, 17699, "ad"], [17708, 17718, "a"], [17711, 17715, "ad"], [17724, 17734, "a"], [17727, 17731, "ad"], [17740, 17750, "a"], [17743, 17747, "ad"], [17756, 17766, "a"], [17759, 17763, "ad"], [17772, 17782, "a"], [17775, 17779, "ad"], [17788, 17798, "a"], [17791, 17795, "ad"], [17804, 17814, "a"], [17807, 17811, "ad"], [17820, 17830, "a"], [17823, 17827, "ad"], [17836, 17846, "a"], [17839, 17843, "ad"], [17852, 17862, "a"], [17855, 17859, "al"], [17868, 17878, "a"], [17871, 17875, "al"], [17884, 17894, "a"], [17887, 17891, "al"], [17900, 17910, "a"], [17903, 17907, "al"], [17916, 17926, "a"], [17919, 17923, "al"], [17932, 17942, "a"], [17935, 17939, "al"], [17948, 17958, "a"], [17951, 17955, "al"], [17964, 17974, "a"], [17967, 17971, "al"], [17980, 17990, "a"], [17983, 17987, "al"], [17996, 18006, "a"], [17999, 18003, "al"], [18012, 18022, "a"], [18015, 18019, "al"], [18028, 18038, "a"], [18031, 18035, "al"], [18044, 18054, "a"], [18047, 18051, "al"], [18060, 18070, "a"], [18063, 18067, "al"], [18076, 18086, "a"], [18079, 18083, "al"], [18092, 18102, "a"], [18095, 18099, "ar"], [18108, 18118, "a"], [18111, 18115, "ar"], [18124, 18134, "a"], [18127, 18131, "ar"], [18140, 18150, "a"], [18143, 18147, "ar"], [18156, 18166, "s"], [18159, 18163, "sr"], [18172, 18176, "a"], [18182, 18192, "a"], [18185, 18189, "ad"], [18198, 18208, "a"], [18201, 18205, "ad"], [18214, 18224, "a"], [18217, 18221, "ad"], [18230, 18240, "a"], [18233, 18237, "ad"], [18246, 18256, "a"], [18249, 18253, "ad"], [18262, 18272, "a"], [18265, 18269, "ad"], [18278, 18288, "a"], [18281, 18285, "ad"], [18294, 18304, "a"], [18297, 18301, "al"], [18310, 18320, "a"], [18313, 18317, "al"], [18326, 18336, "a"], [18329, 18333, "al"], [18342, 18352, "a"], [18345, 18349, "al"], [18358, 18368, "a"], [18361, 18365, "al"], [18374, 18384, "a"], [18377, 18381, "al"], [18390, 18400, "a"], [18393, 18397, "al"], [18406, 18416, "a"], [18409, 18413, "al"], [18422, 18432, "a"], [18425, 18429, "al"], [18438, 18448, "a"], [18441, 18445, "al"], [18454, 18464, "a"], [18457, 18461, "al"], [18470, 18480, "a"], [18473, 18477, "au"], [18486, 18496, "a"], [18489, 18493, "au"], [18502, 18512, "a"], [18505, 18509, "ar"], [18518, 18528, "a"], [18521, 18525, "ar"], [18534, 18544, "a"], [18537, 18541, "ar"], [18550, 18560, "a"], [18553, 18557, "ar"], [18566, 18570, "r"], [18576, 18580, "a"], [18586, 18596, "a"], [18589, 18593, "ad"], [18602, 18612, "a"], [18605, 18609, "ad"], [18618, 18628, "a"], [18621, 18625, "ad"], [18634, 18644, "a"], [18637, 18641, "ad"], [18650, 18660, "a"], [18653, 18657, "ad"], [18666, 18676, "a"], [18669, 18673, "ad"], [18682, 18692, "a"], [18685, 18689, "ad"], [18698, 18708, "a"], [18701, 18705, "ad"], [18714, 18724, "a"], [18717, 18721, "ad"], [18730, 18740, "a"], [18733, 18737, "ad"], [18746, 18756, "a"], [18749, 18753, "ad"], [18762, 18772, "a"], [18765, 18769, "ad"], [18778, 18788, "a"], [18781, 18785, "ad"], [18794, 18804, "a"], [18797, 18801, "ad"], [18810, 18820, "a"], [18813, 18817, "ad"], [18826, 18836, "a"], [18829, 18833, "ad"], [18842, 18852, "a"], [18845, 18849, "al"], [18858, 18868, "a"], [18861, 18865, "al"], [18874, 18884, "a"], [18877, 18881, "al"], [18890, 18900, "a"], [18893, 18897, "al"], [18906, 18916, "a"], [18909, 18913, "al"], [18922, 18932, "a"], [18925, 18929, "al"], [18938, 18948, "a"], [18941, 18945, "al"], [18954, 18964, "a"], [18957, 18961, "al"], [18970, 18980, "a"], [18973, 18977, "al"], [18986, 18996, "a"], [18989, 18993, "al"], [19002, 19012, "a"], [19005, 19009, "al"], [19018, 19028, "a"], [19021, 19025, "al"], [19034, 19044, "a"], [19037, 19041, "al"], [19050, 19060, "a"], [19053, 19057, "al"], [19066, 19076, "a"], [19069, 19073, "al"], [19082, 19092, "a"], [19085, 19089, "ar"], [19098, 19108, "a"], [19101, 19105, "ar"], [19114, 19118, "l"], [19124, 19128, "d"], [19134, 19138, "d"], [19144, 19148, "d"], [19154, 19158, "d"], [19164, 19168, "d"], [19174, 19178, "d"], [19184, 19188, "d"], [19194, 19198, "d"], [19204, 19208, "a"], [19214, 19224, "a"], [19217, 19221, "ad"], [19230, 19240, "a"], [19233, 19237, "ad"], [19246, 19256, "a"], [19249, 19253, "ad"], [19262, 19272, "a"], [19265, 19269, "ad"], [19278, 19288, "a"], [19281, 19285, "ad"], [19294, 19304, "a"], [19297, 19301, "ad"], [19310, 19320, "a"], [19313, 19317, "ad"], [19326, 19336, "a"], [19329, 19333, "al"], [19342, 19352, "a"], [19345, 19349, "al"], [19358, 19368, "a"], [19361, 19365, "al"], [19374, 19384, "a"], [19377, 19381, "al"], [19390, 19400, "a"], [19393, 19397, "al"], [19406, 19416, "a"], [19409, 19413, "al"], [19422, 19432, "a"], [19425, 19429, "al"], [19438, 19448, "a"], [19441, 19445, "al"], [19454, 19464, "a"], [19457, 19461, "al"], [19470, 19480, "a"], [19473, 19477, "al"], [19486, 19496, "a"], [19489, 19493, "al"], [19502, 19512, "a"], [19505, 19509, "au"], [19518, 19528, "a"], [19521, 19525, "au"], [19534, 19544, "a"], [19537, 19541, "ar"], [19550, 19560, "a"], [19553, 19557, "ar"], [19566, 19570, "u"], [19576, 19580, "u"], [19586, 19590, "u"], [19596, 19600, "u"], [19606, 19610, "u"], [19616, 19620, "u"], [19626, 19630, "u"], [19636, 19640, "u"], [19646, 19656, "s"], [19649, 19653, "sl"], [19662, 19666, "d"], [19672, 19676, "a"], [19682, 19692, "a"], [19685, 19689, "ad"], [19698, 19708, "a"], [19701, 19705, "ad"], [19714, 19724, "a"], [19717, 19721, "ad"], [19730, 19740, "a"], [19733, 19737, "ad"], [19746, 19756, "a"], [19749, 19753, "ad"], [19762, 19772, "a"], [19765, 19769, "ad"], [19778, 19788, "a"], [19781, 19785, "ad"], [19794, 19804, "a"], [19797, 19801, "ad"], [19810, 19820, "a"], [19813, 19817, "ad"], [19826, 19836, "a"], [19829, 19833, "ad"], [19842, 19852, "a"], [19845, 19849, "ad"], [19858, 19868, "a"], [19861, 19865, "ad"], [19874, 19884, "a"], [19877, 19881, "ad"], [19890, 19900, "a"], [19893, 19897, "ad"], [19906, 19916, "a"], [19909, 19913, "ad"], [19922, 19932, "a"], [19925, 19929, "ad"], [19938, 19948, "a"], [19941, 19945, "al"], [19954, 19964, "a"], [19957, 19961, "al"], [19970, 19980, "a"], [19973, 19977, "al"], [19986, 19996, "a"], [19989, 19993, "al"], [20002, 20012, "a"], [20005, 20009, "al"], [20018, 20028, "a"], [20021, 20025, "al"], [20034, 20044, "a"], [20037, 20041, "al"], [20050, 20060, "a"], [20053, 20057, "al"], [20066, 20076, "a"], [20069, 20073, "al"], [20082, 20092, "a"], [20085, 20089, "al"], [20098, 20108, "a"], [20101, 20105, "al"], [20114, 20124, "a"], [20117, 20121, "al"], [20130, 20140, "a"], [20133, 20137, "al"], [20146, 20156, "a"], [20149, 20153, "al"], [20162, 20172, "a"], [20165, 20169, "al"], [20178, 20188, "a"], [20181, 20185, "ar"], [20194, 20204, "a"], [20197, 20201, "ar"], [20210, 20220, "a"], [20213, 20217, "ar"], [20226, 20236, "a"], [20229, 20233, "ar"], [20242, 20252, "a"], [20245, 20249, "ar"], [20258, 20268, "s"], [20261, 20265, "sr"], [20274, 20278, "a"], [20284, 20294, "a"], [20287, 20291, "ad"], [20300, 20310, "a"], [20303, 20307, "ad"], [20316, 20326, "a"], [20319, 20323, "ad"], [20332, 20342, "a"], [20335, 20339, "ad"], [20348, 20358, "a"], [20351, 20355, "ad"], [20364, 20374, "a"], [20367, 20371, "ad"], [20380, 20390, "a"], [20383, 20387, "ad"], [20396, 20406, "a"], [20399, 20403, "al"], [20412, 20422, "a"], [20415, 20419, "al"], [20428, 20438, "a"], [20431, 20435, "al"], [20444, 20454, "a"], [20447, 20451, "al"], [20460, 20470, "a"], [20463, 20467, "al"], [20476, 20486, "a"], [20479, 20483, "al"], [20492, 20502, "a"], [20495, 20499, "al"], [20508, 20518, "a"], [20511, 20515, "al"], [20524, 20534, "a"], [20527, 20531, "al"], [20540, 20550, "a"], [20543, 20547, "al"], [20556, 20566, "a"], [20559, 20563, "al"], [20572, 20582, "a"], [20575, 20579, "au"], [20588, 20598, "a"], [20591, 20595, "au"], [20604, 20608, "r"], [20614, 20618, "a"], [20624, 20634, "a"], [20627, 20631, "ad"], [20640, 20650, "a"], [20643, 20647, "ad"], [20656, 20666, "a"], [20659, 20663, "ad"], [20672, 20682, "a"], [20675, 20679, "ad"], [20688, 20698, "a"], [20691, 20695, "ad"], [20704, 20714, "a"], [20707, 20711, "ad"], [20720, 20730, "a"], [20723, 20727, "ad"], [20736, 20746, "a"], [20739, 20743, "ad"], [20752, 20762, "a"], [20755, 20759, "ad"], [20768, 20778, "a"], [20771, 20775, "ad"], [20784, 20794, "a"], [20787, 20791, "ad"], [20800, 20810, "a"], [20803, 20807, "ad"], [20816, 20826, "a"], [20819, 20823, "ad"], [20832, 20842, "a"], [20835, 20839, "ad"], [20848, 20858, "a"], [20851, 20855, "ad"], [20864, 20874, "a"], [20867, 20871, "ad"], [20880, 20890, "a"], [20883, 20887, "al"], [20896, 20906, "a"], [20899, 20903, "al"], [20912, 20922, "a"], [20915, 20919, "al"], [20928, 20938, "a"], [20931, 20935, "al"], [20944, 20954, "a"], [20947, 20951, "al"], [20960, 20970, "a"], [20963, 20967, "al"], [20976, 20986, "a"], [20979, 20983, "al"], [20992, 21002, "a"], [20995, 20999, "al"], [21008, 21018, "a"], [21011, 21015, "al"], [21024, 21034, "a"], [21027, 21031, "al"], [21040, 21050, "a"], [21043, 21047, "al"], [21056, 21066, "a"], [21059, 21063, "al"], [21072, 21082, "a"], [21075, 21079, "al"], [21088, 21098, "a"], [21091, 21095, "al"], [21104, 21114, "a"], [21107, 21111, "al"], [21120, 21130, "a"], [21123, 21127, "ar"], [21136, 21146, "a"], [21139, 21143, "ar"], [21152, 21156, "l"], [21162, 21166, "d"], [21172, 21176, "d"], [21182, 21186, "d"], [21192, 21196, "d"], [21202, 21206, "d"], [21212, 21216, "d"], [21222, 21226, "d"], [21232, 21236, "d"], [21242, 21246, "a"], [21252, 21262, "a"], [21255, 21259, "ad"], [21268, 21278, "a"], [21271, 21275, "ad"], [21284, 21294, "a"], [21287, 21291, "ad"], [21300, 21310, "a"], [21303, 21307, "ad"], [21316, 21326, "a"], [21319, 21323, "ad"], [21332, 21342, "a"], [21335, 21339, "ad"], [21348, 21358, "a"], [21351, 21355, "ad"], [21364, 21374, "a"], [21367, 21371, "al"], [21380, 21390, "a"], [21383, 21387, "al"], [21396, 21406, "a"], [21399, 21403, "al"], [21412, 21422, "a"], [21415, 21419, "al"], [21428, 21438, "a"], [21431, 21435, "al"], [21444, 21454, "a"], [21447, 21451, "al"], [21460, 21470, "a"], [21463, 21467, "al"], [21476, 21486, "a"], [21479, 21483, "al"], [21492, 21502, "a"], [21495, 21499, "al"], [21508, 21518, "a"], [21511, 21515, "al"], [21524, 21534, "a"], [21527, 21531, "al"], [21540, 21550, "a"], [21543, 21547, "au"], [21556, 21566, "a"], [21559, 21563, "ar"], [21572, 21582, "a"], [21575, 21579, "ar"], [21588, 21598, "a"], [21591, 21595, "ar"], [21604, 21614, "a"], [21607, 21611, "ar"], [21620, 21630, "a"], [21623, 21627, "ar"], [21636, 21646, "a"], [21639, 21643, "ar"], [21652, 21662, "a"], [21655, 21659, "ar"], [21668, 21678, "a"], [21671, 21675, "ar"], [21684, 21694, "a"], [21687, 21691, "ar"], [21700, 21710, "a"], [21703, 21707, "ar"], [21716, 21726, "a"], [21719, 21723, "ar"], [21732, 21736, "u"], [21742, 21746, "u"], [21752, 21756, "u"], [21762, 21766, "u"], [21772, 21776, "u"], [21782, 21786, "u"], [21792, 21796, "u"], [21802, 21806, "u"], [21812, 21822, "s"], [21815, 21819, "sl"], [21828, 21832, "d"], [21838, 21842, "u"], [21848, 21852, "u"], [21858, 21868, "s"], [21861, 21865, "sl"], [21874, 21878, "r"], [21884, 21888, "a"], [21894, 21904, "a"], [21897, 21901, "ad"], [21910, 21920, "a"], [21913, 21917, "ad"], [21926, 21936, "a"], [21929, 21933, "ad"], [21942, 21952, "a"], [21945, 21949, "ad"], [21958, 21968, "a"], [21961, 21965, "ad"], [21974, 21984, "a"], [21977, 21981, "ad"], [21990, 22000, "a"], [21993, 21997, "ad"], [22006, 22016, "a"], [22009, 22013, "ad"], [22022, 22032, "a"], [22025, 22029, "ad"], [22038, 22048, "a"], [22041, 22045, "ad"], [22054, 22064, "a"], [22057, 22061, "ad"], [22070, 22080, "a"], [22073, 22077, "ad"], [22086, 22096, "a"], [22089, 22093, "ad"], [22102, 22112, "a"], [22105, 22109, "ad"], [22118, 22128, "a"], [22121, 22125, "ad"], [22134, 22144, "a"], [22137, 22141, "ad"], [22150, 22160, "a"], [22153, 22157, "al"], [22166, 22176, "a"], [22169, 22173, "al"], [22182, 22192, "a"], [22185, 22189, "al"], [22198, 22208, "a"], [22201, 22205, "al"], [22214, 22224, "a"], [22217, 22221, "al"], [22230, 22240, "a"], [22233, 22237, "al"], [22246, 22256, "a"], [22249, 22253, "al"], [22262, 22272, "a"], [22265, 22269, "al"], [22278, 22288, "a"], [22281, 22285, "al"], [22294, 22304, "a"], [22297, 22301, "al"], [22310, 22320, "a"], [22313, 22317, "al"], [22326, 22336, "a"], [22329, 22333, "al"], [22342, 22352, "a"], [22345, 22349, "al"], [22358, 22368, "a"], [22361, 22365, "al"], [22374, 22384, "a"], [22377, 22381, "al"], [22390, 22400, "a"], [22393, 22397, "ar"], [22406, 22416, "a"], [22409, 22413, "ar"], [22422, 22432, "a"], [22425, 22429, "ar"], [22438, 22448, "s"], [22441, 22445, "sr"], [22454, 22458, "a"], [22464, 22474, "a"], [22467, 22471, "ad"], [22480, 22490, "a"], [22483, 22487, "ad"], [22496, 22506, "a"], [22499, 22503, "ad"], [22512, 22522, "a"], [22515, 22519, "ad"], [22528, 22538, "a"], [22531, 22535, "ad"], [22544, 22554, "a"], [22547, 22551, "ad"], [22560, 22570, "a"], [22563, 22567, "ad"], [22576, 22586, "a"], [22579, 22583, "ad"], [22592, 22602, "a"], [22595, 22599, "ad"], [22608, 22618, "a"], [22611, 22615, "ad"], [22624, 22634, "a"], [22627, 22631, "ad"], [22640, 22650, "a"], [22643, 22647, "ad"], [22656, 22666, "a"], [22659, 22663, "ad"], [22672, 22682, "a"], [22675, 22679, "ad"], [22688, 22698, "a"], [22691, 22695, "ad"], [22704, 22714, "a"], [22707, 22711, "ad"], [22720, 22730, "a"], [22723, 22727, "al"], [22736, 22746, "a"], [22739, 22743, "al"], [22752, 22762, "a"], [22755, 22759, "al"], [22768, 22778, "a"], [22771, 22775, "al"], [22784, 22794, "a"], [22787, 22791, "al"], [22800, 22810, "a"], [22803, 22807, "al"], [22816, 22826, "a"], [22819, 22823, "al"], [22832, 22842, "a"], [22835, 22839, "al"], [22848, 22858, "a"], [22851, 22855, "al"], [22864, 22874, "a"], [22867, 22871, "al"], [22880, 22890, "a"], [22883, 22887, "al"], [22896, 22906, "a"], [22899, 22903, "al"], [22912, 22922, "a"], [22915, 22919, "al"], [22928, 22938, "a"], [22931, 22935, "al"], [22944, 22954, "a"], [22947, 22951, "al"], [22960, 22970, "a"], [22963, 22967, "ar"], [22976, 22986, "a"], [22979, 22983, "ar"], [22992, 23002, "a"], [22995, 22999, "ar"], [23008, 23018, "a"], [23011, 23015, "ar"], [23024, 23034, "a"], [23027, 23031, "ar"], [23040, 23050, "a"], [23043, 23047, "ar"], [23056, 23066, "s"], [23059, 23063, "sr"], [23072, 23076, "a"], [23082, 23092, "a"], [23085, 23089, "ad"], [23098, 23108, "a"], [23101, 23105, "ad"], [23114, 23124, "a"], [23117, 23121, "ad"], [23130, 23140, "a"], [23133, 23137, "ad"], [23146, 23156, "a"], [23149, 23153, "ad"], [23162, 23172, "a"], [23165, 23169, "ad"], [23178, 23188, "a"], [23181, 23185, "ad"], [23194, 23204, "a"], [23197, 23201, "al"], [23210, 23220, "a"], [23213, 23217, "al"], [23226, 23236, "a"], [23229, 23233, "al"], [23242, 23252, "a"], [23245, 23249, "al"], [23258, 23268, "a"], [23261, 23265, "al"], [23274, 23284, "a"], [23277, 23281, "al"], [23290, 23300, "a"], [23293, 23297, "al"], [23306, 23316, "a"], [23309, 23313, "al"], [23322, 23332, "a"], [23325, 23329, "al"], [23338, 23348, "a"], [23341, 23345, "al"], [23354, 23364, "a"], [23357, 23361, "al"], [23370, 23380, "a"], [23373, 23377, "au"], [23386, 23396, "a"], [23389, 23393, "au"], [23402, 23412, "a"], [23405, 23409, "au"], [23418, 23428, "a"], [23421, 23425, "au"], [23434, 23444, "a"], [23437, 23441, "au"], [23450, 23454, "r"], [23460, 23464, "a"], [23470, 23480, "a"], [23473, 23477, "ad"], [23486, 23496, "a"], [23489, 23493, "ad"], [23502, 23512, "a"], [23505, 23509, "ad"], [23518, 23528, "a"], [23521, 23525, "ad"], [23534, 23544, "a"], [23537, 23541, "ad"], [23550, 23560, "a"], [23553, 23557, "ad"], [23566, 23576, "a"], [23569, 23573, "ad"], [23582, 23592, "a"], [23585, 23589, "ad"], [23598, 23608, "a"], [23601, 23605, "ad"], [23614, 23624, "a"], [23617, 23621, "ad"], [23630, 23640, "a"], [23633, 23637, "ad"], [23646, 23656, "a"], [23649, 23653, "ad"], [23662, 23672, "a"], [23665, 23669, "ad"], [23678, 23688, "a"], [23681, 23685, "ad"], [23694, 23704, "a"], [23697, 23701, "ad"], [23710, 23720, "a"], [23713, 23717, "ad"], [23726, 23736, "a"], [23729, 23733, "al"], [23742, 23752, "a"], [23745, 23749, "al"], [23758, 23768, "a"], [23761, 23765, "al"], [23774, 23784, "a"], [23777, 23781, "al"], [23790, 23800, "a"], [23793, 23797, "al"], [23806, 23816, "a"], [23809, 23813, "al"], [23822, 23832, "a"], [23825, 23829, "al"], [23838, 23848, "a"], [23841, 23845, "al"], [23854, 23864, "a"], [23857, 23861, "al"], [23870, 23880, "a"], [23873, 23877, "al"], [23886, 23896, "a"], [23889, 23893, "al"], [23902, 23912, "a"], [23905, 23909, "al"], [23918, 23928, "a"], [23921, 23925, "al"], [23934, 23944, "a"], [23937, 23941, "al"], [23950, 23960, "a"], [23953, 23957, "al"], [23966, 23976, "a"], [23969, 23973, "ar"], [23982, 23992, "a"], [23985, 23989, "ar"], [23998, 24008, "a"], [24001, 24005, "ar"], [24014, 24024, "s"], [24017, 24021, "sr"], [24030, 24034, "d"], [24040, 24044, "d"], [24050, 24060, "a"], [24053, 24057, "al"], [24066, 24076, "a"], [24069, 24073, "al"], [24082, 24092, "a"], [24085, 24089, "al"], [24098, 24108, "a"], [24101, 24105, "al"], [24114, 24124, "s"], [24117, 24121, "sl"], [24130, 24134, "l"], [24140, 24144, "d"], [24150, 24154, "d"], [24160, 24164, "a"], [24170, 24180, "a"], [24173, 24177, "ad"], [24186, 24196, "a"], [24189, 24193, "ad"], [24202, 24212, "a"], [24205, 24209, "ad"], [24218, 24228, "a"], [24221, 24225, "ad"], [24234, 24244, "a"], [24237, 24241, "ad"], [24250, 24260, "a"], [24253, 24257, "ad"], [24266, 24276, "a"], [24269, 24273, "ad"], [24282, 24292, "a"], [24285, 24289, "al"], [24298, 24308, "a"], [24301, 24305, "al"], [24314, 24324, "a"], [24317, 24321, "al"], [24330, 24340, "a"], [24333, 24337, "al"], [24346, 24356, "a"], [24349, 24353, "al"], [24362, 24372, "a"], [24365, 24369, "al"], [24378, 24388, "a"], [24381, 24385, "al"], [24394, 24404, "a"], [24397, 24401, "al"], [24410, 24420, "a"], [24413, 24417, "al"], [24426, 24436, "a"], [24429, 24433, "al"], [24442, 24452, "a"], [24445, 24449, "al"], [24458, 24468, "a"], [24461, 24465, "au"], [24474, 24484, "a"], [24477, 24481, "au"], [24490, 24500, "a"], [24493, 24497, "au"], [24506, 24516, "a"], [24509, 24513, "au"], [24522, 24532, "a"], [24525, 24529, "ar"], [24538, 24548, "a"], [24541, 24545, "ar"], [24554, 24564, "a"], [24557, 24561, "ar"], [24570, 24580, "a"], [24573, 24577, "ar"], [24586, 24596, "a"], [24589, 24593, "ar"], [24602, 24612, "a"], [24605, 24609, "ar"], [24618, 24628, "a"], [24621, 24625, "ar"], [24634, 24638, "d"], [24644, 24648, "d"], [24654, 24658, "a"], [24664, 24674, "a"], [24667, 24671, "ad"], [24680, 24690, "a"], [24683, 24687, "ad"], [24696, 24706, "a"], [24699, 24703, "ad"], [24712, 24722, "a"], [24715, 24719, "ad"], [24728, 24738, "a"], [24731, 24735, "ad"], [24744, 24754, "a"], [24747, 24751, "ad"], [24760, 24770, "a"], [24763, 24767, "ad"], [24776, 24786, "a"], [24779, 24783, "al"], [24792, 24802, "a"], [24795, 24799, "al"], [24808, 24818, "a"], [24811, 24815, "al"], [24824, 24834, "a"], [24827, 24831, "al"], [24840, 24850, "a"], [24843, 24847, "al"], [24856, 24866, "a"], [24859, 24863, "al"], [24872, 24882, "a"], [24875, 24879, "al"], [24888, 24898, "a"], [24891, 24895, "al"], [24904, 24914, "a"], [24907, 24911, "al"], [24920, 24930, "a"], [24923, 24927, "al"], [24936, 24946, "a"], [24939, 24943, "al"], [24952, 24962, "a"], [24955, 24959, "au"], [24968, 24978, "a"], [24971, 24975, "au"], [24984, 24994, "a"], [24987, 24991, "ar"], [25000, 25010, "a"], [25003, 25007, "ar"], [25016, 25026, "a"], [25019, 25023, "ar"], [25032, 25042, "a"], [25035, 25039, "ar"], [25048, 25058, "a"], [25051, 25055, "ar"], [25064, 25074, "a"], [25067, 25071, "ar"], [25080, 25084, "d"], [25090, 25094, "d"], [25100, 25104, "a"], [25110, 25120, "a"], [25113, 25117, "ad"], [25126, 25136, "a"], [25129, 25133, "ad"], [25142, 25152, "a"], [25145, 25149, "ad"], [25158, 25168, "a"], [25161, 25165, "ad"], [25174, 25184, "a"], [25177, 25181, "ad"], [25190, 25200, "a"], [25193, 25197, "ad"], [25206, 25216, "a"], [25209, 25213, "ad"], [25222, 25232, "a"], [25225, 25229, "al"], [25238, 25248, "a"], [25241, 25245, "al"], [25254, 25264, "a"], [25257, 25261, "al"], [25270, 25280, "a"], [25273, 25277, "al"], [25286, 25296, "a"], [25289, 25293, "al"], [25302, 25312, "a"], [25305, 25309, "al"], [25318, 25328, "a"], [25321, 25325, "al"], [25334, 25344, "a"], [25337, 25341, "al"], [25350, 25360, "a"], [25353, 25357, "al"], [25366, 25376, "a"], [25369, 25373, "al"], [25382, 25392, "a"], [25385, 25389, "al"], [25398, 25408, "a"], [25401, 25405, "au"], [25414, 25424, "a"], [25417, 25421, "au"], [25430, 25440, "a"], [25433, 25437, "au"], [25446, 25456, "a"], [25449, 25453, "au"], [25462, 25472, "a"], [25465, 25469, "ar"], [25478, 25488, "a"], [25481, 25485, "ar"], [25494, 25504, "a"], [25497, 25501, "ar"], [25510, 25520, "a"], [25513, 25517, "ar"], [25526, 25536, "a"], [25529, 25533, "ar"], [25542, 25552, "a"], [25545, 25549, "ar"], [25558, 25568, "a"], [25561, 25565, "ar"], [25574, 25578, "d"], [25584, 25588, "d"], [25594, 25598, "a"], [25604, 25614, "a"], [25607, 25611, "ad"], [25620, 25630, "a"], [25623, 25627, "ad"], [25636, 25646, "a"], [25639, 25643, "ad"], [25652, 25662, "a"], [25655, 25659, "ad"], [25668, 25678, "a"], [25671, 25675, "ad"], [25684, 25694, "a"], [25687, 25691, "ad"], [25700, 25710, "a"], [25703, 25707, "ad"], [25716, 25726, "a"], [25719, 25723, "al"], [25732, 25742, "a"], [25735, 25739, "al"], [25748, 25758, "a"], [25751, 25755, "al"], [25764, 25774, "a"], [25767, 25771, "al"], [25780, 25790, "a"], [25783, 25787, "al"], [25796, 25806, "a"], [25799, 25803, "al"], [25812, 25822, "a"], [25815, 25819, "al"], [25828, 25838, "a"], [25831, 25835, "al"], [25844, 25854, "a"], [25847, 25851, "al"], [25860, 25870, "a"], [25863, 25867, "al"], [25876, 25886, "a"], [25879, 25883, "al"], [25892, 25902, "a"], [25895, 25899, "au"], [25908, 25918, "a"], [25911, 25915, "au"], [25924, 25934, "a"], [25927, 25931, "au"], [25940, 25950, "a"], [25943, 25947, "au"], [25956, 25966, "a"], [25959, 25963, "au"], [25972, 25976, "d"], [25982, 25986, "d"], [25992, 25996, "a"], [26002, 26012, "a"], [26005, 26009, "ad"], [26018, 26028, "a"], [26021, 26025, "ad"], [26034, 26044, "a"], [26037, 26041, "ad"], [26050, 26060, "a"], [26053, 26057, "ad"], [26066, 26076, "a"], [26069, 26073, "ad"], [26082, 26092, "a"], [26085, 26089, "ad"], [26098, 26108, "a"], [26101, 26105, "ad"], [26114, 26124, "a"], [26117, 26121, "al"], [26130, 26140, "a"], [26133, 26137, "al"], [26146, 26156, "a"], [26149, 26153, "al"], [26162, 26172, "a"], [26165, 26169, "al"], [26178, 26188, "a"], [26181, 26185, "al"], [26194, 26204, "a"], [26197, 26201, "al"], [26210, 26220, "a"], [26213, 26217, "al"], [26226, 26236, "a"], [26229, 26233, "al"], [26242, 26252, "a"], [26245, 26249, "al"], [26258, 26268, "a"], [26261, 26265, "al"], [26274, 26284, "a"], [26277, 26281, "al"], [26290, 26300, "a"], [26293, 26297, "au"], [26306, 26316, "a"], [26309, 26313, "au"], [26322, 26332, "a"], [26325, 26329, "au"], [26338, 26348, "a"], [26341, 26345, "au"], [26354, 26364, "a"], [26357, 26361, "ar"], [26370, 26380, "a"], [26373, 26377, "ar"], [26386, 26396, "a"], [26389, 26393, "ar"], [26402, 26412, "a"], [26405, 26409, "ar"], [26418, 26428, "a"], [26421, 26425, "ar"], [26434, 26444, "a"], [26437, 26441, "ar"], [26450, 26460, "a"], [26453, 26457, "ar"], [26466, 26470, "d"], [26476, 26480, "a"], [26486, 26496, "a"], [26489, 26493, "ad"], [26502, 26512, "a"], [26505, 26509, "ad"], [26518, 26528, "a"], [26521, 26525, "ad"], [26534, 26544, "a"], [26537, 26541, "ad"], [26550, 26560, "a"], [26553, 26557, "ad"], [26566, 26576, "a"], [26569, 26573, "ad"], [26582, 26592, "a"], [26585, 26589, "ad"], [26598, 26608, "a"], [26601, 26605, "al"], [26614, 26624, "a"], [26617, 26621, "al"], [26630, 26640, "a"], [26633, 26637, "al"], [26646, 26656, "a"], [26649, 26653, "al"], [26662, 26672, "a"], [26665, 26669, "al"], [26678, 26688, "a"], [26681, 26685, "al"], [26694, 26704, "a"], [26697, 26701, "al"], [26710, 26720, "a"], [26713, 26717, "al"], [26726, 26736, "a"], [26729, 26733, "al"], [26742, 26752, "a"], [26745, 26749, "al"], [26758, 26768, "a"], [26761, 26765, "al"], [26774, 26784, "a"], [26777, 26781, "au"], [26790, 26800, "a"], [26793, 26797, "au"], [26806, 26816, "a"], [26809, 26813, "au"], [26822, 26832, "a"], [26825, 26829, "au"], [26838, 26848, "a"], [26841, 26845, "au"], [26854, 26858, "d"], [26864, 26868, "a"], [26874, 26884, "a"], [26877, 26881, "ad"], [26890, 26900, "a"], [26893, 26897, "ad"], [26906, 26916, "a"], [26909, 26913, "ad"], [26922, 26932, "a"], [26925, 26929, "ad"], [26938, 26948, "a"], [26941, 26945, "ad"], [26954, 26964, "a"], [26957, 26961, "ad"], [26970, 26980, "a"], [26973, 26977, "ad"], [26986, 26996, "a"], [26989, 26993, "al"], [27002, 27012, "a"], [27005, 27009, "al"], [27018, 27028, "a"], [27021, 27025, "al"], [27034, 27044, "a"], [27037, 27041, "al"], [27050, 27060, "a"], [27053, 27057, "al"], [27066, 27076, "a"], [27069, 27073, "al"], [27082, 27092, "a"], [27085, 27089, "al"], [27098, 27108, "a"], [27101, 27105, "al"], [27114, 27124, "a"], [27117, 27121, "al"], [27130, 27140, "a"], [27133, 27137, "al"], [27146, 27156, "a"], [27149, 27153, "al"], [27162, 27172, "a"], [27165, 27169, "au"], [27178, 27188, "a"], [27181, 27185, "au"], [27194, 27204, "a"], [27197, 27201, "ar"], [27210, 27220, "a"], [27213, 27217, "ar"], [27226, 27236, "a"], [27229, 27233, "ar"], [27242, 27252, "a"], [27245, 27249, "ar"], [27258, 27268, "a"], [27261, 27265, "ar"], [27274, 27284, "a"], [27277, 27281, "ar"], [27290, 27294, "d"], [27300, 27304, "d"], [27310, 27314, "a"], [27320, 27330, "a"], [27323, 27327, "ad"], [27336, 27346, "a"], [27339, 27343, "ad"], [27352, 27362, "a"], [27355, 27359, "ad"], [27368, 27378, "a"], [27371, 27375, "ad"], [27384, 27394, "a"], [27387, 27391, "ad"], [27400, 27410, "a"], [27403, 27407, "ad"], [27416, 27426, "a"], [27419, 27423, "ad"], [27432, 27442, "a"], [27435, 27439, "al"], [27448, 27458, "a"], [27451, 27455, "al"], [27464, 27474, "a"], [27467, 27471, "al"], [27480, 27490, "a"], [27483, 27487, "al"], [27496, 27506, "a"], [27499, 27503, "al"], [27512, 27522, "a"], [27515, 27519, "al"], [27528, 27538, "a"], [27531, 27535, "al"], [27544, 27554, "a"], [27547, 27551, "al"], [27560, 27570, "a"], [27563, 27567, "al"], [27576, 27586, "a"], [27579, 27583, "al"], [27592, 27602, "a"], [27595, 27599, "al"], [27608, 27618, "a"], [27611, 27615, "au"], [27624, 27634, "a"], [27627, 27631, "au"], [27640, 27650, "a"], [27643, 27647, "au"], [27656, 27666, "a"], [27659, 27663, "au"], [27672, 27682, "a"], [27675, 27679, "ar"], [27688, 27698, "a"], [27691, 27695, "ar"], [27704, 27714, "a"], [27707, 27711, "ar"], [27720, 27730, "a"], [27723, 27727, "ar"], [27736, 27746, "a"], [27739, 27743, "ar"], [27752, 27762, "a"], [27755, 27759, "ar"], [27768, 27778, "a"], [27771, 27775, "ar"], [27784, 27788, "u"], [27794, 27798, "u"], [27804, 27808, "u"], [27814, 27818, "u"], [27824, 27828, "u"], [27834, 27838, "u"], [27844, 27848, "u"], [27854, 27858, "u"], [27864, 27868, "u"], [27874, 27878, "u"], [27884, 27888, "u"], [27894, 27898, "u"], [27904, 27908, "u"], [27914, 27918, "u"], [27924, 27934, "s"], [27927, 27931, "sl"], [27940, 27944, "d"], [27950, 27954, "a"], [27960, 27970, "a"], [27963, 27967, "ad"], [27976, 27986, "a"], [27979, 27983, "ad"], [27992, 28002, "a"], [27995, 27999, "ad"], [28008, 28018, "a"], [28011, 28015, "ad"], [28024, 28034, "a"], [28027, 28031, "ad"], [28040, 28050, "a"], [28043, 28047, "ad"], [28056, 28066, "a"], [28059, 28063, "ad"], [28072, 28082, "a"], [28075, 28079, "ad"], [28088, 28098, "a"], [28091, 28095, "ad"], [28104, 28114, "a"], [28107, 28111, "ad"], [28120, 28130, "a"], [28123, 28127, "ad"], [28136, 28146, "a"], [28139, 28143, "ad"], [28152, 28162, "a"], [28155, 28159, "ad"], [28168, 28178, "a"], [28171, 28175, "ad"], [28184, 28194, "a"], [28187, 28191, "ad"], [28200, 28210, "a"], [28203, 28207, "ad"], [28216, 28226, "a"], [28219, 28223, "al"], [28232, 28242, "a"], [28235, 28239, "al"], [28248, 28258, "a"], [28251, 28255, "al"], [28264, 28274, "a"], [28267, 28271, "al"], [28280, 28290, "a"], [28283, 28287, "al"], [28296, 28306, "a"], [28299, 28303, "al"], [28312, 28322, "a"], [28315, 28319, "al"], [28328, 28338, "a"], [28331, 28335, "al"], [28344, 28354, "a"], [28347, 28351, "al"], [28360, 28370, "a"], [28363, 28367, "al"], [28376, 28386, "a"], [28379, 28383, "al"], [28392, 28402, "a"], [28395, 28399, "al"], [28408, 28418, "a"], [28411, 28415, "al"], [28424, 28434, "a"], [28427, 28431, "al"], [28440, 28450, "a"], [28443, 28447, "al"], [28456, 28466, "a"], [28459, 28463, "ar"], [28472, 28482, "a"], [28475, 28479, "ar"], [28488, 28498, "a"], [28491, 28495, "ar"], [28504, 28514, "a"], [28507, 28511, "ar"], [28520, 28530, "a"], [28523, 28527, "ar"], [28536, 28546, "a"], [28539, 28543, "ar"], [28552, 28562, "a"], [28555, 28559, "ar"], [28568, 28578, "s"], [28571, 28575, "sr"], [28584, 28588, "a"], [28594, 28604, "a"], [28597, 28601, "ad"], [28610, 28620, "a"], [28613, 28617, "ad"], [28626, 28636, "a"], [28629, 28633, "ad"], [28642, 28652, "a"], [28645, 28649, "ad"], [28658, 28668, "a"], [28661, 28665, "ad"], [28674, 28684, "a"], [28677, 28681, "ad"], [28690, 28700, "a"], [28693, 28697, "ad"], [28706, 28716, "a"], [28709, 28713, "al"], [28722, 28732, "a"], [28725, 28729, "al"], [28738, 28748, "a"], [28741, 28745, "al"], [28754, 28764, "a"], [28757, 28761, "al"], [28770, 28780, "a"], [28773, 28777, "al"], [28786, 28796, "a"], [28789, 28793, "al"], [28802, 28812, "a"], [28805, 28809, "al"], [28818, 28828, "a"], [28821, 28825, "al"], [28834, 28844, "a"], [28837, 28841, "al"], [28850, 28860, "a"], [28853, 28857, "al"], [28866, 28876, "a"], [28869, 28873, "al"], [28882, 28892, "a"], [28885, 28889, "au"], [28898, 28908, "a"], [28901, 28905, "au"], [28914, 28924, "a"], [28917, 28921, "au"], [28930, 28940, "a"], [28933, 28937, "au"], [28946, 28956, "a"], [28949, 28953, "au"], [28962, 28966, "r"], [28972, 28976, "a"], [28982, 28992, "a"], [28985, 28989, "ad"], [28998, 29008, "a"], [29001, 29005, "ad"], [29014, 29024, "a"], [29017, 29021, "ad"], [29030, 29040, "a"], [29033, 29037, "ad"], [29046, 29056, "a"], [29049, 29053, "ad"], [29062, 29072, "a"], [29065, 29069, "ad"], [29078, 29088, "a"], [29081, 29085, "ad"], [29094, 29104, "a"], [29097, 29101, "ad"], [29110, 29120, "a"], [29113, 29117, "ad"], [29126, 29136, "a"], [29129, 29133, "ad"], [29142, 29152, "a"], [29145, 29149, "ad"], [29158, 29168, "a"], [29161, 29165, "ad"], [29174, 29184, "a"], [29177, 29181, "ad"], [29190, 29200, "a"], [29193, 29197, "ad"], [29206, 29216, "a"], [29209, 29213, "ad"], [29222, 29232, "a"], [29225, 29229, "ad"], [29238, 29248, "a"], [29241, 29245, "al"], [29254, 29264, "a"], [29257, 29261, "al"], [29270, 29280, "a"], [29273, 29277, "al"], [29286, 29296, "a"], [29289, 29293, "al"], [29302, 29312, "a"], [29305, 29309, "al"], [29318, 29328, "a"], [29321, 29325, "al"], [29334, 29344, "a"], [29337, 29341, "al"], [29350, 29360, "a"], [29353, 29357, "al"], [29366, 29376, "a"], [29369, 29373, "al"], [29382, 29392, "a"], [29385, 29389, "al"], [29398, 29408, "a"], [29401, 29405, "al"], [29414, 29424, "a"], [29417, 29421, "al"], [29430, 29440, "a"], [29433, 29437, "al"], [29446, 29456, "a"], [29449, 29453, "al"], [29462, 29472, "a"], [29465, 29469, "al"], [29478, 29488, "a"], [29481, 29485, "ar"], [29494, 29504, "a"], [29497, 29501, "ar"], [29510, 29520, "a"], [29513, 29517, "ar"], [29526, 29530, "l"], [29536, 29540, "d"], [29546, 29550, "d"], [29556, 29560, "a"], [29566, 29576, "a"], [29569, 29573, "ad"], [29582, 29592, "a"], [29585, 29589, "ad"], [29598, 29608, "a"], [29601, 29605, "ad"], [29614, 29624, "a"], [29617, 29621, "ad"], [29630, 29640, "a"], [29633, 29637, "ad"], [29646, 29656, "a"], [29649, 29653, "ad"], [29662, 29672, "a"], [29665, 29669, "ad"], [29678, 29688, "a"], [29681, 29685, "al"], [29694, 29704, "a"], [29697, 29701, "al"], [29710, 29720, "a"], [29713, 29717, "al"], [29726, 29736, "a"], [29729, 29733, "al"], [29742, 29752, "a"], [29745, 29749, "al"], [29758, 29768, "a"], [29761, 29765, "al"], [29774, 29784, "a"], [29777, 29781, "al"], [29790, 29800, "a"], [29793, 29797, "al"], [29806, 29816, "a"], [29809, 29813, "al"], [29822, 29832, "a"], [29825, 29829, "al"], [29838, 29848, "a"], [29841, 29845, "al"], [29854, 29864, "a"], [29857, 29861, "au"], [29870, 29880, "a"], [29873, 29877, "au"], [29886, 29896, "a"], [29889, 29893, "au"], [29902, 29912, "a"], [29905, 29909, "au"], [29918, 29928, "a"], [29921, 29925, "ar"], [29934, 29944, "a"], [29937, 29941, "ar"], [29950, 29960, "a"], [29953, 29957, "ar"], [29966, 29976, "a"], [29969, 29973, "ar"], [29982, 29992, "a"], [29985, 29989, "ar"], [29998, 30008, "a"], [30001, 30005, "ar"], [30014, 30024, "a"], [30017, 30021, "ar"], [30030, 30034, "d"], [30040, 30044, "d"], [30050, 30054, "a"], [30060, 30070, "a"], [30063, 30067, "ad"], [30076, 30086, "a"], [30079, 30083, "ad"], [30092, 30102, "a"], [30095, 30099, "ad"], [30108, 30118, "a"], [30111, 30115, "ad"], [30124, 30134, "a"], [30127, 30131, "ad"], [30140, 30150, "a"], [30143, 30147, "ad"], [30156, 30166, "a"], [30159, 30163, "ad"], [30172, 30182, "a"], [30175, 30179, "al"], [30188, 30198, "a"], [30191, 30195, "al"], [30204, 30214, "a"], [30207, 30211, "al"], [30220, 30230, "a"], [30223, 30227, "al"], [30236, 30246, "a"], [30239, 30243, "al"], [30252, 30262, "a"], [30255, 30259, "al"], [30268, 30278, "a"], [30271, 30275, "al"], [30284, 30294, "a"], [30287, 30291, "al"], [30300, 30310, "a"], [30303, 30307, "al"], [30316, 30326, "a"], [30319, 30323, "al"], [30332, 30342, "a"], [30335, 30339, "al"], [30348, 30358, "a"], [30351, 30355, "au"], [30364, 30374, "a"], [30367, 30371, "au"], [30380, 30390, "a"], [30383, 30387, "ar"], [30396, 30406, "a"], [30399, 30403, "ar"], [30412, 30422, "a"], [30415, 30419, "ar"], [30428, 30438, "a"], [30431, 30435, "ar"], [30444, 30454, "a"], [30447, 30451, "ar"], [30460, 30470, "a"], [30463, 30467, "ar"], [30476, 30480, "d"], [30486, 30490, "d"], [30496, 30500, "a"], [30506, 30516, "a"], [30509, 30513, "ad"], [30522, 30532, "a"], [30525, 30529, "ad"], [30538, 30548, "a"], [30541, 30545, "ad"], [30554, 30564, "a"], [30557, 30561, "ad"], [30570, 30580, "a"], [30573, 30577, "ad"], [30586, 30596, "a"], [30589, 30593, "ad"], [30602, 30612, "a"], [30605, 30609, "ad"], [30618, 30628, "a"], [30621, 30625, "al"], [30634, 30644, "a"], [30637, 30641, "al"], [30650, 30660, "a"], [30653, 30657, "al"], [30666, 30676, "a"], [30669, 30673, "al"], [30682, 30692, "a"], [30685, 30689, "al"], [30698, 30708, "a"], [30701, 30705, "al"], [30714, 30724, "a"], [30717, 30721, "al"], [30730, 30740, "a"], [30733, 30737, "al"], [30746, 30756, "a"], [30749, 30753, "al"], [30762, 30772, "a"], [30765, 30769, "al"], [30778, 30788, "a"], [30781, 30785, "al"], [30794, 30804, "a"], [30797, 30801, "au"], [30810, 30820, "a"], [30813, 30817, "au"], [30826, 30836, "a"], [30829, 30833, "au"], [30842, 30852, "a"], [30845, 30849, "au"], [30858, 30868, "a"], [30861, 30865, "ar"], [30874, 30884, "a"], [30877, 30881, "ar"], [30890, 30900, "a"], [30893, 30897, "ar"], [30906, 30916, "a"], [30909, 30913, "ar"], [30922, 30932, "a"], [30925, 30929, "ar"], [30938, 30948, "a"], [30941, 30945, "ar"], [30954, 30964, "a"], [30957, 30961, "ar"], [30970, 30974, "d"], [30980, 30984, "d"], [30990, 30994, "a"], [31000, 31010, "a"], [31003, 31007, "ad"], [31016, 31026, "a"], [31019, 31023, "ad"], [31032, 31042, "a"], [31035, 31039, "ad"], [31048, 31058, "a"], [31051, 31055, "ad"], [31064, 31074, "a"], [31067, 31071, "ad"], [31080, 31090, "a"], [31083, 31087, "ad"], [31096, 31106, "a"], [31099, 31103, "ad"], [31112, 31122, "a"], [31115, 31119, "al"], [31128, 31138, "a"], [31131, 31135, "al"], [31144, 31154, "a"], [31147, 31151, "al"], [31160, 31170, "a"], [31163, 31167, "al"], [31176, 31186, "a"], [31179, 31183, "al"], [31192, 31202, "a"], [31195, 31199, "al"], [31208, 31218, "a"], [31211, 31215, "al"], [31224, 31234, "a"], [31227, 31231, "al"], [31240, 31250, "a"], [31243, 31247, "al"], [31256, 31266, "a"], [31259, 31263, "al"], [31272, 31282, "a"], [31275, 31279, "al"], [31288, 31298, "a"], [31291, 31295, "au"], [31304, 31314, "a"], [31307, 31311, "au"], [31320, 31330, "a"], [31323, 31327, "au"], [31336, 31346, "a"], [31339, 31343, "au"], [31352, 31362, "a"], [31355, 31359, "au"], [31368, 31372, "d"], [31378, 31382, "d"], [31388, 31392, "a"], [31398, 31408, "a"], [31401, 31405, "ad"], [31414, 31424, "a"], [31417, 31421, "ad"], [31430, 31440, "a"], [31433, 31437, "ad"], [31446, 31456, "a"], [31449, 31453, "ad"], [31462, 31472, "a"], [31465, 31469, "ad"], [31478, 31488, "a"], [31481, 31485, "ad"], [31494, 31504, "a"], [31497, 31501, "ad"], [31510, 31520, "a"], [31513, 31517, "al"], [31526, 31536, "a"], [31529, 31533, "al"], [31542, 31552, "a"], [31545, 31549, "al"], [31558, 31568, "a"], [31561, 31565, "al"], [31574, 31584, "a"], [31577, 31581, "al"], [31590, 31600, "a"], [31593, 31597, "al"], [31606, 31616, "a"], [31609, 31613, "al"], [31622, 31632, "a"], [31625, 31629, "al"], [31638, 31648, "a"], [31641, 31645, "al"], [31654, 31664, "a"], [31657, 31661, "al"], [31670, 31680, "a"], [31673, 31677, "al"], [31686, 31696, "a"], [31689, 31693, "au"], [31702, 31712, "a"], [31705, 31709, "au"], [31718, 31728, "a"], [31721, 31725, "ar"], [31734, 31744, "a"], [31737, 31741, "ar"], [31750, 31760, "a"], [31753, 31757, "ar"], [31766, 31776, "a"], [31769, 31773, "ar"], [31782, 31792, "a"], [31785, 31789, "ar"], [31798, 31808, "a"], [31801, 31805, "ar"], [31814, 31818, "d"], [31824, 31828, "d"], [31834, 31838, "a"], [31844, 31854, "a"], [31847, 31851, "ad"], [31860, 31870, "a"], [31863, 31867, "ad"], [31876, 31886, "a"], [31879, 31883, "ad"], [31892, 31902, "a"], [31895, 31899, "ad"], [31908, 31918, "a"], [31911, 31915, "ad"], [31924, 31934, "a"], [31927, 31931, "ad"], [31940, 31950, "a"], [31943, 31947, "ad"], [31956, 31966, "a"], [31959, 31963, "al"], [31972, 31982, "a"], [31975, 31979, "al"], [31988, 31998, "a"], [31991, 31995, "al"], [32004, 32014, "a"], [32007, 32011, "al"], [32020, 32030, "a"], [32023, 32027, "al"], [32036, 32046, "a"], [32039, 32043, "al"], [32052, 32062, "a"], [32055, 32059, "al"], [32068, 32078, "a"], [32071, 32075, "al"], [32084, 32094, "a"], [32087, 32091, "al"], [32100, 32110, "a"], [32103, 32107, "al"], [32116, 32126, "a"], [32119, 32123, "al"], [32132, 32142, "a"], [32135, 32139, "au"], [32148, 32158, "a"], [32151, 32155, "au"], [32164, 32174, "a"], [32167, 32171, "ar"], [32180, 32190, "a"], [32183, 32187, "ar"], [32196, 32206, "a"], [32199, 32203, "ar"], [32212, 32222, "a"], [32215, 32219, "ar"], [32228, 32238, "a"], [32231, 32235, "ar"], [32244, 32254, "a"], [32247, 32251, "ar"], [32260, 32264, "d"], [32270, 32274, "a"], [32280, 32290, "a"], [32283, 32287, "ad"], [32296, 32306, "a"], [32299, 32303, "ad"], [32312, 32322, "a"], [32315, 32319, "ad"], [32328, 32338, "a"], [32331, 32335, "ad"], [32344, 32354, "a"], [32347, 32351, "ad"], [32360, 32370, "a"], [32363, 32367, "ad"], [32376, 32386, "a"], [32379, 32383, "ad"], [32392, 32402, "a"], [32395, 32399, "al"], [32408, 32418, "a"], [32411, 32415, "al"], [32424, 32434, "a"], [32427, 32431, "al"], [32440, 32450, "a"], [32443, 32447, "al"], [32456, 32466, "a"], [32459, 32463, "al"], [32472, 32482, "a"], [32475, 32479, "al"], [32488, 32498, "a"], [32491, 32495, "al"], [32504, 32514, "a"], [32507, 32511, "al"], [32520, 32530, "a"], [32523, 32527, "al"], [32536, 32546, "a"], [32539, 32543, "al"], [32552, 32562, "a"], [32555, 32559, "al"], [32568, 32578, "a"], [32571, 32575, "au"], [32584, 32594, "a"], [32587, 32591, "au"], [32600, 32610, "a"], [32603, 32607, "ar"], [32616, 32626, "a"], [32619, 32623, "ar"], [32632, 32642, "a"], [32635, 32639, "ar"], [32648, 32658, "a"], [32651, 32655, "ar"], [32664, 32674, "a"], [32667, 32671, "ar"], [32680, 32690, "a"], [32683, 32687, "ar"], [32696, 32700, "d"], [32706, 32710, "a"], [32716, 32726, "a"], [32719, 32723, "ad"], [32732, 32742, "a"], [32735, 32739, "ad"], [32748, 32758, "a"], [32751, 32755, "ad"], [32764, 32774, "a"], [32767, 32771, "ad"], [32780, 32790, "a"], [32783, 32787, "ad"], [32796, 32806, "a"], [32799, 32803, "ad"], [32812, 32822, "a"], [32815, 32819, "ad"], [32828, 32838, "a"], [32831, 32835, "al"], [32844, 32854, "a"], [32847, 32851, "al"], [32860, 32870, "a"], [32863, 32867, "al"], [32876, 32886, "a"], [32879, 32883, "al"], [32892, 32902, "a"], [32895, 32899, "al"], [32908, 32918, "a"], [32911, 32915, "al"], [32924, 32934, "a"], [32927, 32931, "al"], [32940, 32950, "a"], [32943, 32947, "al"], [32956, 32966, "a"], [32959, 32963, "al"], [32972, 32982, "a"], [32975, 32979, "al"], [32988, 32998, "a"], [32991, 32995, "al"], [33004, 33014, "a"], [33007, 33011, "au"], [33020, 33030, "a"], [33023, 33027, "au"], [33036, 33046, "a"], [33039, 33043, "ar"], [33052, 33062, "a"], [33055, 33059, "ar"], [33068, 33078, "a"], [33071, 33075, "ar"], [33084, 33094, "a"], [33087, 33091, "ar"], [33100, 33110, "a"], [33103, 33107, "ar"], [33116, 33126, "a"], [33119, 33123, "ar"], [33132, 33136, "d"], [33142, 33146, "a"], [33152, 33162, "a"], [33155, 33159, "ad"], [33168, 33178, "a"], [33171, 33175, "ad"], [33184, 33194, "a"], [33187, 33191, "ad"], [33200, 33210, "a"], [33203, 33207, "ad"], [33216, 33226, "a"], [33219, 33223, "ad"], [33232, 33242, "a"], [33235, 33239, "ad"], [33248, 33258, "a"], [33251, 33255, "ad"], [33264, 33274, "a"], [33267, 33271, "al"], [33280, 33290, "a"], [33283, 33287, "al"], [33296, 33306, "a"], [33299, 33303, "al"], [33312, 33322, "a"], [33315, 33319, "al"], [33328, 33338, "a"], [33331, 33335, "al"], [33344, 33354, "a"], [33347, 33351, "al"], [33360, 33370, "a"], [33363, 33367, "al"], [33376, 33386, "a"], [33379, 33383, "al"], [33392, 33402, "a"], [33395, 33399, "al"], [33408, 33418, "a"], [33411, 33415, "al"], [33424, 33434, "a"], [33427, 33431, "al"], [33440, 33450, "a"], [33443, 33447, "au"], [33456, 33466, "a"], [33459, 33463, "au"], [33472, 33482, "a"], [33475, 33479, "ar"], [33488, 33498, "a"], [33491, 33495, "ar"], [33504, 33514, "a"], [33507, 33511, "ar"], [33520, 33530, "a"], [33523, 33527, "ar"], [33536, 33546, "a"], [33539, 33543, "ar"], [33552, 33562, "a"], [33555, 33559, "ar"], [33568, 33572, "u"], [33578, 33582, "u"], [33588, 33592, "u"], [33598, 33602, "u"], [33608, 33612, "u"], [33618, 33622, "u"], [33628, 33632, "u"], [33638, 33642, "u"], [33648, 33652, "u"], [33658, 33662, "u"], [33668, 33672, "u"], [33678, 33682, "u"], [33688, 33692, "u"], [33698, 33702, "u"], [33708, 33712, "u"], [33718, 33728, "s"], [33721, 33725, "sl"], [33734, 33738, "d"], [33744, 33748, "u"], [33754, 33758, "u"], [33764, 33774, "s"], [33767, 33771, "sl"], [33780, 33784, "l"], [33790, 33794, "l"], [33800, 33804, "l"]], "frames": 33870}};
+const TEXT = {
+  start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing", reboot: "Restarting",
+  done: "Done. Press PLAY on the FM-1 to start it.", stopped: "Stopped. Replug the USB cable and press Install again.",
+  error: "Error: ",
+  denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
+  notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
+  model: "The connected device is not an FM-1.",
+  lost: "The USB connection was lost. Replug it and press Install again.",
+  noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
+  noreturn: "The FM-1 did not come back. Power-cycle it.",
+  mismatch: "Written, but the FM-1 reports another version: ",
+};
+const say = (t) => { $("status").textContent = t; };
+const romSay = (t) => { $("rom-status").textContent = t; };
+const log = (t) => { $("log").textContent += t + "\n"; };
+const SHADE = [0xE8, 0xA0, 0x58, 0x10];
+let base = null, emu = null, image = null, writing = false, busy = false, epoch = 0;
+
+const lock = () => { $("go").disabled = writing || busy || !image; $("rom").disabled = writing || busy || !base; };
+window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = "Writing. Do not close the page."; } });
+
+function draw() {
+  const ctx = $("screen").getContext("2d"), img = ctx.createImageData(160, 144), px = emu.screen();
+  for (let i = 0; i < px.length; i++) {
+    const v = SHADE[px[i] & 3];
+    img.data[4 * i] = v; img.data[4 * i + 1] = v; img.data[4 * i + 2] = v; img.data[4 * i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+(async () => {
+  if (!navigator.requestMIDIAccess) { romSay("This browser cannot do it. Open the page in Chrome or Edge."); return; }
+  try {
+    const [p, w] = await Promise.all([fetch(meta.pkg), fetch(meta.wasm)]);
+    if (!p.ok || !w.ok) throw new Error(`HTTP ${p.ok ? w.status : p.status}`);
+    const pkg = new Uint8Array(await p.arrayBuffer());
+    if (productOf(pkg) !== meta.product) throw new Error("the firmware file is damaged; reload the page");
+    baseInfo(new Package(pkg));
+    emu = await loadEmu(await w.arrayBuffer());
+    base = pkg;
+    romSay(`Firmware ${meta.version} loaded. Choose your LSDj or DMGo ROM file (.gb).`);
+  } catch (e) { romSay("Could not load: " + e.message); }
+  lock();
+})();
+
+$("rom").addEventListener("change", async () => {
+  const file = $("rom").files[0], mine = ++epoch;
+  image = null;
+  if (!file || !base) { lock(); return; }
+  busy = true;
+  lock();
+  $("screen").hidden = false;
+  $("rom-bar").hidden = false;
+  $("rom-bar").value = 0;
+  say("");
+  try {
+    const rom = new Uint8Array(await file.arrayBuffer()), info = baseInfo(new Package(base));
+    const parts = { "LSDj's first start": [0, 8], "typing the demo song": [8, 90], "playing it": [98, 2],
+                    "DMGo's first start": [0, 40], "playing a step": [40, 60] };
+    const cart = await makeCart(emu, rom, meta.demo, info.room, (what, done, total) => {
+      const [at, share] = parts[what];
+      $("rom-bar").value = at + share * done / total;
+      romSay(`Checking the ROM in the emulator: ${what} ...`);
+      draw();
+    }, () => new Promise((r) => setTimeout(r)));
+    const pkg = withCart(base, cart);
+    if (mine !== epoch) return;
+    image = logicalImage(pkg);
+    $("rom-bar").value = 100;
+    romSay(`${file.name}: it runs. Its ${cart.length.toLocaleString()} bytes fit (${info.room.toLocaleString()} are free). Ready to install.`);
+  } catch (e) {
+    if (mine !== epoch) return;
+    $("rom-bar").hidden = true;
+    romSay(e.message);
+  }
+  busy = false;
+  lock();
+});
+
+$("go").addEventListener("click", async () => {
+  if (writing || !image) return;
+  writing = true;
+  lock();
+  let midi;
+  try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { say(TEXT.denied); writing = false; lock(); return; }
+  try {
+    const up = new Updater(midi, log), total = 74 + 1167;
+    const step = (k, a) => {
+      log(`${k} ${a ?? ""}`);
+      if (TEXT[k] && k !== "done") say(TEXT[k]);
+      if (k === "verify") $("bar").value = (a / total) * 100;
+      if (k === "write") $("bar").value = ((74 + a) / total) * 100;
+      if (k === "done") { $("bar").value = 100; say(TEXT.done); }
+    };
+    const ota = await up.find((id) => /^ota-/i.test(id.model));
+    if (ota) {
+      ota.link.close();
+      say((await up.resume(image, step, meta.product)) ? TEXT.done : TEXT.stopped);
+    } else {
+      await up.install(image, meta.product, step);
+    }
+  } catch (e) {
+    say(e && e.code && TEXT[e.code] ? TEXT[e.code] + (e.detail || "") : TEXT.error + (e && e.message));
+    log(String(e && e.stack || e));
+  }
+  writing = false;
+  lock();
+});
+</script>
+</body>
+</html>
