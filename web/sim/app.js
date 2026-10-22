@@ -2,7 +2,7 @@
 // LSDj fork: 2026 DEADACTIVE (the panel, the input and the power-on after Hortator's simulator, web/sim/app.js)
 // The LSDj simulator page: draws the FM-1's panel in the Game Boy's colours (panel.js, placed by layout.js: the FM-1's
 // own landscape, a stacked portrait for phones), turns pointer and keyboard input into messages for the worklet
-// (worklet.js runs the firmware), paints the frames it sends back in the Game Boy screen's greens, and keeps what the
+// (worklet.js runs the firmware), paints the frames it sends back in their own colours (the firmware's screen theme), and keeps what the
 // firmware writes to flash in IndexedDB (store.js). The user's own ROM is made into a cartridge block here
 // (lsdjinstall.js, as the install page does) and kept in this browser.
 import { HeldSet, keyEvent, contextMenuLatches, setProgram } from './controls.js';

@@ -159,7 +159,7 @@ static uint64_t sim_next_pass;
 static void sim_pass(void)                     /* core_main.c's loop body, minus the hardware */
 {
     uint32_t now = sim_buttons | sim_tap_b, down = now & ~sim_prev, f = st.frames;
-    sim_prev = sim_buttons;
+    sim_prev = now;                            /* (a tap kept for the frame is held: not pressed again next pass) */
     ble_key(down, sim_take(0));
     ble_service();
     ble_draw();

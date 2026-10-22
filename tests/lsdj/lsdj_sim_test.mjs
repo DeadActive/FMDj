@@ -87,11 +87,24 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     ok(peak > 0.02 && peak <= 1, `with sound (peak ${peak.toFixed(3)})`);
     const fb = sim.fb();
     ok(colours(fb, 4, 220) >= 2 && colours(fb, 222, 240) === 1, "its picture on the screen, nothing under it (no status bar)");
+    const under = sim.fb().slice(108 * 240, 218 * 240);
     tap(sim, B.GLO);                               // GLO: the menu over the picture's lower half
     run(sim, 0.3);
-    ok(colours(sim.fb(), 108, 218) > 2 && sim.playing(), "GLO opens the menu; the Game Boy plays on");
+    const m = sim.fb(), at = (x, y) => m[y * 240 + x];    // the first line highlighted (row 123..138), the next not
+    ok(at(236, 130) !== at(236, 150) && at(236, 150) === at(238, 160) && at(236, 130) === at(238, 135) && sim.playing(),
+       "GLO opens the menu (its first line highlighted); the Game Boy plays on");
     tap(sim, B.GLO);
     run(sim, 0.5);
+    ok(sim.fb().slice(108 * 240, 218 * 240).every((v, i) => v === under[i]), "GLO again closes it: the picture as before");
+    const same = () => sim.fb().slice(108 * 240, 218 * 240).every((v, i) => v === under[i]);
+    let alternates = true;                         // quick taps (down and up before a pass: a key on the keyboard),
+    for (let k = 0; k < 12; k++) {                 // at all sorts of moments between the passes and the frames
+      sim.btn(B.GLO, true); sim.btn(B.GLO, false);
+      for (let n = 0; n < 7 + 5 * k; n++) sim.render(128);
+      run(sim, 0.4);
+      alternates &&= same() === (k % 2 === 1);
+    }
+    ok(alternates, "a quick tap is one press: open, closed, open, ... (12 taps)");
     sim.enc(0, 3); sim.enc(1, -2); sim.enc(2, 1); sim.key(24, true); sim.master(300);
     run(sim, 0.5);
     sim.releaseAll();

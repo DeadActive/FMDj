@@ -13,10 +13,12 @@ export function green(l) {                         // l: 0 (black) .. 255 (white
   const c = k => Math.round(a[k] + (b[k] - a[k]) * f);
   return (0xff000000 | (c(2) << 16) | (c(1) << 8) | c(0)) >>> 0;
 }
-export const LUT = new Uint32Array(65536);         // RGB565 -> the green for its brightness
+// RGB565 -> its own colour, as the FM-1's screen shows it: the Game Boy's colours are the firmware's own now (the GLO
+// menu's SCREEN themes; DMG green at first)
+export const LUT = new Uint32Array(65536);
 for (let c = 0; c < 65536; c++) {
-  const r = ((c >> 11) & 31) * 255 / 31, g = ((c >> 5) & 63) * 255 / 63, b = (c & 31) * 255 / 31;
-  LUT[c] = green(0.299 * r + 0.587 * g + 0.114 * b);
+  const r = Math.round(((c >> 11) & 31) * 255 / 31), g = Math.round(((c >> 5) & 63) * 255 / 63), b = Math.round((c & 31) * 255 / 31);
+  LUT[c] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
 }
 export const SHADE = [232, 160, 88, 16].map(green); // the Game Boy's four shades, as the firmware's palette has them
 

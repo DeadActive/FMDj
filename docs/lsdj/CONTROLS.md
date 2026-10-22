@@ -39,6 +39,11 @@ back at the next PLAY.
 
 The last four were the FX, LFO, EDIT and ENV buttons; those buttons do nothing now.
 
+Saving the settings when the menu closes takes a moment of flash writing: the sound stops for a fraction of a
+second (only when something changed). The very first time anything of FMDj's is written to the FM-1's flash (a
+save, kits, or these settings), the user-sample headers Hortator keeps there are cleared, as its samples' area is
+FMDj's from then on.
+
 ## The status bar
 
 Off at first (the menu's STATUS BAR). Left: **FPS** is the Game Boy's frames a second (59.7 is real time). **CPU**

@@ -248,6 +248,71 @@ static void test_menu(void)                   /* the menu over the picture's low
     CHECK(menu.set.bar && menu.set.theme == LSDJ_THEME_DMG && menu.set.off == EMU_SND_FINE && emu_mode == 7);
     option(LSDJ_MI_SOUND);                    /* (the sound in the frame again) */
     CHECK(emu_mode == 15);
+    {   /* closed with B: B (and anything held then) reaches the Game Boy only once let go and pressed again */
+        uint32_t k, leaked = 0;
+        glo();
+        notes = 1u << 26;                     /* B down: closes */
+        for (k = 0; k < 6; k++) {
+            pass();
+            leaked |= !(st.pad & JOYPAD_B);
+        }
+        CHECK(!menu.open && !leaked);
+        notes = 0;
+        pass();
+        buttons = core_button_bit(CORE_BTN_ARP);   /* RIGHT (ARP) held through the menu: not its key at open, and not */
+        pass();                               /* the Game Boy's after close, with turns waiting at close */
+        glo();
+        ble_key(core_button_bit(CORE_BTN_GLO), 3);
+        for (k = 0, leaked = 0; k < 8; k++) {
+            pass();
+            leaked |= st.pad != 0xFF;
+        }
+        CHECK(!menu.open && !leaked);         /* neither the held RIGHT nor the turns */
+        buttons = 0;
+        notes = 0;
+        pass();
+        notes = 1u << 26;                     /* B pressed again: the Game Boy's */
+        pass();
+        CHECK(!(st.pad & JOYPAD_B));
+        notes = 0;
+        pass();
+        CHECK(menu.set.theme == LSDJ_THEME_DMG);   /* (RIGHT on SCREEN was not taken: it was held at open) */
+    }
+    {   /* the console holds the Game Boy: GLO still shows the menu */
+        console("ble hold");
+        small_text[0] = 0;
+        glo();
+        CHECK(menu.open && !strcmp(small_text, "MENU  (GLO CLOSES)"));
+        glo();
+        console("ble go");
+    }
+    {   /* `ble mode` (the test bench) and the menu agree */
+        console("ble mode 7");
+        CHECK(menu.set.off == EMU_SND_FINE);
+        console("ble mode F");
+        CHECK(menu.set.off == 0);
+    }
+    {   /* a settings write that does not go through says so */
+        flash_on = 0;
+        option(LSDJ_MI_BAR);
+        CHECK(!strcmp(st.note, "SETTINGS FAILED") && !menu.set.bar);
+        flash_on = 1;
+        option(LSDJ_MI_BAR);                  /* (on again, and kept) */
+        CHECK(menu.set.bar && set_saved.bar);
+    }
+    {   /* a DMGo step half done when the menu opens: DMGo's cursor goes back at once (as LSDj here, its bytes
+         * kept and put back) */
+        uint8_t keep[3] = {emu.gb.wram[0x01A], emu.gb.wram[0x01B], emu.gb.wram[0xB1F]};
+        with_steps = 1;
+        steps.busy = 1;
+        steps.keep[0] = 3; steps.keep[1] = 5; steps.keep[2] = 5;
+        emu.gb.wram[0x01A] = 12; emu.gb.wram[0x01B] = emu.gb.wram[0xB1F] = 7;
+        glo();
+        CHECK(menu.open && !steps.busy && emu.gb.wram[0x01A] == 3 && emu.gb.wram[0x01B] == 5 && emu.gb.wram[0xB1F] == 5);
+        glo();
+        with_steps = 0;
+        emu.gb.wram[0x01A] = keep[0]; emu.gb.wram[0x01B] = keep[1]; emu.gb.wram[0xB1F] = keep[2];
+    }
     for (i = 0; i < 50; i++)
         pass();
     CHECK(emu.errors == 0);

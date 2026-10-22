@@ -96,6 +96,7 @@ static uint16_t pal[4];                       /* the screen theme's (the GLO men
 static lsdj_menu_t menu;
 static lsdj_set_t set_saved;                  /* what flash holds */
 static uint8_t menu_paint_req, menu_last, set_req, bar_shown;
+static uint8_t menu_mask;                     /* keys down when the menu closed: not the Game Boy's until let go */
 
 static struct {
     uint32_t frames, waits, doubles, frame_max_us, frame_us_sum, pushes, start_ms, push_ticks, push_calls;
@@ -256,8 +257,9 @@ static void menu_paint(void)                   /* the box over the picture's low
         y = MENU_Y + 1u + MENU_LINE * (i + 1u);
         lsdj_menu_line(&menu, i, label, value);
         core_fill(0, (int)y, 240, (int)MENU_LINE, sel ? CORE_SEL : CORE_BG);
-        core_text(8, (int)y, 112, CORE_FONT_S, label, sel ? CORE_TEXT : CORE_MID, sel ? CORE_SEL : CORE_BG, 0);
-        core_text(120, (int)y, 112, CORE_FONT_S, value, CORE_TEXT, sel ? CORE_SEL : CORE_BG, 0);
+        core_text(8, (int)y, 112, CORE_FONT_S, label, sel ? CORE_BG : CORE_MID, sel ? CORE_SEL : CORE_BG, 0);   /* (dark on
+                                                                                    * the light highlight) */
+        core_text(120, (int)y, 112, CORE_FONT_S, value, sel ? CORE_BG : CORE_TEXT, sel ? CORE_SEL : CORE_BG, 0);
     }
     menu_paint_req = 0;
 }
@@ -274,6 +276,8 @@ static void menu_open(void)
 static void menu_close(void)
 {
     menu.open = 0;
+    menu_mask = menu_last;                    /* (the B that closed it, a direction still held) */
+    memset(&knobs, 0, sizeof knobs);          /* (turns meant for the menu) */
     memset(shown[2u * MENU_G], 0xFF, sizeof shown - sizeof shown[0] * 2u * MENU_G);   /* the picture under it again */
     memset(dirty + 2u * MENU_G, 1, sizeof dirty - 2u * MENU_G);
     if (memcmp(&menu.set, &set_saved, sizeof set_saved))
@@ -437,7 +441,11 @@ static void lsdj_step(void)
         st.gap_off = 1;
         if (flash_on && lsdj_store_settings(&flash, &store, b) == LSDJ_ST_OK)
             set_saved = menu.set;
+        else
+            lsdj_note("SETTINGS FAILED");     /* (tried again when the menu next closes with a change) */
     }
+    if (menu.open && menu_paint_req && core_lcd_idle())   /* (also while the host holds the Game Boy) */
+        menu_paint();
     if (!(core_buttons() & core_rec_bit())) { /* REC held for a second: save (once a press; not under the host) */
         st.rec_ms = 0;
         st.rec_done = 0;
@@ -472,14 +480,20 @@ static void lsdj_step(void)
         st.pad = lsdj_pad_ab(st.buttons, st.notes, pad_map, note_a, note_b) & (uint8_t)~lsdj_knobs_frame(&knobs);
         if (menu.open) {                      /* the menu takes the keys; the Game Boy gets none, and plays on */
             menu_keys(st.pad);
+            if (with_steps && steps.busy)     /* a DMGo step half done: its cursor back now (B stays up) */
+                lsdj_steps_frame(&steps, emu.gb.wram, 0xFF);
             if (with_steps) {
                 lsdj_steps_keys(&steps, st.notes);   /* (white keys held now are not pressed when it closes) */
                 steps.n = 0;
             }
             st.pad = 0xFF;
-        } else if (with_steps) {              /* DMGo's step keys: its cursor on the step and B, for a frame */
-            lsdj_steps_keys(&steps, st.notes);
-            st.pad = lsdj_steps_frame(&steps, emu.gb.wram, st.pad);
+        } else {
+            menu_mask &= (uint8_t)~st.pad;    /* a key held since the menu closed: up for the Game Boy until let go */
+            st.pad |= menu_mask;
+            if (with_steps) {                 /* DMGo's step keys: its cursor on the step and B, for a frame */
+                lsdj_steps_keys(&steps, st.notes);
+                st.pad = lsdj_steps_frame(&steps, emu.gb.wram, st.pad);
+            }
         }
         if (xfer.key_n) {                     /* the console's `ble key` */
             xfer.key_n--;
@@ -499,8 +513,6 @@ static void lsdj_step(void)
             break;
         st.doubles += n == 0;
     }
-    if (menu.open && menu_paint_req && core_lcd_idle())
-        menu_paint();
 }
 
 /* changed line pairs to the screen, round robin, never waiting: while the last transfer runs, nothing; else one
@@ -682,9 +694,10 @@ static void lsdj_console(const char *args)     /* the words after `ble` on the c
     xfer.nbanks = run ? cart.nbanks : 0;
     xfer.mode = (uint8_t)emu_mode;
     lsdj_xfer_cmd(&xfer, args, core_ms(), xfer_out);
-    if (xfer.mode_set) {                      /* `ble mode M`: as the option buttons */
+    if (xfer.mode_set) {                      /* `ble mode M`: as the menu's emulator options (not kept in flash) */
         xfer.mode_set = 0;
         emu_mode = xfer.mode;
+        menu.set.off = (uint8_t)(~emu_mode & 15u);
         st.pad_shown = (uint8_t)~st.pad;
     }
     core_con_puts(xfer_out);
