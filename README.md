@@ -1,3 +1,34 @@
+# FMDj
+
+Game Boy music programs inside the M-VAVE FM-1: **LSDj**, the tracker, and **DMGo!**, the drum machine, run on the
+FM-1's own firmware in a Game Boy emulator (Peanut-GB, minigb_apu). You bring your own ROM; the install page puts it
+into the firmware in your browser and installs it over USB.
+
+- Site: [deadactive.github.io/FMDj](https://deadactive.github.io/FMDj/): what it is, screenshots, how to use it
+- Install: [install page](https://deadactive.github.io/FMDj/webapp/lsdj-install/) (Chrome or Edge, USB, your own
+  LSDj or DMGo ROM)
+- Try: [simulator](https://deadactive.github.io/FMDj/webapp/lsdj-sim/): the FM-1 and this firmware in the browser,
+  with your ROM
+- Songs and saves: [song page](https://deadactive.github.io/FMDj/webapp/lsdj/)
+- Controls: [docs/lsdj/CONTROLS.md](docs/lsdj/CONTROLS.md); roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
+
+Nothing of LSDj or DMGo is in this repository, the firmware or the site's packages: LSDj is by Johan Kotlinski
+([littlesounddj.com](https://www.littlesounddj.com/)), DMGo! by Audiowanderer (free from
+[audiowanderer.com](https://audiowanderer.com/AW/drum-machina-go-or/)); you need your own copy. Installing is at
+your own risk; an FM-1 that no longer starts is recovered with a
+[Transporter](https://github.com/kurogedelic/FM-1-transporter).
+
+Build: `FELUCCA_LSDJ=1 ./build.sh` makes the firmware without a ROM (`build/lsdj-base.fwsc`), with
+`LSDJ_ROM=your.gb` also a private one with your ROM in it (never published). The site: `tools/fmdj_publish.sh`.
+
+FMDj, the LSDj fork of Felucca: DEADACTIVE. Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments.
+GPL-3.0-only. M-VAVE and FM-1 are trademarks of their respective owners; Game Boy is a trademark of Nintendo. This
+project is not affiliated with any of them.
+
+---
+
+*The rest of this README is Felucca's: the firmware FMDj is built on.*
+
 # Felucca
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
