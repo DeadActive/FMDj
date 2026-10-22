@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # LSDj fork: 2026 DEADACTIVE
-"""tools/fmdj_shots.py: the walk to each LSDj screen, the PNGs, the output refusal. Part 5 needs the owner's ROM
-(LSDJ_ROM) and build/lsdj/demo.sav; it is skipped without them."""
+"""tools/fmdj_shots.py: the walk to each LSDj screen and each DMGo screen, the PNGs, the output refusal. Part 5 needs
+the owner's ROM (LSDJ_ROM) and build/lsdj/demo.sav, part 8 the owner's DMGo ROM (DMGO_ROM); skipped without them."""
 import json
 import os
 import struct
@@ -72,7 +72,7 @@ if rom and sav.exists():
     check("5a tool runs", r.returncode == 0, r.stdout + r.stderr)
     names = list(want)
     man = json.loads((out / "manifest.json").read_text()) if (out / "manifest.json").exists() else []
-    check("5b manifest", man == [{"name": n, "title": n.upper(), "file": n + ".png"} for n in names])
+    check("5b manifest", man == [{"prog": "lsdj", "name": n, "title": n.upper(), "file": n + ".png"} for n in names])
     files = [(out / (n + ".png")).read_bytes() if (out / (n + ".png")).exists() else None for n in names]
     check("5c nine PNGs", all(files) and len(set(files)) == 9)
 else:
@@ -117,6 +117,65 @@ o2 = other / "deep" / "shots"
 r = subprocess.run([sys.executable, tool, fake, tdir / "some.sav", o2], capture_output=True, text=True)
 check("6c refuses an output inside another git repository", r.returncode != 0 and "repository" in r.stdout + r.stderr
       and str(other.resolve()) in r.stdout + r.stderr and not o2.exists(), r.stdout + r.stderr)
+
+# ---- 7 DMGo's walk (no ROM needed): the screens, the page each one ends on (WRAM C005), the host's arguments
+dwant = ["title", "ch1", "ch3", "ch4", "pick", "patterns", "save", "setup"]
+check("7a DMGO screens", list(F.DMGO) == dwant, list(getattr(F, "DMGO", {})))
+pages = {n: F.DMGO[n]["page"] for n in F.DMGO}
+check("7b DMGO pages (C005: CH1..CH4 0..3, PATTERNS 4, SAVE 5, SETUP 6; the title none)",
+      pages == {"title": None, "ch1": 0, "ch3": 2, "ch4": 3, "pick": 0, "patterns": 4, "save": 5, "setup": 6}, pages)
+titles = [F.DMGO[n]["title"] for n in dwant]
+check("7c DMGO titles distinct and upper case", len(set(titles)) == len(titles)
+      and all(t == t.upper() for t in titles), titles)
+args, frames = F.dmgo_args(["a", "r"], [1, 5])
+check("7d dmgo_args: START at 300, white keys from 400 every 16 frames, then keys every 12",
+      args == ["-k", "300:304:t", "-n", "400:1", "-n", "416:5", "-k", "432:436:a", "-k", "444:448:r"]
+      and frames == 456 + 60, (args, frames))
+args, frames = F.dmgo_args([], [], start=False, frames=250)
+check("7e dmgo_args: the title screen (no START)", args == [] and frames == 250, (args, frames))
+check("7f CH1 is filled with the white keys, the others with DMGo's own presets (PICK A PAT: SELECT, RIGHT, B)",
+      F.DMGO["ch1"]["steps"] and not F.DMGO["ch3"]["steps"] and F.DMGO["ch3"]["keys"][4:7] == ["s", "r", "b"])
+o3 = tdir / "out3"
+r = subprocess.run([sys.executable, tool, "--dmgo", tdir / "nosuch.gb", o3], capture_output=True, text=True)
+check("7g --dmgo refuses a missing ROM, naming it", r.returncode != 0 and "nosuch.gb" in r.stdout + r.stderr
+      and not o3.exists(), r.stdout + r.stderr)
+r = subprocess.run([sys.executable, tool, "--dmgo", fake, "/tmp/x_fmdj_dmgo"], capture_output=True, text=True)
+check("7h --dmgo refuses a path that is not git-ignored", r.returncode != 0 and "git-ignored" in r.stdout + r.stderr
+      and not Path("/tmp/x_fmdj_dmgo").exists(), r.stdout + r.stderr)
+o4 = other / "deep" / "dmgo"
+r = subprocess.run([sys.executable, tool, "--dmgo", fake, o4], capture_output=True, text=True)
+check("7i --dmgo refuses an output inside another git repository", r.returncode != 0
+      and str(other.resolve()) in r.stdout + r.stderr and not o4.exists(), r.stdout + r.stderr)
+
+# ---- 8 DMGo's screens from the owner's ROM
+drom = os.environ.get("DMGO_ROM")
+if drom and Path(drom).is_file():
+    out = SRC / "build" / "tests" / "fmdj_shots_dmgo"
+    subprocess.run(["rm", "-rf", str(out)])
+    r = subprocess.run([sys.executable, tool, "--dmgo", drom, out], capture_output=True, text=True)
+    check("8a --dmgo runs", r.returncode == 0, r.stdout + r.stderr)
+    man = json.loads((out / "manifest.json").read_text()) if (out / "manifest.json").exists() else []
+    check("8b manifest: prog dmgo, the screens in order",
+          man == [{"prog": "dmgo", "name": n, "title": F.DMGO[n]["title"], "file": n + ".png"} for n in dwant], man)
+    files = [(out / (n + ".png")).read_bytes() if (out / (n + ".png")).exists() else None for n in dwant]
+    check("8c eight different PNGs", all(files) and len(set(files)) == len(dwant), f"{len(set(f for f in files if f))}")
+    def greens(f):
+        ihdr, raw = decode(f)
+        n = 480 * 3 + 1
+        return ihdr[:2] == (480, 432) and len(raw) == 432 * n and {
+            raw[y * n + 1 + x * 3:y * n + 4 + x * 3] for y in range(0, 432, 3) for x in range(0, 480, 3)} <= \
+            {bytes(c) for c in pal}
+    check("8d each 480 x 432 in the four greens", all(f and greens(f) for f in files))
+    left = sorted(p.name for p in out.iterdir() if p.suffix not in (".png", ".json"))
+    check("8e nothing else left in the output", not left, str(left))
+    if rom:
+        o5 = SRC / "build" / "tests" / "fmdj_shots_notdmgo"
+        subprocess.run(["rm", "-rf", str(o5)])
+        r = subprocess.run([sys.executable, tool, "--dmgo", rom, o5], capture_output=True, text=True)
+        check("8f --dmgo with LSDj's ROM fails: a screen not where DMGo's walk ends", r.returncode != 0
+              and "page" in r.stdout + r.stderr and not (o5 / "manifest.json").exists(), r.stdout + r.stderr)
+else:
+    print("skipped 8 (DMGO_ROM missing)")
 
 print("fmdj_shots_test: all passed" if not fails else f"{fails} FAILED")
 sys.exit(fails != 0)
