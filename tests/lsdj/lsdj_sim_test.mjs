@@ -86,17 +86,18 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     ok(sim.frames() - f0 >= 176 && sim.frames() - f0 <= 183, `it runs at the Game Boy's speed (${sim.frames() - f0} frames in 3 s of sound)`);
     ok(peak > 0.02 && peak <= 1, `with sound (peak ${peak.toFixed(3)})`);
     const fb = sim.fb();
-    ok(colours(fb, 4, 220) >= 2 && colours(fb, 222, 240) === 1, "its picture on the screen, nothing under it (no status bar)");
-    const under = sim.fb().slice(108 * 240, 218 * 240);
+    ok(colours(fb, 12, 228) >= 2 && colours(fb, 0, 12) === 1 && colours(fb, 228, 240) === 1 && fb[0] === fb[239 * 240 + 239],
+       "its picture in the middle, the theme's border round it (no status bar)");
+    const under = sim.fb().slice(116 * 240, 226 * 240);
     tap(sim, B.GLO);                               // GLO: the menu over the picture's lower half
     run(sim, 0.3);
-    const m = sim.fb(), at = (x, y) => m[y * 240 + x];    // the first line highlighted (row 123..138), the next not
-    ok(at(236, 130) !== at(236, 150) && at(236, 150) === at(238, 160) && at(236, 130) === at(238, 135) && sim.playing(),
+    const m = sim.fb(), at = (x, y) => m[y * 240 + x];    // the first line highlighted (rows 131..146), the next not
+    ok(at(236, 138) !== at(236, 155) && at(236, 155) === at(238, 158) && at(236, 138) === at(238, 142) && sim.playing(),
        "GLO opens the menu (its first line highlighted); the Game Boy plays on");
     tap(sim, B.GLO);
     run(sim, 0.5);
-    ok(sim.fb().slice(108 * 240, 218 * 240).every((v, i) => v === under[i]), "GLO again closes it: the picture as before");
-    const same = () => sim.fb().slice(108 * 240, 218 * 240).every((v, i) => v === under[i]);
+    ok(sim.fb().slice(116 * 240, 226 * 240).every((v, i) => v === under[i]), "GLO again closes it: the picture as before");
+    const same = () => sim.fb().slice(116 * 240, 226 * 240).every((v, i) => v === under[i]);
     let alternates = true;                         // quick taps (down and up before a pass: a key on the keyboard),
     for (let k = 0; k < 12; k++) {                 // at all sorts of moments between the passes and the frames
       sim.btn(B.GLO, true); sim.btn(B.GLO, false);
@@ -177,7 +178,7 @@ if (!fs.existsSync(WASM) || !fs.existsSync(EMU)) {
     const same = (a, b) => a.every((v, i) => v === b[i]);
     // on the screen (1.5x from row 4): DMGo's SEQ row, Game Boy rows 88..95; the top row's left part ("CH1:PULSE";
     // its right part, the BPM under the cursor, blinks)
-    const SEQ = [4 + 88 * 3 / 2, 4 + 96 * 3 / 2], TOP = [4, 4 + 12, 110];
+    const SEQ = [12 + 88 * 3 / 2, 12 + 96 * 3 / 2], TOP = [12, 12 + 12, 110];   // (the picture from row 12: no status bar)
     const seq0 = rows(sim.fb(), ...SEQ), top0 = rows(sim.fb(), ...TOP);
     sim.key(0, true); run(sim, 0.1); sim.key(0, false); run(sim, 0.5);   // F3: step 1
     ok(!same(seq0, rows(sim.fb(), ...SEQ)) && same(top0, rows(sim.fb(), ...TOP)),

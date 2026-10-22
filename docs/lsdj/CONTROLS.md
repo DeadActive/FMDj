@@ -46,7 +46,11 @@ FMDj's from then on.
 
 ## The status bar
 
-Off at first (the menu's STATUS BAR). Left: **FPS** is the Game Boy's frames a second (59.7 is real time). **CPU**
+Off at first (the menu's STATUS BAR): the picture is then in the middle of the screen, with a border above and below
+in the theme's lightest shade, so the whole screen is the Game Boy's. With the status bar on, the picture moves up
+and the bar is under it.
+
+With it on, left: **FPS** is the Game Boy's frames a second (59.7 is real time). **CPU**
 is how much of its time the FM-1 needs for the Game Boy: under 100 % it keeps up, and the lower the more is spare.
 
 Right, with no key held: **GAPS** counts the seconds so far in which the sound ran dry, because the FM-1 was too

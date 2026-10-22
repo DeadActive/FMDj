@@ -200,6 +200,13 @@ static void test_menu(void)                   /* the menu over the picture's low
     CHECK(!menu.open && menu.set.theme == LSDJ_THEME_DMG && !menu.set.bar && emu_mode == 15);   /* the defaults */
     CHECK(pal[0] == RGB(0x9B, 0xBC, 0x0F) && pal[3] == RGB(0x0F, 0x38, 0x0F));   /* DMG green */
     CHECK(keys_text[0] == 0);                 /* no status bar: nothing drawn under the picture */
+    for (i = 0; i < 300; i++)                 /* ... the picture in the middle, the theme's lightest shade round it */
+        ble_draw();
+    CHECK(y0 == 12u && screen[0][0] == pal[0] && screen[11][239] == pal[0] && screen[228][0] == pal[0] &&
+          screen[239][239] == pal[0]);
+    for (y = 0, e = 0; y < LSDJ_H; y += 7u)
+        e += screen[y0 + y * 3u / 2u + (y & 1u)][(y * 3u) % 240u] != pal[fb[y][(y * 2u) % 160u]];
+    CHECK(e == 0);
     glo();
     CHECK(menu.open && !strcmp(small_text, "MENU  (GLO CLOSES)"));
     for (i = 0, f = st.frames; i < 30; i++)
@@ -217,7 +224,8 @@ static void test_menu(void)                   /* the menu over the picture's low
     CHECK(e == 0 && dirty[2u * MENU_G] && dirty[LSDJ_H - 1u]);
     menu_press(CORE_BTN_SAVE);                /* DOWN: STATUS BAR; RIGHT: on */
     menu_press(CORE_BTN_ARP);
-    CHECK(menu.item == LSDJ_MI_BAR && menu.set.bar && !strncmp(keys_text, "GAPS ", 5));
+    CHECK(menu.item == LSDJ_MI_BAR && menu.set.bar && !strncmp(keys_text, "GAPS ", 5) && y0 == 4u);   /* (the picture
+                                                                                         * up again, the bar under it) */
     e = flash_progs;
     CHECK(store.set[0] == 0 && store.set[1] == 0);
     glo();                                    /* closed: the picture under it again, the settings into flash */
@@ -876,7 +884,7 @@ int main(int argc, char **argv)
     CHECK(bad_blits == 0);
     for (y = 0; y < LSDJ_H; y++)              /* every Game Boy pixel on the screen, 1.5x */
         for (x = 0; x < LSDJ_W; x++)
-            diff += screen[Y0 + y * 3u / 2u + (y & 1u)][x * 3u / 2u + (x & 1u)] != pal[fb[y][x]];
+            diff += screen[y0 + y * 3u / 2u + (y & 1u)][x * 3u / 2u + (x & 1u)] != pal[fb[y][x]];
     CHECK(diff == 0);
     CHECK(memcmp(fb, shown, sizeof fb) == 0);
     {

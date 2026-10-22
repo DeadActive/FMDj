@@ -2,7 +2,8 @@
 
 The menu and its lines are in `docs/lsdj/CONTROLS.md`.
 
-1. **PLAY** starts LSDj (or DMGo). Expect the screen in DMG green and nothing under the picture (no status bar).
+1. **PLAY** starts LSDj (or DMGo). Expect the screen in DMG green, the picture in the middle with a light green
+   border above and below it (no status bar, no black strip).
 
 2. **GLO** opens the menu over the picture's lower half. **PLAY** a song first: expect it to keep playing while the
    menu is open, and the picture's upper half to keep moving.

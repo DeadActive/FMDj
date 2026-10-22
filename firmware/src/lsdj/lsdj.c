@@ -37,13 +37,16 @@
 
 #define RING_N 4096u                          /* stereo frames: 93 ms, 5.5 Game Boy frames */
 #define RING_LOW (RING_N / 2u)                /* under this the step runs a second Game Boy frame in its pass */
-#define Y0 4u                                 /* the picture: rows 4 .. 219; the status line below */
+#define Y0_BAR 4u                             /* the picture: rows 4 .. 219, the status bar below it */
+#define Y0_FULL 12u                           /* ... without the status bar: in the middle, rows 12 .. 227, and the
+                                               * 12 rows above and below in the theme's lightest shade */
+#define BORDER 12u                            /* (AF_S, the status font, is 12 px: a note fits in the lower one) */
 #define GROUPS (LSDJ_H / 2u)                  /* line pairs: 3 screen rows each */
 #define PUSH_MAX 8u                           /* line pairs merged into one transfer (24 rows, <= 11.5 KB) */
 #define STATUS_Y 223u
 #define MENU_G 34u                            /* the GLO menu covers line pairs 34.. (screen rows 106..219); the
                                                * picture above it runs on */
-#define MENU_Y (Y0 + 3u * MENU_G)
+#define MENU_Y (y0 + 3u * MENU_G)
 #define MENU_LINE 16u
 
 static uint8_t sram[LSDJ_SRAM] LSDJ_POOL;
@@ -97,6 +100,8 @@ static lsdj_menu_t menu;
 static lsdj_set_t set_saved;                  /* what flash holds */
 static uint8_t menu_paint_req, menu_last, set_req, bar_shown;
 static uint8_t menu_mask;                     /* keys down when the menu closed: not the Game Boy's until let go */
+static uint32_t y0 = Y0_BAR;                  /* the picture's first screen row (Y0_BAR, Y0_FULL) */
+static uint8_t border_req;                    /* the borders to paint (1 the upper, 2 the lower): no status bar */
 
 static struct {
     uint32_t frames, waits, doubles, frame_max_us, frame_us_sum, pushes, start_ms, push_ticks, push_calls;
@@ -196,10 +201,16 @@ static void keys_line(void)
     char b[40], *p;
     st.pad_shown = st.pad;
     st.held_shown = xfer.held;
-    if (!menu.set.bar && !st.note[0]) {       /* no status bar: the strip blank (a note shows there for its time) */
-        if (bar_shown)
-            core_fill(0, (int)STATUS_Y, 240, 240 - (int)STATUS_Y, CORE_BG);
-        bar_shown = 0;
+    if (!menu.set.bar) {                      /* no status bar: the lower border (a note shows there for its time) */
+        if (st.note[0]) {
+            border_req &= (uint8_t)~2u;
+            core_fill(0, (int)(240u - BORDER), 240, (int)BORDER, CORE_BG);
+            core_text(0, (int)(240u - BORDER), 240, CORE_FONT_S, st.note, CORE_THEME, CORE_BG, 1);
+            bar_shown = 1;
+        } else if (bar_shown) {
+            border_req |= 2u;                 /* (the note gone: the border again) */
+            bar_shown = 0;
+        }
         return;
     }
     bar_shown = 1;
@@ -234,10 +245,25 @@ static void theme_apply(void)                  /* the theme's colours; the whole
     memset(dirty, 1, sizeof dirty);
 }
 
+static void layout_apply(void)                 /* the picture up with the status bar, in the middle without */
+{
+    uint32_t y = menu.set.bar ? Y0_BAR : Y0_FULL;
+    if (y != y0) {                            /* moved: the screen cleared, everything sent again */
+        y0 = y;
+        core_fill(0, 0, 240, 240, CORE_BG);
+        memset(shown, 0xFF, sizeof shown);
+        memset(dirty, 1, sizeof dirty);
+        bar_shown = 0;
+        menu_paint_req = 1;
+    }
+    border_req = menu.set.bar ? 0 : 3u;
+}
+
 static void settings_apply(void)               /* the menu's settings into the emulator, the screen, the status bar */
 {
     emu_mode = (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE) & ~(uint32_t)menu.set.off;
     theme_apply();
+    layout_apply();
     if (menu.set.bar) {
         status_line();
         keys_line();
@@ -250,7 +276,7 @@ static void menu_paint(void)                   /* the box over the picture's low
 {
     char label[16], value[16];
     uint32_t i, y;
-    core_fill(0, (int)MENU_Y, 240, (int)(Y0 + 3u * GROUPS - MENU_Y), CORE_BG);
+    core_fill(0, (int)MENU_Y, 240, (int)(y0 + 3u * GROUPS - MENU_Y), CORE_BG);
     core_text(0, (int)MENU_Y + 1, 240, CORE_FONT_S, "MENU  (GLO CLOSES)", CORE_THEME, CORE_BG, 1);
     for (i = 0; i < LSDJ_NMI; i++) {
         int sel = i == menu.item;
@@ -523,6 +549,15 @@ static void lsdj_push(void)
     uint32_t k, g0, n, x0, x1, a, b, r;
     if (!core_lcd_idle())
         return;
+    if (border_req) {                         /* a border, in the theme's lightest shade: one transfer */
+        uint32_t i, top = border_req & 1u;
+        for (i = 0; i < 240u * BORDER; i++)
+            pushbuf[buf_i][i] = pal[0];
+        core_lcd_blit(0, top ? 0 : (int)(240u - BORDER), 240, (int)BORDER, pushbuf[buf_i]);
+        buf_i ^= 1u;
+        border_req &= (uint8_t)(top ? ~1u : ~2u);
+        return;
+    }
     for (k = 0; k < GROUPS; k++) {            /* only rows marked changed are compared */
         g0 = group;
         group = group + 1u == GROUPS ? 0 : group + 1u;
@@ -541,7 +576,7 @@ static void lsdj_push(void)
     }
     for (k = 0; k < n; k++)
         lsdj_scale(pushbuf[buf_i] + k * 3u * LSDJ_SX(x1 - x0), fb[2u * (g0 + k)], x0, x1, pal);
-    core_lcd_blit((int)LSDJ_SX(x0), (int)(Y0 + 3u * g0), (int)LSDJ_SX(x1 - x0), (int)(3u * n), pushbuf[buf_i]);
+    core_lcd_blit((int)LSDJ_SX(x0), (int)(y0 + 3u * g0), (int)LSDJ_SX(x1 - x0), (int)(3u * n), pushbuf[buf_i]);
     buf_i ^= 1u;
     for (r = 2u * g0; r < 2u * (g0 + n); r++) {
         memcpy(&shown[r][x0], &fb[r][x0], x1 - x0);
@@ -602,6 +637,8 @@ static __attribute__((noinline)) void lsdj_start(void)
     bar_shown = 0;
     emu_mode = (EMU_FAST_ROM | EMU_FRAME_SKIP | EMU_WAIT_SKIP | EMU_SND_FINE) & ~(uint32_t)menu.set.off;
     theme_apply();                            /* (no shade sent yet: every line pair is sent once) */
+    y0 = menu.set.bar ? Y0_BAR : Y0_FULL;     /* (the screen was cleared above) */
+    border_req = menu.set.bar ? 0 : 3u;
     lsdj_ring_init(&ring, ring_buf, RING_N);
     r = emu_init(rom_tab, cart.nbanks, sram, fb);
     emu.dirty = dirty;
