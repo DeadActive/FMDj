@@ -89,3 +89,5 @@ GPL-3.0-only, no warranty: [LICENSE](LICENSE).
 
 M-VAVE and FM-1 are trademarks of their respective owners; Game Boy is a trademark of Nintendo. This project is not
 affiliated with any of them.
+
+You can also try FMDj in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
